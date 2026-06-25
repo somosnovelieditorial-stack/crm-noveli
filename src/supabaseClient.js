@@ -1,0 +1,1125 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env?.VITE_SUPABASE_ANON_KEY;
+
+const useRealSupabase = supabaseUrl && supabaseAnonKey && 
+                        supabaseUrl !== 'YOUR_SUPABASE_URL' && 
+                        supabaseAnonKey !== 'YOUR_SUPABASE_ANON_KEY';
+
+let supabaseInstance;
+
+// Helper to pre-generate 10 standard stages for a service
+const generateMockStagesForService = (serviceId, activeStageIndex = 0) => {
+  const stagesList = [
+    'recepción de material', 'contrato firmado', 'pago realizado', 'revisión inicial',
+    'corrección', 'diseño de portada', 'maquetación', 'revisión del autor',
+    'entrega final', 'cerrado'
+  ];
+
+  return stagesList.map((stage, idx) => {
+    let status = 'pendiente';
+    let start_date = null;
+    let end_date = null;
+    
+    if (idx < activeStageIndex) {
+      status = 'completada';
+      start_date = new Date(Date.now() - (45 - idx * 5) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      end_date = new Date(Date.now() - (40 - idx * 5) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    } else if (idx === activeStageIndex) {
+      status = 'en proceso';
+      start_date = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    }
+
+    return {
+      id: `stage-${serviceId}-${idx}`,
+      user_id: "mock-user-123",
+      service_id: serviceId,
+      stage_name: stage,
+      status,
+      start_date,
+      end_date,
+      responsible: idx % 2 === 0 ? "Juan Pérez (Diseño/Maq)" : "Isabel V. (Editora)",
+      notes: status === 'completada' ? `Etapa completada con éxito conforme a plazos.` : status === 'en proceso' ? `Etapa actual en desarrollo.` : `Pendiente de inicio.`
+    };
+  });
+};
+
+// Initial mock database state
+const INITIAL_MOCK_DATA = {
+  providers: [
+    {
+      id: "prov-1",
+      user_id: "mock-user-123",
+      name: "Juan Pérez Design",
+      type: "diseñador",
+      email: "juan@perezdesign.com",
+      phone: "+56 9 8765 4321",
+      country: "Chile",
+      service_provided: "Diseño de portadas y maquetación",
+      notes: "Excelente diseñador, puntual en las entregas.",
+      created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "prov-2",
+      user_id: "mock-user-123",
+      name: "Imprenta Andina",
+      type: "imprenta",
+      email: "contacto@imprentaandina.cl",
+      phone: "+56 2 2345 6789",
+      country: "Chile",
+      service_provided: "Impresión de libros físicos en offset y digital",
+      notes: "Descuento del 10% por más de 500 copias.",
+      created_at: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "prov-3",
+      user_id: "mock-user-123",
+      name: "Estudio Jurídico Letras",
+      type: "abogado",
+      email: "derechos@estudioletras.com",
+      phone: "+34 612 345 678",
+      country: "España",
+      service_provided: "Asesoría de propiedad intelectual y contratos de autor",
+      notes: "Cobran por contrato revisado.",
+      created_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString()
+    }
+  ],
+  clients: [
+    {
+      id: "client-1",
+      user_id: "mock-user-123",
+      name: "Isabel Allende",
+      email: "isabel.allende@novels.com",
+      instagram: "@isabelallende",
+      phone: "+1 415 555 0199",
+      country: "Chile",
+      city: "Santiago",
+      client_type: "nacional",
+      preferred_currency: "CLP",
+      timezone: "America/Santiago",
+      status: "activo",
+      notes: "Autora premium. Prefiere comunicación por correo electrónico.",
+      created_at: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "client-2",
+      user_id: "mock-user-123",
+      name: "Gabriel García Márquez",
+      email: "gabo@macondo.org",
+      instagram: "@gabo_oficial",
+      phone: "+57 300 123 4567",
+      country: "Colombia",
+      city: "Bogotá",
+      client_type: "internacional",
+      preferred_currency: "USD",
+      timezone: "America/Bogota",
+      status: "finalizado",
+      notes: "Proyecto de reedición cerrado exitosamente.",
+      created_at: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "client-3",
+      user_id: "mock-user-123",
+      name: "Mario Vargas Llosa",
+      email: "mario.vargas@catedral.pe",
+      instagram: "@mvargasllosa",
+      phone: "+51 999 888 777",
+      country: "Perú",
+      city: "Lima",
+      client_type: "internacional",
+      preferred_currency: "USD",
+      timezone: "America/Lima",
+      status: "activo",
+      notes: "Trabajando en corrección de estilo para su nueva novela.",
+      created_at: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "client-4",
+      user_id: "mock-user-123",
+      name: "Laura Restrepo",
+      email: "laura.restrepo@letras.com",
+      instagram: "@laurarestrepootro",
+      phone: "+57 311 987 6543",
+      country: "Colombia",
+      city: "Medellín",
+      client_type: "internacional",
+      preferred_currency: "USD",
+      timezone: "America/Bogota",
+      status: "prospecto",
+      notes: "Interesada en asesoría de publicación e impresión digital.",
+      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+    }
+  ],
+  prospects: [
+    {
+      id: "prosp-1",
+      user_id: "mock-user-123",
+      name: "Roberto Bolaño",
+      contact: "@roberto_bolano_instagram",
+      origin: "Instagram",
+      interest_service: "libro físico",
+      probability: "alta",
+      next_action: "Enviar cotización final de diseño de portada e impresión",
+      followup_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      notes: "El manuscrito está listo. Tirada de 300 copias.",
+      converted_to_client_id: null,
+      country: "Chile",
+      city: "Santiago",
+      client_type: "nacional",
+      preferred_currency: "CLP",
+      timezone: "America/Santiago",
+      created_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "prosp-2",
+      user_id: "mock-user-123",
+      name: "Gabriela Mistral",
+      contact: "gabriela@valleelqui.cl",
+      origin: "web",
+      interest_service: "asesoría de publicación",
+      probability: "media",
+      next_action: "Llamar para agendar reunión de asesoría",
+      followup_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      notes: "Tiene poemas inéditos. Quiere conocer los canales de distribución.",
+      converted_to_client_id: null,
+      country: "Chile",
+      city: "Vicuña",
+      client_type: "nacional",
+      preferred_currency: "CLP",
+      timezone: "America/Santiago",
+      created_at: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "prosp-3",
+      user_id: "mock-user-123",
+      name: "Julio Cortázar",
+      contact: "Julio en París (Referido por Carlos Fuentes)",
+      origin: "referido",
+      interest_service: "corrección",
+      probability: "baja",
+      next_action: "Mandar correo de introducción y tarifas",
+      followup_date: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      notes: "Novela de estructura no lineal. Requiere maquetación avanzada.",
+      converted_to_client_id: null,
+      country: "Argentina",
+      city: "Buenos Aires",
+      client_type: "internacional",
+      preferred_currency: "EUR",
+      timezone: "America/Argentina/Buenos_Aires",
+      created_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString()
+    }
+  ],
+  services: [
+    {
+      id: "serv-1",
+      user_id: "mock-user-123",
+      client_id: "client-1",
+      type: "libro físico",
+      book_title: "La Casa de los Espíritus (Edición Especial)",
+      status: "en maquetación",
+      value: 1800000,
+      currency: "CLP",
+      exchange_rate: 1.0,
+      value_converted: 1800000,
+      rate_date: new Date().toISOString().split('T')[0],
+      start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      estimated_delivery: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      notes: "Requiere tapa dura y detalles dorados en la portada.",
+      current_stage: "maquetación",
+      advance_percent: 70,
+      created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "serv-2",
+      user_id: "mock-user-123",
+      client_id: "client-3",
+      type: "corrección",
+      book_title: "La fiesta del chivo (Revisión)",
+      status: "en corrección",
+      value: 1200,
+      currency: "USD",
+      exchange_rate: 940.0,
+      value_converted: 1128000,
+      rate_date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      start_date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      estimated_delivery: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      notes: "El cliente paga en dólares vía PayPal. Corrección de estilo.",
+      current_stage: "corrección",
+      advance_percent: 45,
+      created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "serv-3",
+      user_id: "mock-user-123",
+      client_id: "client-2",
+      type: "ebook",
+      book_title: "Cien años de soledad (Digital)",
+      status: "cerrado",
+      value: 450000,
+      currency: "CLP",
+      exchange_rate: 1.0,
+      value_converted: 450000,
+      rate_date: new Date().toISOString().split('T')[0],
+      start_date: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      estimated_delivery: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      notes: "Entrega en formatos ePUB y PDF optimizado.",
+      current_stage: "cerrado",
+      advance_percent: 100,
+      created_at: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
+    }
+  ],
+  service_stages: [
+    ...generateMockStagesForService("serv-1", 6),
+    ...generateMockStagesForService("serv-2", 4),
+    ...generateMockStagesForService("serv-3", 9)
+  ],
+  incomes: [
+    {
+      id: "inc-1",
+      user_id: "mock-user-123",
+      client_id: "client-1",
+      service_id: "serv-1",
+      amount: 900000,
+      currency: "CLP",
+      exchange_rate: 1.0,
+      value_converted: 900000,
+      rate_date: new Date().toISOString().split('T')[0],
+      date: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      payment_method: "transferencia",
+      includes_vat: true,
+      status: "parcial",
+      notes: "Primer pago del 50%. Factura emitida con IVA.",
+      created_at: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "inc-2",
+      user_id: "mock-user-123",
+      client_id: "client-3",
+      service_id: "serv-2",
+      amount: 1200,
+      currency: "USD",
+      exchange_rate: 940.0,
+      value_converted: 1128000,
+      rate_date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      date: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      payment_method: "paypal",
+      includes_vat: false,
+      status: "pagado",
+      notes: "Pago completo del servicio en USD.",
+      created_at: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "inc-3",
+      user_id: "mock-user-123",
+      client_id: "client-2",
+      service_id: "serv-3",
+      amount: 450000,
+      currency: "CLP",
+      exchange_rate: 1.0,
+      value_converted: 450000,
+      rate_date: new Date().toISOString().split('T')[0],
+      date: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      payment_method: "transferencia",
+      includes_vat: true,
+      status: "pagado",
+      notes: "Pago total del Ebook.",
+      created_at: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString()
+    }
+  ],
+  expenses: [
+    {
+      id: "exp-1",
+      user_id: "mock-user-123",
+      provider_id: "prov-1",
+      category: "diseño",
+      amount: 300000,
+      currency: "CLP",
+      exchange_rate: 1.0,
+      value_converted: 300000,
+      rate_date: new Date().toISOString().split('T')[0],
+      date: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      includes_vat: true,
+      deductible: true,
+      notes: "Diseño de portada para el proyecto de Isabel Allende.",
+      created_at: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "exp-2",
+      user_id: "mock-user-123",
+      provider_id: null,
+      category: "software",
+      amount: 25000,
+      currency: "CLP",
+      exchange_rate: 1.0,
+      value_converted: 25000,
+      rate_date: new Date().toISOString().split('T')[0],
+      date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      includes_vat: false,
+      deductible: true,
+      notes: "Suscripción Adobe Creative Cloud.",
+      created_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "exp-3",
+      user_id: "mock-user-123",
+      provider_id: null,
+      category: "oficina virtual",
+      amount: 35000,
+      currency: "CLP",
+      exchange_rate: 1.0,
+      value_converted: 35000,
+      rate_date: new Date().toISOString().split('T')[0],
+      date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      includes_vat: true,
+      deductible: true,
+      notes: "Dirección comercial y tributaria.",
+      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+    }
+  ],
+  service_catalog: [
+    {
+      id: "cat-1",
+      user_id: "mock-user-123",
+      name: "Corrección Ortotipográfica y de Estilo",
+      description: "Revisión completa de gramática, redacción, coherencia.",
+      base_price: 350000,
+      currency: "CLP",
+      includes_vat: false,
+      category: "corrección",
+      active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: "cat-2",
+      user_id: "mock-user-123",
+      name: "Maquetación Editorial Profesional (InDesign)",
+      description: "Diagramación interna de páginas para impresión física.",
+      base_price: 250000,
+      currency: "CLP",
+      includes_vat: false,
+      category: "maquetación",
+      active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: "cat-3",
+      user_id: "mock-user-123",
+      name: "Diseño de Portada Ilustrada",
+      description: "Diseño premium e ilustración para la tapa frontal.",
+      base_price: 300000,
+      currency: "CLP",
+      includes_vat: true,
+      category: "diseño",
+      active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: "cat-4",
+      user_id: "mock-user-123",
+      name: "Publicación Ebook (Kindle/ePUB)",
+      description: "Conversión a formato reflowable y publicación.",
+      base_price: 150000,
+      currency: "CLP",
+      includes_vat: false,
+      category: "publicación",
+      active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: "cat-5",
+      user_id: "mock-user-123",
+      name: "Impresión Tirada Corta (100 Copias)",
+      description: "Impresión de tapa blanda, papel bond de 80g.",
+      base_price: 650000,
+      currency: "CLP",
+      includes_vat: true,
+      category: "publicación",
+      active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: "cat-6",
+      user_id: "mock-user-123",
+      name: "Sesión de Asesoría de Publicación",
+      description: "Reunión estratégica de 1 hora sobre derecho de autor.",
+      base_price: 65,
+      currency: "USD",
+      includes_vat: false,
+      category: "asesoría",
+      active: true,
+      created_at: new Date().toISOString()
+    }
+  ],
+  service_packs: [
+    {
+      id: "pack-1",
+      user_id: "mock-user-123",
+      name: "Pack eBook Esencial",
+      description: "Servicio completo para autores digitales. Incluye maquetación, portada y publicación en Amazon.",
+      price_special: 620000,
+      currency: "CLP",
+      includes_vat: false,
+      active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: "pack-2",
+      user_id: "mock-user-123",
+      name: "Pack Full Editorial (Impreso + Digital)",
+      description: "Edición física y digital. Incluye corrección, maquetación, portada premium, 100 libros físicos impresos y publicación ebook.",
+      price_special: 1350000,
+      currency: "CLP",
+      includes_vat: true,
+      active: true,
+      created_at: new Date().toISOString()
+    }
+  ],
+  service_pack_items: [
+    { id: "pitem-1", user_id: "mock-user-123", pack_id: "pack-1", service_id: "cat-2" },
+    { id: "pitem-2", user_id: "mock-user-123", pack_id: "pack-1", service_id: "cat-3" },
+    { id: "pitem-3", user_id: "mock-user-123", pack_id: "pack-1", service_id: "cat-4" },
+    { id: "pitem-4", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-1" },
+    { id: "pitem-5", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-2" },
+    { id: "pitem-6", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-3" },
+    { id: "pitem-7", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-4" },
+    { id: "pitem-8", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-5" }
+  ],
+  quotations: [
+    {
+      id: "quot-1",
+      user_id: "mock-user-123",
+      client_id: null,
+      prospect_id: "prosp-1",
+      discount: 20000,
+      currency: "CLP",
+      exchange_rate: 1.0,
+      value_converted: 600000,
+      rate_date: new Date().toISOString().split('T')[0],
+      status: "enviada",
+      notes: "Enviado por correo. Incluye descuento especial.",
+      includes_vat: true,
+      created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "quot-2",
+      user_id: "mock-user-123",
+      client_id: "client-1",
+      prospect_id: null,
+      discount: 0,
+      currency: "CLP",
+      exchange_rate: 1.0,
+      value_converted: 1500000,
+      rate_date: new Date().toISOString().split('T')[0],
+      status: "borrador",
+      notes: "Revisando tarifas para tirada especial.",
+      includes_vat: false,
+      created_at: new Date().toISOString()
+    }
+  ],
+  quotation_items: [
+    {
+      id: "qitem-1",
+      user_id: "mock-user-123",
+      quotation_id: "quot-1",
+      service_id: null,
+      pack_id: "pack-1",
+      custom_name: null,
+      price: 620000,
+      quantity: 1
+    },
+    {
+      id: "qitem-2",
+      user_id: "mock-user-123",
+      quotation_id: "quot-2",
+      service_id: "cat-5",
+      pack_id: null,
+      custom_name: "Impresión Tirada Corta - Re-edición Tapa Dura",
+      price: 750000,
+      quantity: 2
+    }
+  ],
+  quick_replies: [
+    {
+      id: "reply-1",
+      user_id: "mock-user-123",
+      title: "Saludo Inicial Instagram",
+      category: "Ventas",
+      channel: "Instagram",
+      message_text: "¡Hola! Gracias por escribirnos a Somos Noveli 📚✨. ¿De qué trata tu obra?",
+      active: true,
+      created_at: new Date().toISOString()
+    }
+  ],
+  documents: [
+    {
+      id: "doc-1",
+      user_id: "mock-user-123",
+      name: "Contrato_Isabel_Allende_2026.pdf",
+      file_path: "mock/docs/contrato_allende.pdf",
+      file_type: "contrato",
+      client_id: "client-1",
+      provider_id: null,
+      income_id: null,
+      expense_id: null,
+      service_id: "serv-1",
+      quotation_id: null,
+      created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    }
+  ],
+  settings: [
+    {
+      id: "settings-1",
+      editorial_name: "Somos Noveli Editorial",
+      logo: "",
+      email: "contacto@somosnoveli.cl",
+      address: "Av. Providencia 1234, Santiago",
+      base_country: "Chile",
+      currency_primary: "CLP",
+      currencies_secondary: ["USD", "EUR"],
+      vat_rate: 19,
+      bank_details: "Banco de Chile - Cta Corriente: 123456789 - RUT: 76.123.456-7",
+      quotation_notes: "Vigencia de cotización: 15 días.",
+      quotation_legal: "Precios expuestos pueden variar según adicionales."
+    }
+  ],
+  exchange_rates: [
+    { id: "rate-1", currency_from: "USD", currency_to: "CLP", rate: 940, date: new Date().toISOString().split('T')[0], source: "Manual", created_at: new Date().toISOString() },
+    { id: "rate-2", currency_from: "EUR", currency_to: "CLP", rate: 1010, date: new Date().toISOString().split('T')[0], source: "Manual", created_at: new Date().toISOString() },
+    { id: "rate-3", currency_from: "USD", currency_to: "EUR", rate: 0.93, date: new Date().toISOString().split('T')[0], source: "Manual", created_at: new Date().toISOString() }
+  ],
+  editorial_stages: [
+    { id: "estage-1", name: "recepción de material", description: "Recepción de manuscrito y archivos del autor", order: 1, color: "#94a3b8", active: true },
+    { id: "estage-2", name: "contrato firmado", description: "Firma mutua del acuerdo editorial", order: 2, color: "#3b82f6", active: true },
+    { id: "estage-3", name: "pago realizado", description: "Primer abono o pago completo verificado", order: 3, color: "#10b981", active: true },
+    { id: "estage-4", name: "revisión inicial", description: "Primera lectura diagnóstica por editor asignado", order: 4, color: "#6366f1", active: true },
+    { id: "estage-5", name: "corrección", description: "Corrección de estilo y ortotipográfica", order: 5, color: "#f59e0b", active: true },
+    { id: "estage-6", name: "diseño de portada", description: "Propuestas de portada e ilustración", order: 6, color: "#ec4899", active: true },
+    { id: "estage-7", name: "maquetación", description: "Diagramación interna en InDesign", order: 7, color: "#8b5cf6", active: true },
+    { id: "estage-8", name: "revisión del autor", description: "Aprobación de galeradas por el autor", order: 8, color: "#06b6d4", active: true },
+    { id: "estage-9", name: "entrega final", description: "Envío de archivos finales a imprenta/tiendas", order: 9, color: "#10b981", active: true },
+    { id: "estage-10", name: "cerrado", description: "Libro impreso, distribuido y proyecto archivado", order: 10, color: "#64748b", active: true }
+  ],
+  service_checklists: [
+    { id: "chk-1", service_id: "serv-1", task: "Revisar ortografía de capítulo 1", status: "completada", responsible: "Isabel V.", due_date: new Date(Date.now() + 5*24*60*60*1000).toISOString().split('T')[0], notes: "Todo bien" },
+    { id: "chk-2", service_id: "serv-1", task: "Diseñar lomo y contraportada", status: "en proceso", responsible: "Juan Pérez", due_date: new Date(Date.now() + 10*24*60*60*1000).toISOString().split('T')[0], notes: "Esperando dimensiones de imprenta" },
+    { id: "chk-3", service_id: "serv-1", task: "Enviar pruebas de color", status: "pendiente", responsible: "Juan Pérez", due_date: new Date(Date.now() + 12*24*60*60*1000).toISOString().split('T')[0], notes: "" }
+  ],
+  activity_log: [
+    { id: "act-1", user_id: "mock-user-123", user_email: "admin@somosnoveli.cl", date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), module: "clients", action: "creación", description: "Cliente Isabel Allende creado", entity_id: "client-1" }
+  ],
+  agenda_events: [
+    { id: "evt-1", user_id: "mock-user-123", title: "Reunión de lanzamiento con Isabel Allende", description: "Definir cronograma final y detalles de tapa dura", date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], time: "11:00", type: "reunión", created_at: new Date().toISOString() },
+    { id: "evt-2", user_id: "mock-user-123", title: "Revisar muestras Imprenta Andina", description: "Verificar muestras de impresión física de prueba", date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], time: "15:30", type: "evento", created_at: new Date().toISOString() }
+  ]
+};
+
+// LocalStorage database engine helper
+const getMockDb = () => {
+  const data = localStorage.getItem('somos_noveli_crm_db');
+  if (!data) {
+    localStorage.setItem('somos_noveli_crm_db', JSON.stringify(INITIAL_MOCK_DATA));
+    return INITIAL_MOCK_DATA;
+  }
+  
+  // Clean merge in case new tables/properties are missing from a pre-existing DB
+  const parsed = JSON.parse(data);
+  let updated = false;
+  
+  Object.keys(INITIAL_MOCK_DATA).forEach(table => {
+    if (!parsed[table]) {
+      parsed[table] = INITIAL_MOCK_DATA[table];
+      updated = true;
+    }
+  });
+
+  // Check services for new properties
+  if (parsed.services) {
+    parsed.services = parsed.services.map(s => {
+      const orig = INITIAL_MOCK_DATA.services.find(o => o.id === s.id);
+      if (orig && s.advance_percent === undefined) {
+        s.current_stage = orig.current_stage;
+        s.advance_percent = orig.advance_percent;
+        updated = true;
+      }
+      return s;
+    });
+  }
+
+  if (updated) {
+    localStorage.setItem('somos_noveli_crm_db', JSON.stringify(parsed));
+  }
+  
+  return parsed;
+};
+
+const saveMockDb = (db) => {
+  localStorage.setItem('somos_noveli_crm_db', JSON.stringify(db));
+};
+
+// Mock Query Builder that behaves similarly to Supabase postgrest-js
+class MockQueryBuilder {
+  constructor(table) {
+    this.table = table;
+    this.filters = [];
+    this.orderConfig = null;
+    this.singleRow = false;
+  }
+
+  select(columns = '*') {
+    return this;
+  }
+
+  eq(column, value) {
+    this.filters.push({ column, value });
+    return this;
+  }
+
+  order(column, { ascending = true } = {}) {
+    this.orderConfig = { column, ascending };
+    return this;
+  }
+
+  single() {
+    this.singleRow = true;
+    return this;
+  }
+
+  // To make it awaitable like a Promise
+  async then(onfulfilled, onrejected) {
+    try {
+      const db = getMockDb();
+      let records = db[this.table] || [];
+
+      // Filter
+      for (const filter of this.filters) {
+        records = records.filter(row => row[filter.column] === filter.value);
+      }
+
+      // Sort
+      if (this.orderConfig) {
+        const { column, ascending } = this.orderConfig;
+        records.sort((a, b) => {
+          let valA = a[column];
+          let valB = b[column];
+          
+          if (typeof valA === 'string') {
+            return ascending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+          }
+          return ascending ? valA - valB : valB - valA;
+        });
+      }
+
+      // MULTICURRENCY DYNAMIC POPULATION FOR LEGACY ROWS
+      if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+        records = records.map(row => {
+          if (row.exchange_rate === undefined) {
+            row.exchange_rate = row.currency === 'USD' ? 940 : row.currency === 'EUR' ? 1010 : 1;
+            const amt = Number(row.value || row.amount || 0);
+            row.value_converted = amt * row.exchange_rate;
+            row.rate_date = row.start_date || row.date || row.created_at?.split('T')[0] || new Date().toISOString().split('T')[0];
+          }
+          return row;
+        });
+      }
+
+      // AUTO-POPULATE RELATIONSHIPS FOR EASY FRONT-END USE
+      if (this.table === 'services') {
+        records = records.map(row => {
+          row.client = db.clients.find(c => c.id === row.client_id) || null;
+          row.stages = (db.service_stages || []).filter(st => st.service_id === row.id).sort((a, b) => {
+            return a.id.localeCompare(b.id);
+          });
+          row.checklists = (db.service_checklists || []).filter(chk => chk.service_id === row.id);
+          return row;
+        });
+      }
+      if (this.table === 'incomes') {
+        records = records.map(row => {
+          row.client = db.clients.find(c => c.id === row.client_id) || null;
+          row.service = db.services.find(s => s.id === row.service_id) || null;
+          return row;
+        });
+      }
+      if (this.table === 'expenses') {
+        records = records.map(row => {
+          row.provider = db.providers.find(p => p.id === row.provider_id) || null;
+          return row;
+        });
+      }
+      if (this.table === 'service_pack_items') {
+        records = records.map(row => {
+          row.service = db.service_catalog.find(s => s.id === row.service_id) || null;
+          return row;
+        });
+      }
+      if (this.table === 'quotations') {
+        records = records.map(row => {
+          row.client = db.clients.find(c => c.id === row.client_id) || null;
+          row.prospect = db.prospects.find(p => p.id === row.prospect_id) || null;
+          row.items = (db.quotation_items || []).filter(item => item.quotation_id === row.id).map(item => {
+            item.service = db.service_catalog.find(s => s.id === item.service_id) || null;
+            item.pack = db.service_packs.find(p => p.id === item.pack_id) || null;
+            return item;
+          });
+          return row;
+        });
+      }
+      if (this.table === 'quotation_items') {
+        records = records.map(row => {
+          row.service = db.service_catalog.find(s => s.id === row.service_id) || null;
+          row.pack = db.service_packs.find(p => p.id === row.pack_id) || null;
+          return row;
+        });
+      }
+      if (this.table === 'documents') {
+        records = records.map(row => {
+          row.client = db.clients.find(c => c.id === row.client_id) || null;
+          row.provider = db.providers.find(p => p.id === row.provider_id) || null;
+          row.service = db.services.find(s => s.id === row.service_id) || null;
+          row.income = db.incomes.find(i => i.id === row.income_id) || null;
+          row.expense = db.expenses.find(e => e.id === row.expense_id) || null;
+          row.quotation = db.quotations.find(q => q.id === row.quotation_id) || null;
+          return row;
+        });
+      }
+
+      const result = this.singleRow ? (records[0] || null) : records;
+      const data = JSON.parse(JSON.stringify(result));
+      return onfulfilled({ data, error: null });
+    } catch (err) {
+      if (onrejected) {
+        return onrejected(err);
+      }
+      return { data: null, error: err };
+    }
+  }
+
+  async insert(newData) {
+    return {
+      then: async (onfulfilled) => {
+        const db = getMockDb();
+        const records = db[this.table] || [];
+        
+        const itemsToInsert = Array.isArray(newData) ? newData : [newData];
+        const insertedItems = itemsToInsert.map(item => {
+          const newItem = {
+            id: genId(this.table),
+            user_id: getMockUser().id,
+            created_at: new Date().toISOString(),
+            ...item
+          };
+
+          // Multicurrency calculations
+          if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+            if (newItem.exchange_rate === undefined) {
+              newItem.exchange_rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
+            }
+            const amt = Number(newItem.value || newItem.amount || 0);
+            newItem.value_converted = amt * newItem.exchange_rate;
+            newItem.rate_date = newItem.start_date || newItem.date || new Date().toISOString().split('T')[0];
+          }
+
+          records.push(newItem);
+          return newItem;
+        });
+
+        // Trigger automatic stages timeline insertion for new service (based on editorial_stages configurations)
+        if (this.table === 'services') {
+          db.service_stages = db.service_stages || [];
+          const activeStages = (db.editorial_stages || []).filter(st => st.active).sort((a, b) => a.order - b.order);
+          insertedItems.forEach(serv => {
+            const stages = activeStages.map((stage, idx) => ({
+              id: `stage-${serv.id}-${stage.id}`,
+              user_id: getMockUser().id,
+              service_id: serv.id,
+              stage_name: stage.name,
+              status: idx === 0 ? 'en proceso' : 'pendiente',
+              start_date: idx === 0 ? new Date().toISOString().split('T')[0] : null,
+              end_date: null,
+              responsible: '',
+              notes: ''
+            }));
+            db.service_stages.push(...stages);
+          });
+        }
+
+        // Auto-log activity
+        if (this.table !== 'activity_log') {
+          db.activity_log = db.activity_log || [];
+          insertedItems.forEach(item => {
+            let desc = `Se creó un registro en la tabla ${this.table}: ${item.name || item.book_title || item.title || item.id}`;
+            let moduleName = this.table;
+            let actionType = 'creación';
+
+            if (this.table === 'clients') {
+              moduleName = 'Clientes';
+              desc = `Se registró el nuevo cliente: ${item.name}`;
+            } else if (this.table === 'prospects') {
+              moduleName = 'Prospectos';
+              desc = `Se registró el prospecto: ${item.name}`;
+            } else if (this.table === 'quotations') {
+              moduleName = 'Cotizaciones';
+              desc = `Se creó la cotización ${item.id}`;
+            } else if (this.table === 'services') {
+              moduleName = 'Servicios';
+              desc = `Se contrató el servicio para la obra ${item.book_title}`;
+            } else if (this.table === 'incomes') {
+              moduleName = 'Ingresos';
+              desc = `Ingreso registrado por ${formatCurrency(item.amount, item.currency)}`;
+              actionType = 'ingreso registrado';
+            } else if (this.table === 'expenses') {
+              moduleName = 'Gastos';
+              desc = `Gasto registrado por ${formatCurrency(item.amount, item.currency)}`;
+              actionType = 'gasto registrado';
+            } else if (this.table === 'documents') {
+              moduleName = 'Documentos';
+              desc = `Se subió el documento ${item.name}`;
+              actionType = 'documento subido';
+            }
+
+            const log = {
+              id: genId('activity_log'),
+              user_id: getMockUser().id,
+              user_email: getMockUser().email,
+              date: new Date().toISOString(),
+              module: moduleName,
+              action: actionType,
+              description: desc,
+              entity_id: item.id
+            };
+            db.activity_log.push(log);
+          });
+        }
+
+        db[this.table] = records;
+        saveMockDb(db);
+
+        const returnData = Array.isArray(newData) ? insertedItems : insertedItems[0];
+        return onfulfilled({ data: JSON.parse(JSON.stringify(returnData)), error: null });
+      }
+    };
+  }
+
+  async update(updateData) {
+    return {
+      then: async (onfulfilled) => {
+        const db = getMockDb();
+        let records = db[this.table] || [];
+        
+        let updatedRecords = [];
+
+        records = records.map(row => {
+          const matches = this.filters.every(filter => row[filter.column] === filter.value);
+          if (matches) {
+            const updatedRow = { ...row, ...updateData };
+            
+            // Multicurrency calculations
+            if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+              if (updatedRow.exchange_rate === undefined) {
+                updatedRow.exchange_rate = updatedRow.currency === 'USD' ? 940 : updatedRow.currency === 'EUR' ? 1010 : 1;
+              }
+              const amt = Number(updatedRow.value || updatedRow.amount || 0);
+              updatedRow.value_converted = amt * updatedRow.exchange_rate;
+              updatedRow.rate_date = updatedRow.start_date || updatedRow.date || new Date().toISOString().split('T')[0];
+            }
+
+            updatedRecords.push(updatedRow);
+            return updatedRow;
+          }
+          return row;
+        });
+
+        // Auto-log activity
+        if (this.table !== 'activity_log') {
+          db.activity_log = db.activity_log || [];
+          updatedRecords.forEach(item => {
+            let actionType = 'edición';
+            let desc = `Se editó un registro en la tabla ${this.table}: ${item.name || item.book_title || item.title || item.id}`;
+            let moduleName = this.table;
+
+            if (this.table === 'clients') {
+              moduleName = 'Clientes';
+              actionType = 'edición de cliente';
+              desc = `Se editó el cliente ${item.name}`;
+            } else if (this.table === 'prospects') {
+              moduleName = 'Prospectos';
+              desc = `Se editó el prospecto ${item.name}`;
+            } else if (this.table === 'quotations' && updateData.status === 'aceptada') {
+              moduleName = 'Cotizaciones';
+              actionType = 'aprobación de cotización';
+              desc = `Se aprobó la cotización ${item.id}`;
+            } else if (this.table === 'quotations' && updateData.status) {
+              moduleName = 'Cotizaciones';
+              actionType = 'cambio de estado de cotización';
+              desc = `Se cambió el estado de la cotización ${item.id} a ${updateData.status}`;
+            } else if (this.table === 'services' && updateData.current_stage) {
+              moduleName = 'Servicios';
+              actionType = 'cambio de etapa';
+              desc = `Se cambió la etapa de la obra ${item.book_title} a ${updateData.current_stage}`;
+            } else if (this.table === 'incomes' && updateData.status === 'pagado') {
+              moduleName = 'Ingresos';
+              actionType = 'pago marcado como recibido';
+              desc = `Se recibió el pago de la cuenta de cobro ${item.id}`;
+            }
+
+            const log = {
+              id: genId('activity_log'),
+              user_id: getMockUser().id,
+              user_email: getMockUser().email,
+              date: new Date().toISOString(),
+              module: moduleName,
+              action: actionType,
+              description: desc,
+              entity_id: item.id
+            };
+            db.activity_log.push(log);
+          });
+        }
+
+        db[this.table] = records;
+        saveMockDb(db);
+
+        const returnData = this.singleRow ? (updatedRecords[0] || null) : updatedRecords;
+        return onfulfilled({ data: JSON.parse(JSON.stringify(returnData)), error: null });
+      }
+    };
+  }
+
+  async delete() {
+    return {
+      then: async (onfulfilled) => {
+        const db = getMockDb();
+        let records = db[this.table] || [];
+        
+        const beforeCount = records.length;
+        records = records.filter(row => {
+          return !this.filters.every(filter => row[filter.column] === filter.value);
+        });
+
+        const deletedCount = beforeCount - records.length;
+        db[this.table] = records;
+        saveMockDb(db);
+
+        return onfulfilled({ data: { count: deletedCount }, error: null });
+      }
+    };
+  }
+}
+
+// Helpers for mock IDs
+function genId(prefix) {
+  return `${prefix.substring(0, 3)}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Mock User handling
+const getMockUser = () => {
+  const userJson = localStorage.getItem('somos_noveli_crm_user');
+  if (!userJson) {
+    const defaultUser = { id: 'mock-user-123', email: 'admin@somosnoveli.cl', role: 'administrador' };
+    localStorage.setItem('somos_noveli_crm_user', JSON.stringify(defaultUser));
+    return defaultUser;
+  }
+  return JSON.parse(userJson);
+};
+
+// Mock Supabase Client implementation
+const mockSupabase = {
+  auth: {
+    getSession: async () => {
+      const user = localStorage.getItem('somos_noveli_crm_user') ? getMockUser() : null;
+      if (user) {
+        return { data: { session: { user, access_token: 'mock-session-token' } }, error: null };
+      }
+      return { data: { session: null }, error: null };
+    },
+    
+    signInWithPassword: async ({ email, password }) => {
+      if (email && password) {
+        const user = { id: 'mock-user-123', email };
+        localStorage.setItem('somos_noveli_crm_user', JSON.stringify(user));
+        
+        if (authListener) {
+          authListener('SIGNED_IN', { user, access_token: 'mock-session-token' });
+        }
+        return { data: { user, session: { user, access_token: 'mock-session-token' } }, error: null };
+      }
+      return { data: null, error: { message: "Email y contraseña requeridos" } };
+    },
+
+    signUp: async ({ email, password }) => {
+      const user = { id: 'mock-user-123', email };
+      localStorage.setItem('somos_noveli_crm_user', JSON.stringify(user));
+      if (authListener) {
+        authListener('SIGNED_IN', { user, access_token: 'mock-session-token' });
+      }
+      return { data: { user, session: { user, access_token: 'mock-session-token' } }, error: null };
+    },
+
+    signOut: async () => {
+      localStorage.removeItem('somos_noveli_crm_user');
+      if (authListener) {
+        authListener('SIGNED_OUT', null);
+      }
+      return { error: null };
+    },
+
+    onAuthStateChange: (callback) => {
+      authListener = callback;
+      const user = localStorage.getItem('somos_noveli_crm_user') ? getMockUser() : null;
+      if (user) {
+        callback('SIGNED_IN', { user, access_token: 'mock-session-token' });
+      } else {
+        callback('SIGNED_OUT', null);
+      }
+      return {
+        data: {
+          subscription: {
+            unsubscribe: () => {
+              authListener = null;
+            }
+          }
+        }
+      };
+    }
+  },
+
+  storage: {
+    from: (bucket) => ({
+      upload: async (path, file) => {
+        const fileUrl = `mock_storage/${bucket}/${path}`;
+        return { data: { path: fileUrl }, error: null };
+      },
+      getPublicUrl: (path) => ({
+        data: { publicUrl: `https://mockstorage.supabase.co/${bucket}/${path}` }
+      }),
+      remove: async (paths) => {
+        return { data: paths, error: null };
+      }
+    })
+  },
+
+  from: (table) => {
+    return new MockQueryBuilder(table);
+  }
+};
+
+let authListener = null;
+
+if (useRealSupabase) {
+  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
+  console.log("🚀 Somos Noveli CRM: Conectado a la base de datos Supabase Real.");
+} else {
+  supabaseInstance = mockSupabase;
+  console.warn("⚠️ Somos Noveli CRM: Ejecutándose con base de datos Mock local (localStorage). Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en un archivo .env para conectar a Supabase real.");
+}
+
+export const supabase = supabaseInstance;
+export const isMock = !useRealSupabase;
+
+function formatCurrency(amount, currency = 'CLP') {
+  if (currency === 'CLP') {
+    return '$' + Math.round(amount).toLocaleString('es-CL');
+  }
+  return 'US$ ' + Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
