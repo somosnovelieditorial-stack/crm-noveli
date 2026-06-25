@@ -1023,6 +1023,393 @@ const getMockUser = () => {
   return JSON.parse(userJson);
 };
 
+// Real Supabase Query Builder with relation joins, currency conversions and logging interceptors
+class RealSupabaseQueryBuilder {
+  constructor(table, realClient) {
+    this.table = table;
+    this.realClient = realClient;
+    this.query = realClient.from(table);
+    this.singleRow = false;
+    
+    const self = this;
+    const proxy = new Proxy(this, {
+      get: (target, prop) => {
+        if (prop in target) {
+          if (typeof target[prop] === 'function') {
+            return target[prop].bind(target);
+          }
+          return target[prop];
+        }
+        
+        if (prop === 'single') {
+          return () => {
+            target.singleRow = true;
+            target.query = target.query.single();
+            return proxy;
+          };
+        }
+
+        if (typeof target.query[prop] === 'function') {
+          return (...args) => {
+            target.query = target.query[prop](...args);
+            return proxy;
+          };
+        }
+        
+        return target.query[prop];
+      }
+    });
+
+    return proxy;
+  }
+
+  then(onfulfilled, onrejected) {
+    return this.execute().then(onfulfilled, onrejected);
+  }
+
+  async execute() {
+    const result = await this.query;
+    if (result.error) return { data: null, error: result.error };
+    
+    let data = result.data;
+    if (!data) return { data: null, error: null };
+
+    const isArray = Array.isArray(data);
+    let records = isArray ? data : [data];
+
+    if (records.length > 0) {
+      // 1. Populate for services
+      if (this.table === 'services') {
+        const serviceIds = records.map(r => r.id);
+        const [stagesRes, checklistsRes, clientsRes] = await Promise.all([
+          this.realClient.from('service_stages').select('*').in('service_id', serviceIds),
+          this.realClient.from('service_checklists').select('*').in('service_id', serviceIds),
+          this.realClient.from('clients').select('id, name')
+        ]);
+        const stages = stagesRes.data || [];
+        const checklists = checklistsRes.data || [];
+        const clients = clientsRes.data || [];
+        records = records.map(row => {
+          row.client = clients.find(c => c.id === row.client_id) || null;
+          row.stages = stages.filter(st => st.service_id === row.id).sort((a, b) => a.id.localeCompare(b.id));
+          row.checklists = checklists.filter(chk => chk.service_id === row.id);
+          return row;
+        });
+      }
+      
+      // 2. Populate for incomes
+      if (this.table === 'incomes') {
+        const clientIds = records.map(r => r.client_id).filter(Boolean);
+        const serviceIds = records.map(r => r.service_id).filter(Boolean);
+        const [clientsRes, servicesRes] = await Promise.all([
+          clientIds.length > 0 ? this.realClient.from('clients').select('id, name').in('id', clientIds) : { data: [] },
+          serviceIds.length > 0 ? this.realClient.from('services').select('id, book_title').in('id', serviceIds) : { data: [] }
+        ]);
+        records = records.map(row => {
+          row.client = (clientsRes.data || []).find(c => c.id === row.client_id) || null;
+          row.service = (servicesRes.data || []).find(s => s.id === row.service_id) || null;
+          return row;
+        });
+      }
+
+      // 3. Populate for expenses
+      if (this.table === 'expenses') {
+        const providerIds = records.map(r => r.provider_id).filter(Boolean);
+        const providersRes = providerIds.length > 0 ? await this.realClient.from('providers').select('*').in('id', providerIds) : { data: [] };
+        records = records.map(row => {
+          row.provider = (providersRes.data || []).find(p => p.id === row.provider_id) || null;
+          return row;
+        });
+      }
+
+      // 4. Populate for service_pack_items
+      if (this.table === 'service_pack_items') {
+        const serviceIds = records.map(r => r.service_id).filter(Boolean);
+        const catalogRes = serviceIds.length > 0 ? await this.realClient.from('service_catalog').select('*').in('id', serviceIds) : { data: [] };
+        records = records.map(row => {
+          row.service = (catalogRes.data || []).find(s => s.id === row.service_id) || null;
+          return row;
+        });
+      }
+
+      // 5. Populate for quotations
+      if (this.table === 'quotations') {
+        const quotIds = records.map(r => r.id);
+        const clientIds = records.map(r => r.client_id).filter(Boolean);
+        const prospectIds = records.map(r => r.prospect_id).filter(Boolean);
+
+        const [itemsRes, clientsRes, prospectsRes, catalogRes, packsRes] = await Promise.all([
+          this.realClient.from('quotation_items').select('*').in('quotation_id', quotIds),
+          clientIds.length > 0 ? this.realClient.from('clients').select('id, name').in('id', clientIds) : { data: [] },
+          prospectIds.length > 0 ? this.realClient.from('prospects').select('id, name').in('id', prospectIds) : { data: [] },
+          this.realClient.from('service_catalog').select('*'),
+          this.realClient.from('service_packs').select('*')
+        ]);
+
+        const items = itemsRes.data || [];
+        const clients = clientsRes.data || [];
+        const prospects = prospectsRes.data || [];
+        const catalog = catalogRes.data || [];
+        const packs = packsRes.data || [];
+
+        records = records.map(row => {
+          row.client = clients.find(c => c.id === row.client_id) || null;
+          row.prospect = prospects.find(p => p.id === row.prospect_id) || null;
+          row.items = items.filter(item => item.quotation_id === row.id).map(item => {
+            item.service = catalog.find(s => s.id === item.service_id) || null;
+            item.pack = packs.find(p => p.id === item.pack_id) || null;
+            return item;
+          });
+          return row;
+        });
+      }
+
+      // 6. Populate for quotation_items
+      if (this.table === 'quotation_items') {
+        const serviceIds = records.map(r => r.service_id).filter(Boolean);
+        const packIds = records.map(r => r.pack_id).filter(Boolean);
+        const [catalogRes, packsRes] = await Promise.all([
+          serviceIds.length > 0 ? this.realClient.from('service_catalog').select('*').in('id', serviceIds) : { data: [] },
+          packIds.length > 0 ? this.realClient.from('service_packs').select('*').in('id', packIds) : { data: [] }
+        ]);
+        records = records.map(row => {
+          row.service = (catalogRes.data || []).find(s => s.id === row.service_id) || null;
+          row.pack = (packsRes.data || []).find(p => p.id === row.pack_id) || null;
+          return row;
+        });
+      }
+
+      // 7. Populate for documents
+      if (this.table === 'documents') {
+        const clientIds = records.map(r => r.client_id).filter(Boolean);
+        const providerIds = records.map(r => r.provider_id).filter(Boolean);
+        const serviceIds = records.map(r => r.service_id).filter(Boolean);
+        const incomeIds = records.map(r => r.income_id).filter(Boolean);
+        const expenseIds = records.map(r => r.expense_id).filter(Boolean);
+        const quotationIds = records.map(r => r.quotation_id).filter(Boolean);
+
+        const [clientsRes, providersRes, servicesRes, incomesRes, expensesRes, quotationsRes] = await Promise.all([
+          clientIds.length > 0 ? this.realClient.from('clients').select('id, name').in('id', clientIds) : { data: [] },
+          providerIds.length > 0 ? this.realClient.from('providers').select('id, name').in('id', providerIds) : { data: [] },
+          serviceIds.length > 0 ? this.realClient.from('services').select('id, book_title').in('id', serviceIds) : { data: [] },
+          incomeIds.length > 0 ? this.realClient.from('incomes').select('id, amount, currency').in('id', incomeIds) : { data: [] },
+          expenseIds.length > 0 ? this.realClient.from('expenses').select('id, amount, currency').in('id', expenseIds) : { data: [] },
+          quotationIds.length > 0 ? this.realClient.from('quotations').select('id').in('id', quotationIds) : { data: [] }
+        ]);
+
+        records = records.map(row => {
+          row.client = (clientsRes.data || []).find(c => c.id === row.client_id) || null;
+          row.provider = (providersRes.data || []).find(p => p.id === row.provider_id) || null;
+          row.service = (servicesRes.data || []).find(s => s.id === row.service_id) || null;
+          row.income = (incomesRes.data || []).find(i => i.id === row.income_id) || null;
+          row.expense = (expensesRes.data || []).find(e => e.id === row.expense_id) || null;
+          row.quotation = (quotationsRes.data || []).find(q => q.id === row.quotation_id) || null;
+          return row;
+        });
+      }
+    }
+    
+    return { data: isArray ? records : records[0], error: null };
+  }
+
+  async insert(newData) {
+    const items = Array.isArray(newData) ? newData : [newData];
+    
+    const updatedItems = await Promise.all(items.map(async item => {
+      const newItem = { ...item };
+      
+      if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+        if (newItem.exchange_rate === undefined) {
+          let rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
+          try {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const rateRes = await this.realClient.from('exchange_rates').select('rate').eq('currency_from', newItem.currency).eq('date', todayStr).single();
+            if (rateRes.data) {
+              rate = Number(rateRes.data.rate);
+            }
+          } catch (e) {}
+          newItem.exchange_rate = rate;
+        }
+        const amt = Number(newItem.value || newItem.amount || 0);
+        newItem.value_converted = amt * newItem.exchange_rate;
+        newItem.rate_date = newItem.start_date || newItem.date || new Date().toISOString().split('T')[0];
+      }
+      return newItem;
+    }));
+
+    const result = await this.realClient.from(this.table).insert(updatedItems).select();
+    if (result.error) return result;
+
+    const insertedData = result.data || [];
+
+    if (this.table === 'services' && insertedData.length > 0) {
+      try {
+        const stagesRes = await this.realClient.from('editorial_stages').select('*').eq('active', true).order('order', { ascending: true });
+        const activeStages = stagesRes.data || [];
+        
+        const serviceStagesToInsert = [];
+        insertedData.forEach(serv => {
+          activeStages.forEach((stage, idx) => {
+            serviceStagesToInsert.push({
+              service_id: serv.id,
+              stage_name: stage.name,
+              status: idx === 0 ? 'en proceso' : 'pendiente',
+              start_date: idx === 0 ? new Date().toISOString().split('T')[0] : null,
+              end_date: null,
+              responsible: '',
+              notes: ''
+            });
+          });
+        });
+
+        if (serviceStagesToInsert.length > 0) {
+          await this.realClient.from('service_stages').insert(serviceStagesToInsert);
+        }
+      } catch (e) {
+        console.error("Error creating stages for new service:", e);
+      }
+    }
+
+    try {
+      const userRes = await this.realClient.auth.getUser();
+      const currentUser = userRes.data?.user;
+      if (currentUser && this.table !== 'activity_log') {
+        const logsToInsert = insertedData.map(item => {
+          let desc = `Se creó un registro en la tabla ${this.table}: ${item.name || item.book_title || item.title || item.id}`;
+          let moduleName = this.table;
+          let actionType = 'creación';
+
+          if (this.table === 'clients') {
+            moduleName = 'Clientes';
+            desc = `Se registró el nuevo cliente: ${item.name}`;
+          } else if (this.table === 'prospects') {
+            moduleName = 'Prospectos';
+            desc = `Se registró el prospecto: ${item.name}`;
+          } else if (this.table === 'quotations') {
+            moduleName = 'Cotizaciones';
+            desc = `Se creó la cotización ${item.id}`;
+          } else if (this.table === 'services') {
+            moduleName = 'Servicios';
+            desc = `Se contrató el servicio para la obra ${item.book_title}`;
+          } else if (this.table === 'incomes') {
+            moduleName = 'Ingresos';
+            desc = `Ingreso registrado por ${formatCurrency(item.amount, item.currency)}`;
+            actionType = 'ingreso registrado';
+          } else if (this.table === 'expenses') {
+            moduleName = 'Gastos';
+            desc = `Gasto registrado por ${formatCurrency(item.amount, item.currency)}`;
+            actionType = 'gasto registrado';
+          } else if (this.table === 'documents') {
+            moduleName = 'Documentos';
+            desc = `Se subió el documento ${item.name}`;
+            actionType = 'documento subido';
+          }
+
+          return {
+            user_id: currentUser.id,
+            user_email: currentUser.email,
+            date: new Date().toISOString(),
+            module: moduleName,
+            action: actionType,
+            description: desc,
+            entity_id: item.id
+          };
+        });
+
+        if (logsToInsert.length > 0) {
+          await this.realClient.from('activity_log').insert(logsToInsert);
+        }
+      }
+    } catch (e) {
+      console.error("Activity logging error:", e);
+    }
+
+    const returnData = Array.isArray(newData) ? insertedData : insertedData[0];
+    return { data: returnData, error: null };
+  }
+
+  async update(updateData) {
+    const result = await this.query.update(updateData).select();
+    if (result.error) return result;
+
+    const updatedData = result.data || [];
+
+    if (updatedData.length > 0) {
+      if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table) && 
+          (updateData.value !== undefined || updateData.amount !== undefined || updateData.currency !== undefined || updateData.exchange_rate !== undefined)) {
+        await Promise.all(updatedData.map(async row => {
+          let rate = row.exchange_rate || (row.currency === 'USD' ? 940 : row.currency === 'EUR' ? 1010 : 1);
+          const amt = Number(row.value || row.amount || 0);
+          const value_converted = amt * rate;
+          await this.realClient.from(this.table).update({ value_converted, exchange_rate: rate }).eq('id', row.id);
+          row.value_converted = value_converted;
+          row.exchange_rate = rate;
+        }));
+      }
+
+      try {
+        const userRes = await this.realClient.auth.getUser();
+        const currentUser = userRes.data?.user;
+        if (currentUser && this.table !== 'activity_log') {
+          const logs = updatedData.map(item => {
+            let actionType = 'edición';
+            let desc = `Se editó un registro en la tabla ${this.table}: ${item.name || item.book_title || item.title || item.id}`;
+            let moduleName = this.table;
+
+            if (this.table === 'clients') {
+              moduleName = 'Clientes';
+              actionType = 'edición de cliente';
+              desc = `Se editó el cliente ${item.name}`;
+            } else if (this.table === 'prospects') {
+              moduleName = 'Prospectos';
+              desc = `Se editó el prospecto ${item.name}`;
+            } else if (this.table === 'quotations' && updateData.status === 'aceptada') {
+              moduleName = 'Cotizaciones';
+              actionType = 'aprobación de cotización';
+              desc = `Se aprobó la cotización ${item.id}`;
+            } else if (this.table === 'quotations' && updateData.status) {
+              moduleName = 'Cotizaciones';
+              actionType = 'cambio de estado de cotización';
+              desc = `Se cambió el estado de la cotización ${item.id} a ${updateData.status}`;
+            } else if (this.table === 'services' && updateData.current_stage) {
+              moduleName = 'Servicios';
+              actionType = 'cambio de etapa';
+              desc = `Se cambió la etapa de la obra ${item.book_title} a ${updateData.current_stage}`;
+            } else if (this.table === 'incomes' && updateData.status === 'pagado') {
+              moduleName = 'Ingresos';
+              actionType = 'pago marcado como recibido';
+              desc = `Se recibió el pago de la cuenta de cobro ${item.id}`;
+            }
+
+            return {
+              user_id: currentUser.id,
+              user_email: currentUser.email,
+              date: new Date().toISOString(),
+              module: moduleName,
+              action: actionType,
+              description: desc,
+              entity_id: item.id
+            };
+          });
+
+          if (logs.length > 0) {
+            await this.realClient.from('activity_log').insert(logs);
+          }
+        }
+      } catch (e) {
+        console.error("Activity logging error on update:", e);
+      }
+    }
+
+    const returnData = this.singleRow ? (updatedData[0] || null) : updatedData;
+    return { data: returnData, error: null };
+  }
+
+  async delete() {
+    return await this.query.delete();
+  }
+}
+
 // Mock Supabase Client implementation
 const mockSupabase = {
   auth: {
@@ -1036,7 +1423,7 @@ const mockSupabase = {
     
     signInWithPassword: async ({ email, password }) => {
       if (email && password) {
-        const user = { id: 'mock-user-123', email };
+        const user = { id: 'mock-user-123', email, role: 'administrador' };
         localStorage.setItem('somos_noveli_crm_user', JSON.stringify(user));
         
         if (authListener) {
@@ -1048,7 +1435,7 @@ const mockSupabase = {
     },
 
     signUp: async ({ email, password }) => {
-      const user = { id: 'mock-user-123', email };
+      const user = { id: 'mock-user-123', email, role: 'administrador' };
       localStorage.setItem('somos_noveli_crm_user', JSON.stringify(user));
       if (authListener) {
         authListener('SIGNED_IN', { user, access_token: 'mock-session-token' });
@@ -1107,7 +1494,14 @@ const mockSupabase = {
 let authListener = null;
 
 if (useRealSupabase) {
-  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
+  const realClient = createClient(supabaseUrl, supabaseAnonKey);
+  supabaseInstance = {
+    auth: realClient.auth,
+    storage: realClient.storage,
+    from: (table) => {
+      return new RealSupabaseQueryBuilder(table, realClient);
+    }
+  };
   console.log("🚀 Somos Noveli CRM: Conectado a la base de datos Supabase Real.");
 } else {
   supabaseInstance = mockSupabase;
@@ -1123,3 +1517,4 @@ function formatCurrency(amount, currency = 'CLP') {
   }
   return 'US$ ' + Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+

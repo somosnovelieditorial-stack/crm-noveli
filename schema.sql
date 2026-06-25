@@ -214,6 +214,94 @@ ALTER TABLE quotation_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quick_replies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 
+-- 15. SETTINGS Table
+CREATE TABLE IF NOT EXISTS settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    editorial_name TEXT NOT NULL DEFAULT 'Somos Noveli Editorial',
+    logo TEXT,
+    email TEXT,
+    address TEXT,
+    base_country TEXT DEFAULT 'Chile',
+    currency_primary TEXT DEFAULT 'CLP',
+    currencies_secondary TEXT[] DEFAULT ARRAY['USD', 'EUR'],
+    vat_rate NUMERIC(4,2) DEFAULT 19.00,
+    bank_details TEXT,
+    quotation_notes TEXT,
+    quotation_legal TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 16. EXCHANGE_RATES Table
+CREATE TABLE IF NOT EXISTS exchange_rates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    currency_from TEXT NOT NULL,
+    currency_to TEXT NOT NULL DEFAULT 'CLP',
+    rate NUMERIC(12,4) NOT NULL,
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    source TEXT NOT NULL DEFAULT 'Manual',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 17. EDITORIAL_STAGES Table
+CREATE TABLE IF NOT EXISTS editorial_stages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    name TEXT NOT NULL,
+    description TEXT,
+    "order" INTEGER NOT NULL DEFAULT 1,
+    color TEXT DEFAULT '#3b82f6',
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 18. SERVICE_CHECKLISTS Table
+CREATE TABLE IF NOT EXISTS service_checklists (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+    task TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'en proceso', 'completada')),
+    responsible TEXT,
+    due_date DATE,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 19. ACTIVITY_LOG Table
+CREATE TABLE IF NOT EXISTS activity_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    user_email TEXT,
+    date TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    module TEXT NOT NULL,
+    action TEXT NOT NULL,
+    description TEXT NOT NULL,
+    entity_id UUID,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 20. AGENDA_EVENTS Table
+CREATE TABLE IF NOT EXISTS agenda_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    title TEXT NOT NULL,
+    description TEXT,
+    date DATE NOT NULL,
+    time TIME,
+    type TEXT NOT NULL DEFAULT 'reunión' CHECK (type IN ('reunión', 'evento', 'otro')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable RLS for new tables
+ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exchange_rates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE editorial_stages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE service_checklists ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agenda_events ENABLE ROW LEVEL SECURITY;
+
 -- Enable Policies (Users can only manage their own data)
 CREATE POLICY "Users can manage their own providers" ON providers FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can manage their own clients" ON clients FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
@@ -230,6 +318,13 @@ CREATE POLICY "Users can manage their own quotation_items" ON quotation_items FO
 CREATE POLICY "Users can manage their own quick_replies" ON quick_replies FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can manage their own documents" ON documents FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
+CREATE POLICY "Users can manage their own settings" ON settings FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own exchange_rates" ON exchange_rates FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own editorial_stages" ON editorial_stages FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own service_checklists" ON service_checklists FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own activity_log" ON activity_log FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own agenda_events" ON agenda_events FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
 -- Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_providers_user_id ON providers(user_id);
 CREATE INDEX IF NOT EXISTS idx_clients_user_id ON clients(user_id);
@@ -245,3 +340,11 @@ CREATE INDEX IF NOT EXISTS idx_quotations_user_id ON quotations(user_id);
 CREATE INDEX IF NOT EXISTS idx_quotation_items_quot ON quotation_items(quotation_id);
 CREATE INDEX IF NOT EXISTS idx_quick_replies_user_id ON quick_replies(user_id);
 CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_settings_user_id ON settings(user_id);
+CREATE INDEX IF NOT EXISTS idx_exchange_rates_user_id ON exchange_rates(user_id);
+CREATE INDEX IF NOT EXISTS idx_editorial_stages_user_id ON editorial_stages(user_id);
+CREATE INDEX IF NOT EXISTS idx_service_checklists_serv ON service_checklists(service_id);
+CREATE INDEX IF NOT EXISTS idx_activity_log_user_id ON activity_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_agenda_events_user_id ON agenda_events(user_id);
+
