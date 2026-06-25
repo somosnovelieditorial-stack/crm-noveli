@@ -611,6 +611,12 @@ const INITIAL_MOCK_DATA = {
   agenda_events: [
     { id: "evt-1", user_id: "mock-user-123", title: "Reunión de lanzamiento con Isabel Allende", description: "Definir cronograma final y detalles de tapa dura", date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], time: "11:00", type: "reunión", created_at: new Date().toISOString() },
     { id: "evt-2", user_id: "mock-user-123", title: "Revisar muestras Imprenta Andina", description: "Verificar muestras de impresión física de prueba", date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], time: "15:30", type: "evento", created_at: new Date().toISOString() }
+  ],
+  organizations: [
+    { id: "org-noveli-1234", name: "Somos Noveli Editorial", created_at: new Date().toISOString() }
+  ],
+  organization_members: [
+    { id: "member-1", organization_id: "org-noveli-1234", user_id: "mock-user-123", role: "administrador", created_at: new Date().toISOString() }
   ]
 };
 
@@ -795,42 +801,54 @@ class MockQueryBuilder {
     }
   }
 
-  async insert(newData) {
-    return {
-      then: async (onfulfilled) => {
-        const db = getMockDb();
-        const records = db[this.table] || [];
-        
-        const itemsToInsert = Array.isArray(newData) ? newData : [newData];
-        const insertedItems = itemsToInsert.map(item => {
-          const newItem = {
-            id: genId(this.table),
-            user_id: getMockUser().id,
-            created_at: new Date().toISOString(),
-            ...item
-          };
+  insert(newData) {
+    return new MockMutationBuilder(this, 'insert', newData);
+  }
 
-          // Multicurrency calculations
-          if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
-            if (newItem.exchange_rate === undefined) {
-              newItem.exchange_rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
-            }
-            const amt = Number(newItem.value || newItem.amount || 0);
-            newItem.value_converted = amt * newItem.exchange_rate;
-            newItem.rate_date = newItem.start_date || newItem.date || new Date().toISOString().split('T')[0];
-          }
+  update(updateData) {
+    return new MockMutationBuilder(this, 'update', updateData);
+  }
 
-          records.push(newItem);
-          return newItem;
-        });
+  delete() {
+    return new MockMutationBuilder(this, 'delete');
+  }
 
-        // Trigger automatic stages timeline insertion for new service (based on editorial_stages configurations)
-        if (this.table === 'services') {
-          db.service_stages = db.service_stages || [];
-          const activeStages = (db.editorial_stages || []).filter(st => st.active).sort((a, b) => a.order - b.order);
-          insertedItems.forEach(serv => {
-            const stages = activeStages.map((stage, idx) => ({
-              id: `stage-${serv.id}-${stage.id}`,
+  async _executeInsert(newData) {
+    const db = getMockDb();
+    const records = db[this.table] || [];
+    
+    const itemsToInsert = Array.isArray(newData) ? newData : [newData];
+    const insertedItems = itemsToInsert.map(item => {
+      const newItem = {
+        id: item.id || genId(this.table),
+        user_id: getMockUser().id,
+        created_at: new Date().toISOString(),
+        ...item
+      };
+
+      // Multicurrency calculations
+      if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+        if (newItem.exchange_rate === undefined) {
+          newItem.exchange_rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
+        }
+        const amt = Number(newItem.value || newItem.amount || 0);
+        newItem.value_converted = amt * newItem.exchange_rate;
+        newItem.rate_date = newItem.start_date || newItem.date || new Date().toISOString().split('T')[0];
+      }
+
+      records.push(newItem);
+      return newItem;
+    });
+
+    // Trigger automatic stages timeline insertion for new service
+    if (this.table === 'services' && insertedItems.length > 0) {
+      try {
+        const activeStages = (db.editorial_stages || []).filter(st => st.active).sort((a, b) => a.order - b.order);
+        db.service_stages = db.service_stages || [];
+        insertedItems.forEach(serv => {
+          activeStages.forEach((stage, idx) => {
+            db.service_stages.push({
+              id: genId('service_stages'),
               user_id: getMockUser().id,
               service_id: serv.id,
               stage_name: stage.name,
@@ -839,15 +857,449 @@ class MockQueryBuilder {
               end_date: null,
               responsible: '',
               notes: ''
-            }));
-            db.service_stages.push(...stages);
+            });
           });
+        });
+      } catch (e) {
+        console.error("Mock: Error creating stages for new service:", e);
+      }
+    }
+
+    // Auto-log activity
+    if (this.table !== 'activity_log') {
+      db.activity_log = db.activity_log || [];
+      insertedItems.forEach(item => {
+        let desc = `Se creó un registro en la tabla ${this.table}: ${item.name || item.book_title || item.title || item.id}`;
+        let moduleName = this.table;
+        let actionType = 'creación';
+
+        if (this.table === 'clients') {
+          moduleName = 'Clientes';
+          desc = `Se registró el nuevo cliente: ${item.name}`;
+        } else if (this.table === 'prospects') {
+          moduleName = 'Prospectos';
+          desc = `Se registró el prospecto: ${item.name}`;
+        } else if (this.table === 'quotations') {
+          moduleName = 'Cotizaciones';
+          desc = `Se creó la cotización ${item.id}`;
+        } else if (this.table === 'services') {
+          moduleName = 'Servicios';
+          desc = `Se contrató el servicio para la obra ${item.book_title}`;
+        } else if (this.table === 'incomes') {
+          moduleName = 'Ingresos';
+          desc = `Ingreso registrado por ${formatCurrency(item.amount, item.currency)}`;
+          actionType = 'ingreso registrado';
+        } else if (this.table === 'expenses') {
+          moduleName = 'Gastos';
+          desc = `Gasto registrado por ${formatCurrency(item.amount, item.currency)}`;
+          actionType = 'gasto registrado';
+        } else if (this.table === 'documents') {
+          moduleName = 'Documentos';
+          desc = `Se subió el documento ${item.name}`;
+          actionType = 'documento subido';
         }
 
-        // Auto-log activity
-        if (this.table !== 'activity_log') {
-          db.activity_log = db.activity_log || [];
-          insertedItems.forEach(item => {
+        const log = {
+          id: genId('activity_log'),
+          user_id: getMockUser().id,
+          user_email: getMockUser().email,
+          date: new Date().toISOString(),
+          module: moduleName,
+          action: actionType,
+          description: desc,
+          entity_id: item.id
+        };
+        db.activity_log.push(log);
+      });
+    }
+
+    db[this.table] = records;
+    saveMockDb(db);
+
+    const returnData = Array.isArray(newData) ? insertedItems : insertedItems[0];
+    return { data: JSON.parse(JSON.stringify(returnData)), error: null };
+  }
+
+  async _executeUpdate(updateData) {
+    const db = getMockDb();
+    let records = db[this.table] || [];
+    let updatedRecords = [];
+
+    records = records.map(row => {
+      const matches = this.filters.every(filter => row[filter.column] === filter.value);
+      if (matches) {
+        const updatedRow = { ...row, ...updateData };
+        
+        // Multicurrency calculations
+        if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+          if (updatedRow.exchange_rate === undefined) {
+            updatedRow.exchange_rate = updatedRow.currency === 'USD' ? 940 : updatedRow.currency === 'EUR' ? 1010 : 1;
+          }
+          const amt = Number(updatedRow.value || updatedRow.amount || 0);
+          updatedRow.value_converted = amt * updatedRow.exchange_rate;
+          updatedRow.rate_date = updatedRow.start_date || updatedRow.date || new Date().toISOString().split('T')[0];
+        }
+
+        updatedRecords.push(updatedRow);
+        return updatedRow;
+      }
+      return row;
+    });
+
+    // Auto-log activity
+    if (this.table !== 'activity_log') {
+      db.activity_log = db.activity_log || [];
+      updatedRecords.forEach(item => {
+        let actionType = 'edición';
+        let desc = `Se editó un registro en la tabla ${this.table}: ${item.name || item.book_title || item.title || item.id}`;
+        let moduleName = this.table;
+
+        if (this.table === 'clients') {
+          moduleName = 'Clientes';
+          actionType = 'edición de cliente';
+          desc = `Se editó el cliente ${item.name}`;
+        } else if (this.table === 'prospects') {
+          moduleName = 'Prospectos';
+          desc = `Se editó el prospecto ${item.name}`;
+        } else if (this.table === 'quotations' && updateData.status === 'aceptada') {
+          moduleName = 'Cotizaciones';
+          actionType = 'aprobación de cotización';
+          desc = `Se aprobó la cotización ${item.id}`;
+        } else if (this.table === 'quotations' && updateData.status) {
+          moduleName = 'Cotizaciones';
+          actionType = 'cambio de estado de cotización';
+          desc = `Se cambió el estado de la cotización ${item.id} a ${updateData.status}`;
+        } else if (this.table === 'services' && updateData.current_stage) {
+          moduleName = 'Servicios';
+          actionType = 'cambio de etapa';
+          desc = `Se cambió la etapa de la obra ${item.book_title} a ${updateData.current_stage}`;
+        } else if (this.table === 'incomes' && updateData.status === 'pagado') {
+          moduleName = 'Ingresos';
+          actionType = 'pago marcado como recibido';
+          desc = `Se recibió el pago de la cuenta de cobro ${item.id}`;
+        }
+
+        const log = {
+          id: genId('activity_log'),
+          user_id: getMockUser().id,
+          user_email: getMockUser().email,
+          date: new Date().toISOString(),
+          module: moduleName,
+          action: actionType,
+          description: desc,
+          entity_id: item.id
+        };
+        db.activity_log.push(log);
+      });
+    }
+
+    db[this.table] = records;
+    saveMockDb(db);
+
+    const returnData = this.singleRow ? (updatedRecords[0] || null) : updatedRecords;
+    return { data: JSON.parse(JSON.stringify(returnData)), error: null };
+  }
+
+  async _executeDelete() {
+    const db = getMockDb();
+    let records = db[this.table] || [];
+    
+    let deletedRecords = [];
+    const beforeCount = records.length;
+    records = records.filter(row => {
+      const matches = this.filters.every(filter => row[filter.column] === filter.value);
+      if (matches) {
+        deletedRecords.push(row);
+        return false;
+      }
+      return true;
+    });
+
+    const deletedCount = beforeCount - records.length;
+
+    // Auto-log activity on delete
+    if (this.table !== 'activity_log' && deletedRecords.length > 0) {
+      db.activity_log = db.activity_log || [];
+      deletedRecords.forEach(item => {
+        let desc = `Se eliminó un registro en la tabla ${this.table} (ID: ${item.id})`;
+        let moduleName = this.table;
+
+        if (this.table === 'clients') {
+          moduleName = 'Clientes';
+          desc = `Se eliminó el cliente: ${item.name}`;
+        } else if (this.table === 'prospects') {
+          moduleName = 'Prospectos';
+          desc = `Se eliminó el prospecto: ${item.name}`;
+        } else if (this.table === 'quotations') {
+          moduleName = 'Cotizaciones';
+          desc = `Se eliminó la cotización ${item.id}`;
+        } else if (this.table === 'services') {
+          moduleName = 'Servicios';
+          desc = `Se eliminó el servicio para la obra ${item.book_title}`;
+        }
+
+        db.activity_log.push({
+          id: genId('activity_log'),
+          user_id: getMockUser().id,
+          user_email: getMockUser().email,
+          date: new Date().toISOString(),
+          module: moduleName,
+          action: 'eliminación',
+          description: desc,
+          entity_id: item.id
+        });
+      });
+    }
+
+    db[this.table] = records;
+    saveMockDb(db);
+    return { data: { count: deletedCount }, error: null };
+  }
+}
+
+// Helpers for mock IDs
+function genId(prefix) {
+  return `${prefix.substring(0, 3)}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Mock User handling
+const getMockUser = () => {
+  const userJson = localStorage.getItem('somos_noveli_crm_user');
+  if (!userJson) {
+    const defaultUser = { id: 'mock-user-123', email: 'admin@somosnoveli.cl', role: 'administrador' };
+    localStorage.setItem('somos_noveli_crm_user', JSON.stringify(defaultUser));
+    return defaultUser;
+  }
+  return JSON.parse(userJson);
+};
+
+// Mock Mutation Builder to wrap MockQueryBuilder mutations and support standard postgrest chaining
+class MockMutationBuilder {
+  constructor(builder, method, data) {
+    this.builder = builder;
+    this.method = method;
+    this.data = data;
+    this.selectColumns = null;
+    this.isSingle = false;
+
+    const self = this;
+    const proxy = new Proxy(this, {
+      get: (target, prop) => {
+        if (prop in target) {
+          if (typeof target[prop] === 'function') {
+            return target[prop].bind(target);
+          }
+          return target[prop];
+        }
+
+        // Intercept filter and chaining calls and forward to builder
+        return (...args) => {
+          if (prop === 'select') {
+            target.selectColumns = args[0] || '*';
+          } else if (prop === 'single') {
+            target.isSingle = true;
+            target.builder.single();
+          } else if (typeof target.builder[prop] === 'function') {
+            target.builder = target.builder[prop](...args);
+          }
+          return proxy;
+        };
+      }
+    });
+
+    return proxy;
+  }
+
+  then(onfulfilled, onrejected) {
+    return this.execute().then(onfulfilled, onrejected);
+  }
+
+  catch(onrejected) {
+    return this.execute().catch(onrejected);
+  }
+
+  finally(onfinally) {
+    return this.execute().finally(onfinally);
+  }
+
+  async execute() {
+    let result;
+    if (this.method === 'insert') {
+      result = await this.builder._executeInsert(this.data);
+    } else if (this.method === 'update') {
+      result = await this.builder._executeUpdate(this.data);
+    } else if (this.method === 'delete') {
+      result = await this.builder._executeDelete();
+    }
+    return result;
+  }
+}
+
+// Real Supabase Mutation Builder to support query chaining on insert/update/delete operations
+class MutationQueryBuilder {
+  constructor(realClient, table, method, data) {
+    this.realClient = realClient;
+    this.table = table;
+    this.method = method;
+    this.data = data;
+    this.filters = [];
+    this.selectColumns = null;
+    this.isSingle = false;
+
+    const self = this;
+    const proxy = new Proxy(this, {
+      get: (target, prop) => {
+        if (prop in target) {
+          if (typeof target[prop] === 'function') {
+            return target[prop].bind(target);
+          }
+          return target[prop];
+        }
+
+        // Catch any filtering/chaining methods like eq, neq, select, single, etc.
+        return (...args) => {
+          if (prop === 'select') {
+            target.selectColumns = args[0] || '*';
+          } else if (prop === 'single') {
+            target.isSingle = true;
+          } else {
+            target.filters.push({ method: prop, args });
+          }
+          return proxy;
+        };
+      }
+    });
+
+    return proxy;
+  }
+
+  then(onfulfilled, onrejected) {
+    return this.execute().then(onfulfilled, onrejected);
+  }
+
+  catch(onrejected) {
+    return this.execute().catch(onrejected);
+  }
+
+  finally(onfinally) {
+    return this.execute().finally(onfinally);
+  }
+
+  async execute() {
+    let query;
+
+    if (this.method === 'insert') {
+      const items = Array.isArray(this.data) ? this.data : [this.data];
+      const updatedItems = await Promise.all(items.map(async item => {
+        const newItem = { ...item };
+        if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+          if (newItem.exchange_rate === undefined) {
+            let rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
+            try {
+              const todayStr = new Date().toISOString().split('T')[0];
+              const rateRes = await this.realClient.from('exchange_rates').select('rate').eq('currency_from', newItem.currency).eq('date', todayStr).single();
+              if (rateRes.data) {
+                rate = Number(rateRes.data.rate);
+              }
+            } catch (e) {}
+            newItem.exchange_rate = rate;
+          }
+          const amt = Number(newItem.value || newItem.amount || 0);
+          newItem.value_converted = amt * newItem.exchange_rate;
+          newItem.rate_date = newItem.start_date || newItem.date || new Date().toISOString().split('T')[0];
+        }
+        return newItem;
+      }));
+      query = this.realClient.from(this.table).insert(updatedItems);
+
+    } else if (this.method === 'update') {
+      query = this.realClient.from(this.table).update(this.data);
+
+    } else if (this.method === 'delete') {
+      query = this.realClient.from(this.table).delete();
+
+    } else if (this.method === 'upsert') {
+      const items = Array.isArray(this.data) ? this.data : [this.data];
+      const updatedItems = await Promise.all(items.map(async item => {
+        const newItem = { ...item };
+        if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+          if (newItem.exchange_rate === undefined) {
+            let rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
+            try {
+              const todayStr = new Date().toISOString().split('T')[0];
+              const rateRes = await this.realClient.from('exchange_rates').select('rate').eq('currency_from', newItem.currency).eq('date', todayStr).single();
+              if (rateRes.data) {
+                rate = Number(rateRes.data.rate);
+              }
+            } catch (e) {}
+            newItem.exchange_rate = rate;
+          }
+          const amt = Number(newItem.value || newItem.amount || 0);
+          newItem.value_converted = amt * newItem.exchange_rate;
+          newItem.rate_date = newItem.start_date || newItem.date || new Date().toISOString().split('T')[0];
+        }
+        return newItem;
+      }));
+      query = this.realClient.from(this.table).upsert(updatedItems);
+    }
+
+    // Apply all recorded filters (eq, neq, in, etc.)
+    for (const filter of this.filters) {
+      if (typeof query[filter.method] === 'function') {
+        query = query[filter.method](...filter.args);
+      }
+    }
+
+    // Apply select
+    if (this.selectColumns !== null) {
+      query = query.select(this.selectColumns);
+    } else {
+      query = query.select();
+    }
+
+    if (this.isSingle) {
+      query = query.single();
+    }
+
+    const result = await query;
+    if (result.error) return result;
+
+    const returnedData = result.data || [];
+    const records = Array.isArray(returnedData) ? returnedData : [returnedData];
+
+    // Post-insertion side effects
+    if (this.method === 'insert' && records.length > 0) {
+      if (this.table === 'services') {
+        try {
+          const stagesRes = await this.realClient.from('editorial_stages').select('*').eq('active', true).order('order', { ascending: true });
+          const activeStages = stagesRes.data || [];
+          const serviceStagesToInsert = [];
+          records.forEach(serv => {
+            activeStages.forEach((stage, idx) => {
+              serviceStagesToInsert.push({
+                service_id: serv.id,
+                stage_name: stage.name,
+                status: idx === 0 ? 'en proceso' : 'pendiente',
+                start_date: idx === 0 ? new Date().toISOString().split('T')[0] : null,
+                end_date: null,
+                responsible: '',
+                notes: ''
+              });
+            });
+          });
+          if (serviceStagesToInsert.length > 0) {
+            await this.realClient.from('service_stages').insert(serviceStagesToInsert);
+          }
+        } catch (e) {
+          console.error("Error creating stages for new service:", e);
+        }
+      }
+
+      try {
+        const userRes = await this.realClient.auth.getUser();
+        const currentUser = userRes.data?.user;
+        if (currentUser && this.table !== 'activity_log') {
+          const logsToInsert = records.map(item => {
             let desc = `Se creó un registro en la tabla ${this.table}: ${item.name || item.book_title || item.title || item.id}`;
             let moduleName = this.table;
             let actionType = 'creación';
@@ -878,150 +1330,137 @@ class MockQueryBuilder {
               actionType = 'documento subido';
             }
 
-            const log = {
-              id: genId('activity_log'),
-              user_id: getMockUser().id,
-              user_email: getMockUser().email,
+            return {
+              user_id: currentUser.id,
+              user_email: currentUser.email,
               date: new Date().toISOString(),
               module: moduleName,
               action: actionType,
               description: desc,
               entity_id: item.id
             };
-            db.activity_log.push(log);
           });
-        }
-
-        db[this.table] = records;
-        saveMockDb(db);
-
-        const returnData = Array.isArray(newData) ? insertedItems : insertedItems[0];
-        return onfulfilled({ data: JSON.parse(JSON.stringify(returnData)), error: null });
-      }
-    };
-  }
-
-  async update(updateData) {
-    return {
-      then: async (onfulfilled) => {
-        const db = getMockDb();
-        let records = db[this.table] || [];
-        
-        let updatedRecords = [];
-
-        records = records.map(row => {
-          const matches = this.filters.every(filter => row[filter.column] === filter.value);
-          if (matches) {
-            const updatedRow = { ...row, ...updateData };
-            
-            // Multicurrency calculations
-            if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
-              if (updatedRow.exchange_rate === undefined) {
-                updatedRow.exchange_rate = updatedRow.currency === 'USD' ? 940 : updatedRow.currency === 'EUR' ? 1010 : 1;
-              }
-              const amt = Number(updatedRow.value || updatedRow.amount || 0);
-              updatedRow.value_converted = amt * updatedRow.exchange_rate;
-              updatedRow.rate_date = updatedRow.start_date || updatedRow.date || new Date().toISOString().split('T')[0];
-            }
-
-            updatedRecords.push(updatedRow);
-            return updatedRow;
+          if (logsToInsert.length > 0) {
+            await this.realClient.from('activity_log').insert(logsToInsert);
           }
-          return row;
-        });
+        }
+      } catch (e) {
+        console.error("Activity logging error:", e);
+      }
+    }
 
-        // Auto-log activity
-        if (this.table !== 'activity_log') {
-          db.activity_log = db.activity_log || [];
-          updatedRecords.forEach(item => {
-            let actionType = 'edición';
-            let desc = `Se editó un registro en la tabla ${this.table}: ${item.name || item.book_title || item.title || item.id}`;
+    // Post-update side effects
+    if (this.method === 'update' && records.length > 0) {
+      if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table) && 
+          (this.data.value !== undefined || this.data.amount !== undefined || this.data.currency !== undefined || this.data.exchange_rate !== undefined)) {
+        await Promise.all(records.map(async row => {
+          let rate = row.exchange_rate || (row.currency === 'USD' ? 940 : row.currency === 'EUR' ? 1010 : 1);
+          const amt = Number(row.value || row.amount || 0);
+          const value_converted = amt * rate;
+          await this.realClient.from(this.table).update({ value_converted, exchange_rate: rate }).eq('id', row.id);
+        }));
+      }
+
+      try {
+        const userRes = await this.realClient.auth.getUser();
+        const currentUser = userRes.data?.user;
+        if (currentUser && this.table !== 'activity_log') {
+          const logsToInsert = records.map(item => {
+            let desc = `Se actualizó un registro en la tabla ${this.table}: ${item.name || item.book_title || item.title || item.id}`;
             let moduleName = this.table;
+            let actionType = 'edición';
 
             if (this.table === 'clients') {
               moduleName = 'Clientes';
-              actionType = 'edición de cliente';
-              desc = `Se editó el cliente ${item.name}`;
+              desc = `Se editó la información del cliente: ${item.name}`;
             } else if (this.table === 'prospects') {
               moduleName = 'Prospectos';
-              desc = `Se editó el prospecto ${item.name}`;
-            } else if (this.table === 'quotations' && updateData.status === 'aceptada') {
+              desc = `Se editó el prospecto: ${item.name}`;
+            } else if (this.table === 'quotations' && this.data.status === 'aceptada') {
               moduleName = 'Cotizaciones';
               actionType = 'aprobación de cotización';
               desc = `Se aprobó la cotización ${item.id}`;
-            } else if (this.table === 'quotations' && updateData.status) {
+            } else if (this.table === 'quotations' && this.data.status) {
               moduleName = 'Cotizaciones';
               actionType = 'cambio de estado de cotización';
-              desc = `Se cambió el estado de la cotización ${item.id} a ${updateData.status}`;
-            } else if (this.table === 'services' && updateData.current_stage) {
+              desc = `Se cambió el estado de la cotización ${item.id} a ${this.data.status}`;
+            } else if (this.table === 'services' && this.data.current_stage) {
               moduleName = 'Servicios';
               actionType = 'cambio de etapa';
-              desc = `Se cambió la etapa de la obra ${item.book_title} a ${updateData.current_stage}`;
-            } else if (this.table === 'incomes' && updateData.status === 'pagado') {
+              desc = `Se cambió la etapa de la obra ${item.book_title} a ${this.data.current_stage}`;
+            } else if (this.table === 'incomes' && this.data.status === 'pagado') {
               moduleName = 'Ingresos';
               actionType = 'pago marcado como recibido';
               desc = `Se recibió el pago de la cuenta de cobro ${item.id}`;
             }
 
-            const log = {
-              id: genId('activity_log'),
-              user_id: getMockUser().id,
-              user_email: getMockUser().email,
+            return {
+              user_id: currentUser.id,
+              user_email: currentUser.email,
               date: new Date().toISOString(),
               module: moduleName,
               action: actionType,
               description: desc,
               entity_id: item.id
             };
-            db.activity_log.push(log);
           });
+          if (logsToInsert.length > 0) {
+            await this.realClient.from('activity_log').insert(logsToInsert);
+          }
         }
-
-        db[this.table] = records;
-        saveMockDb(db);
-
-        const returnData = this.singleRow ? (updatedRecords[0] || null) : updatedRecords;
-        return onfulfilled({ data: JSON.parse(JSON.stringify(returnData)), error: null });
+      } catch (e) {
+        console.error("Activity logging error:", e);
       }
-    };
-  }
+    }
 
-  async delete() {
-    return {
-      then: async (onfulfilled) => {
-        const db = getMockDb();
-        let records = db[this.table] || [];
-        
-        const beforeCount = records.length;
-        records = records.filter(row => {
-          return !this.filters.every(filter => row[filter.column] === filter.value);
-        });
+    // Post-deletion side effects
+    if (this.method === 'delete' && records.length > 0) {
+      try {
+        const userRes = await this.realClient.auth.getUser();
+        const currentUser = userRes.data?.user;
+        if (currentUser && this.table !== 'activity_log') {
+          const logsToInsert = records.map(item => {
+            let desc = `Se eliminó un registro en la tabla ${this.table} (ID: ${item.id})`;
+            let moduleName = this.table;
+            let actionType = 'eliminación';
 
-        const deletedCount = beforeCount - records.length;
-        db[this.table] = records;
-        saveMockDb(db);
+            if (this.table === 'clients') {
+              moduleName = 'Clientes';
+              desc = `Se eliminó el cliente: ${item.name}`;
+            } else if (this.table === 'prospects') {
+              moduleName = 'Prospectos';
+              desc = `Se eliminó el prospecto: ${item.name}`;
+            } else if (this.table === 'quotations') {
+              moduleName = 'Cotizaciones';
+              desc = `Se eliminó la cotización ${item.id}`;
+            } else if (this.table === 'services') {
+              moduleName = 'Servicios';
+              desc = `Se eliminó el servicio para la obra ${item.book_title}`;
+            }
 
-        return onfulfilled({ data: { count: deletedCount }, error: null });
+            return {
+              user_id: currentUser.id,
+              user_email: currentUser.email,
+              date: new Date().toISOString(),
+              module: moduleName,
+              action: actionType,
+              description: desc,
+              entity_id: item.id
+            };
+          });
+          if (logsToInsert.length > 0) {
+            await this.realClient.from('activity_log').insert(logsToInsert);
+          }
+        }
+      } catch (e) {
+        console.error("Activity logging error:", e);
       }
-    };
+    }
+
+    const returnData = Array.isArray(returnedData) ? returnedData : returnedData[0];
+    return { data: returnData, error: null };
   }
 }
-
-// Helpers for mock IDs
-function genId(prefix) {
-  return `${prefix.substring(0, 3)}-${Math.random().toString(36).substr(2, 9)}`;
-}
-
-// Mock User handling
-const getMockUser = () => {
-  const userJson = localStorage.getItem('somos_noveli_crm_user');
-  if (!userJson) {
-    const defaultUser = { id: 'mock-user-123', email: 'admin@somosnoveli.cl', role: 'administrador' };
-    localStorage.setItem('somos_noveli_crm_user', JSON.stringify(defaultUser));
-    return defaultUser;
-  }
-  return JSON.parse(userJson);
-};
 
 // Real Supabase Query Builder with relation joins, currency conversions and logging interceptors
 class RealSupabaseQueryBuilder {
@@ -1212,201 +1651,20 @@ class RealSupabaseQueryBuilder {
     return { data: isArray ? records : records[0], error: null };
   }
 
-  async insert(newData) {
-    const items = Array.isArray(newData) ? newData : [newData];
-    
-    const updatedItems = await Promise.all(items.map(async item => {
-      const newItem = { ...item };
-      
-      if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
-        if (newItem.exchange_rate === undefined) {
-          let rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
-          try {
-            const todayStr = new Date().toISOString().split('T')[0];
-            const rateRes = await this.realClient.from('exchange_rates').select('rate').eq('currency_from', newItem.currency).eq('date', todayStr).single();
-            if (rateRes.data) {
-              rate = Number(rateRes.data.rate);
-            }
-          } catch (e) {}
-          newItem.exchange_rate = rate;
-        }
-        const amt = Number(newItem.value || newItem.amount || 0);
-        newItem.value_converted = amt * newItem.exchange_rate;
-        newItem.rate_date = newItem.start_date || newItem.date || new Date().toISOString().split('T')[0];
-      }
-      return newItem;
-    }));
-
-    const result = await this.realClient.from(this.table).insert(updatedItems).select();
-    if (result.error) return result;
-
-    const insertedData = result.data || [];
-
-    if (this.table === 'services' && insertedData.length > 0) {
-      try {
-        const stagesRes = await this.realClient.from('editorial_stages').select('*').eq('active', true).order('order', { ascending: true });
-        const activeStages = stagesRes.data || [];
-        
-        const serviceStagesToInsert = [];
-        insertedData.forEach(serv => {
-          activeStages.forEach((stage, idx) => {
-            serviceStagesToInsert.push({
-              service_id: serv.id,
-              stage_name: stage.name,
-              status: idx === 0 ? 'en proceso' : 'pendiente',
-              start_date: idx === 0 ? new Date().toISOString().split('T')[0] : null,
-              end_date: null,
-              responsible: '',
-              notes: ''
-            });
-          });
-        });
-
-        if (serviceStagesToInsert.length > 0) {
-          await this.realClient.from('service_stages').insert(serviceStagesToInsert);
-        }
-      } catch (e) {
-        console.error("Error creating stages for new service:", e);
-      }
-    }
-
-    try {
-      const userRes = await this.realClient.auth.getUser();
-      const currentUser = userRes.data?.user;
-      if (currentUser && this.table !== 'activity_log') {
-        const logsToInsert = insertedData.map(item => {
-          let desc = `Se creó un registro en la tabla ${this.table}: ${item.name || item.book_title || item.title || item.id}`;
-          let moduleName = this.table;
-          let actionType = 'creación';
-
-          if (this.table === 'clients') {
-            moduleName = 'Clientes';
-            desc = `Se registró el nuevo cliente: ${item.name}`;
-          } else if (this.table === 'prospects') {
-            moduleName = 'Prospectos';
-            desc = `Se registró el prospecto: ${item.name}`;
-          } else if (this.table === 'quotations') {
-            moduleName = 'Cotizaciones';
-            desc = `Se creó la cotización ${item.id}`;
-          } else if (this.table === 'services') {
-            moduleName = 'Servicios';
-            desc = `Se contrató el servicio para la obra ${item.book_title}`;
-          } else if (this.table === 'incomes') {
-            moduleName = 'Ingresos';
-            desc = `Ingreso registrado por ${formatCurrency(item.amount, item.currency)}`;
-            actionType = 'ingreso registrado';
-          } else if (this.table === 'expenses') {
-            moduleName = 'Gastos';
-            desc = `Gasto registrado por ${formatCurrency(item.amount, item.currency)}`;
-            actionType = 'gasto registrado';
-          } else if (this.table === 'documents') {
-            moduleName = 'Documentos';
-            desc = `Se subió el documento ${item.name}`;
-            actionType = 'documento subido';
-          }
-
-          return {
-            user_id: currentUser.id,
-            user_email: currentUser.email,
-            date: new Date().toISOString(),
-            module: moduleName,
-            action: actionType,
-            description: desc,
-            entity_id: item.id
-          };
-        });
-
-        if (logsToInsert.length > 0) {
-          await this.realClient.from('activity_log').insert(logsToInsert);
-        }
-      }
-    } catch (e) {
-      console.error("Activity logging error:", e);
-    }
-
-    const returnData = Array.isArray(newData) ? insertedData : insertedData[0];
-    return { data: returnData, error: null };
+  insert(newData) {
+    return new MutationQueryBuilder(this.realClient, this.table, 'insert', newData);
   }
 
-  async update(updateData) {
-    const result = await this.query.update(updateData).select();
-    if (result.error) return result;
-
-    const updatedData = result.data || [];
-
-    if (updatedData.length > 0) {
-      if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table) && 
-          (updateData.value !== undefined || updateData.amount !== undefined || updateData.currency !== undefined || updateData.exchange_rate !== undefined)) {
-        await Promise.all(updatedData.map(async row => {
-          let rate = row.exchange_rate || (row.currency === 'USD' ? 940 : row.currency === 'EUR' ? 1010 : 1);
-          const amt = Number(row.value || row.amount || 0);
-          const value_converted = amt * rate;
-          await this.realClient.from(this.table).update({ value_converted, exchange_rate: rate }).eq('id', row.id);
-          row.value_converted = value_converted;
-          row.exchange_rate = rate;
-        }));
-      }
-
-      try {
-        const userRes = await this.realClient.auth.getUser();
-        const currentUser = userRes.data?.user;
-        if (currentUser && this.table !== 'activity_log') {
-          const logs = updatedData.map(item => {
-            let actionType = 'edición';
-            let desc = `Se editó un registro en la tabla ${this.table}: ${item.name || item.book_title || item.title || item.id}`;
-            let moduleName = this.table;
-
-            if (this.table === 'clients') {
-              moduleName = 'Clientes';
-              actionType = 'edición de cliente';
-              desc = `Se editó el cliente ${item.name}`;
-            } else if (this.table === 'prospects') {
-              moduleName = 'Prospectos';
-              desc = `Se editó el prospecto ${item.name}`;
-            } else if (this.table === 'quotations' && updateData.status === 'aceptada') {
-              moduleName = 'Cotizaciones';
-              actionType = 'aprobación de cotización';
-              desc = `Se aprobó la cotización ${item.id}`;
-            } else if (this.table === 'quotations' && updateData.status) {
-              moduleName = 'Cotizaciones';
-              actionType = 'cambio de estado de cotización';
-              desc = `Se cambió el estado de la cotización ${item.id} a ${updateData.status}`;
-            } else if (this.table === 'services' && updateData.current_stage) {
-              moduleName = 'Servicios';
-              actionType = 'cambio de etapa';
-              desc = `Se cambió la etapa de la obra ${item.book_title} a ${updateData.current_stage}`;
-            } else if (this.table === 'incomes' && updateData.status === 'pagado') {
-              moduleName = 'Ingresos';
-              actionType = 'pago marcado como recibido';
-              desc = `Se recibió el pago de la cuenta de cobro ${item.id}`;
-            }
-
-            return {
-              user_id: currentUser.id,
-              user_email: currentUser.email,
-              date: new Date().toISOString(),
-              module: moduleName,
-              action: actionType,
-              description: desc,
-              entity_id: item.id
-            };
-          });
-
-          if (logs.length > 0) {
-            await this.realClient.from('activity_log').insert(logs);
-          }
-        }
-      } catch (e) {
-        console.error("Activity logging error on update:", e);
-      }
-    }
-
-    const returnData = this.singleRow ? (updatedData[0] || null) : updatedData;
-    return { data: returnData, error: null };
+  update(updateData) {
+    return new MutationQueryBuilder(this.realClient, this.table, 'update', updateData);
   }
 
-  async delete() {
-    return await this.query.delete();
+  delete() {
+    return new MutationQueryBuilder(this.realClient, this.table, 'delete');
+  }
+
+  upsert(newData) {
+    return new MutationQueryBuilder(this.realClient, this.table, 'upsert', newData);
   }
 }
 

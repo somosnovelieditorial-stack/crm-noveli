@@ -1,11 +1,64 @@
--- SQL Schema for Somos Noveli Editorial CRM (Updated with Stage Trackings and Timelines)
--- This script creates the required database tables, enables Row Level Security (RLS),
--- and sets up RLS policies so that each authenticated user can only access their own data.
+-- SQL Schema for Somos Noveli Editorial CRM (Updated with Multi-tenant Organizations and RLS Permissions)
+-- This script creates the required database tables, defines helper functions for multi-tenancy,
+-- enables Row Level Security (RLS), and sets up organization-scoped policies.
+
+-- =========================================================================
+-- 0. CORE MULTI-TENANCY TABLES & FUNCTIONS
+-- =========================================================================
+
+-- Create organizations table
+CREATE TABLE IF NOT EXISTS organizations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Create organization_members table
+CREATE TABLE IF NOT EXISTS organization_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('administrador', 'editor', 'diseñador', 'corrector', 'contador', 'solo lectura')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE (organization_id, user_id)
+);
+
+-- Create user_profiles (Optional, but created for schema completeness)
+CREATE TABLE IF NOT EXISTS user_profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    full_name TEXT,
+    avatar_url TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Helper function to resolve the organization UUID of the active user
+CREATE OR REPLACE FUNCTION get_user_org_id()
+RETURNS UUID AS $$
+    SELECT organization_id 
+    FROM organization_members 
+    WHERE user_id = auth.uid() 
+    LIMIT 1;
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+-- Helper function to resolve the role of the active user
+CREATE OR REPLACE FUNCTION get_user_role()
+RETURNS TEXT AS $$
+    SELECT role 
+    FROM organization_members 
+    WHERE user_id = auth.uid() 
+    LIMIT 1;
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+
+-- =========================================================================
+-- 1. BUSINESS TABLES
+-- =========================================================================
 
 -- 1. PROVIDERS Table
 CREATE TABLE IF NOT EXISTS providers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     name TEXT NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('abogado', 'diseñador', 'imprenta', 'contador', 'software', 'publicidad', 'otro')),
     email TEXT,
@@ -20,6 +73,7 @@ CREATE TABLE IF NOT EXISTS providers (
 CREATE TABLE IF NOT EXISTS clients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     name TEXT NOT NULL,
     email TEXT,
     instagram TEXT,
@@ -27,6 +81,10 @@ CREATE TABLE IF NOT EXISTS clients (
     country TEXT,
     status TEXT NOT NULL DEFAULT 'prospecto' CHECK (status IN ('prospecto', 'cliente', 'activo', 'finalizado', 'perdido')),
     notes TEXT,
+    city TEXT,
+    timezone TEXT,
+    client_type TEXT DEFAULT 'Nacional',
+    preferred_currency TEXT DEFAULT 'CLP',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -34,6 +92,7 @@ CREATE TABLE IF NOT EXISTS clients (
 CREATE TABLE IF NOT EXISTS prospects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     name TEXT NOT NULL,
     contact TEXT,
     origin TEXT NOT NULL DEFAULT 'Instagram' CHECK (origin IN ('Instagram', 'web', 'referido', 'correo', 'otro')),
@@ -42,6 +101,11 @@ CREATE TABLE IF NOT EXISTS prospects (
     next_action TEXT,
     followup_date DATE,
     notes TEXT,
+    country TEXT,
+    city TEXT,
+    timezone TEXT,
+    client_type TEXT DEFAULT 'Nacional',
+    preferred_currency TEXT DEFAULT 'CLP',
     converted_to_client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -50,6 +114,7 @@ CREATE TABLE IF NOT EXISTS prospects (
 CREATE TABLE IF NOT EXISTS services (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     type TEXT NOT NULL CHECK (type IN ('corrección', 'maquetación', 'portada', 'ebook', 'libro físico', 'difusión', 'derechos de autor', 'asesoría de publicación', 'otro')),
     book_title TEXT NOT NULL,
@@ -61,6 +126,9 @@ CREATE TABLE IF NOT EXISTS services (
     notes TEXT,
     current_stage TEXT NOT NULL DEFAULT 'recepción de material',
     advance_percent INTEGER NOT NULL DEFAULT 0 CHECK (advance_percent >= 0 AND advance_percent <= 100),
+    exchange_rate NUMERIC(12,4) NOT NULL DEFAULT 1.0000,
+    value_converted NUMERIC(12,2) NOT NULL DEFAULT 0.00,
+    rate_date DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -68,6 +136,7 @@ CREATE TABLE IF NOT EXISTS services (
 CREATE TABLE IF NOT EXISTS service_stages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
     stage_name TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'en proceso', 'completada')),
@@ -82,6 +151,7 @@ CREATE TABLE IF NOT EXISTS service_stages (
 CREATE TABLE IF NOT EXISTS incomes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
     service_id UUID REFERENCES services(id) ON DELETE SET NULL,
     amount NUMERIC(12,2) NOT NULL DEFAULT 0.00,
@@ -91,6 +161,9 @@ CREATE TABLE IF NOT EXISTS incomes (
     includes_vat BOOLEAN NOT NULL DEFAULT FALSE,
     status TEXT NOT NULL DEFAULT 'pagado' CHECK (status IN ('pagado', 'pendiente', 'parcial')),
     notes TEXT,
+    exchange_rate NUMERIC(12,4) NOT NULL DEFAULT 1.0000,
+    value_converted NUMERIC(12,2) NOT NULL DEFAULT 0.00,
+    rate_date DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -98,6 +171,7 @@ CREATE TABLE IF NOT EXISTS incomes (
 CREATE TABLE IF NOT EXISTS expenses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     provider_id UUID REFERENCES providers(id) ON DELETE SET NULL,
     category TEXT NOT NULL CHECK (category IN ('software', 'diseño', 'impresión', 'publicidad', 'legal', 'impuestos', 'oficina virtual', 'otros')),
     amount NUMERIC(12,2) NOT NULL DEFAULT 0.00,
@@ -106,6 +180,9 @@ CREATE TABLE IF NOT EXISTS expenses (
     includes_vat BOOLEAN NOT NULL DEFAULT FALSE,
     deductible BOOLEAN NOT NULL DEFAULT TRUE,
     notes TEXT,
+    exchange_rate NUMERIC(12,4) NOT NULL DEFAULT 1.0000,
+    value_converted NUMERIC(12,2) NOT NULL DEFAULT 0.00,
+    rate_date DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -113,6 +190,7 @@ CREATE TABLE IF NOT EXISTS expenses (
 CREATE TABLE IF NOT EXISTS service_catalog (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     name TEXT NOT NULL,
     description TEXT,
     base_price NUMERIC(12,2) NOT NULL DEFAULT 0.00,
@@ -127,6 +205,7 @@ CREATE TABLE IF NOT EXISTS service_catalog (
 CREATE TABLE IF NOT EXISTS service_packs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     name TEXT NOT NULL,
     description TEXT,
     price_special NUMERIC(12,2),
@@ -140,6 +219,7 @@ CREATE TABLE IF NOT EXISTS service_packs (
 CREATE TABLE IF NOT EXISTS service_pack_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     pack_id UUID NOT NULL REFERENCES service_packs(id) ON DELETE CASCADE,
     service_id UUID NOT NULL REFERENCES service_catalog(id) ON DELETE CASCADE
 );
@@ -148,6 +228,7 @@ CREATE TABLE IF NOT EXISTS service_pack_items (
 CREATE TABLE IF NOT EXISTS quotations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
     prospect_id UUID REFERENCES prospects(id) ON DELETE SET NULL,
     discount NUMERIC(12,2) NOT NULL DEFAULT 0.00,
@@ -155,6 +236,9 @@ CREATE TABLE IF NOT EXISTS quotations (
     status TEXT NOT NULL DEFAULT 'borrador' CHECK (status IN ('borrador', 'enviada', 'aceptada', 'rechazada', 'vencida')),
     notes TEXT,
     includes_vat BOOLEAN NOT NULL DEFAULT FALSE,
+    exchange_rate NUMERIC(12,4) NOT NULL DEFAULT 1.0000,
+    value_converted NUMERIC(12,2) NOT NULL DEFAULT 0.00,
+    rate_date DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -162,6 +246,7 @@ CREATE TABLE IF NOT EXISTS quotations (
 CREATE TABLE IF NOT EXISTS quotation_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     quotation_id UUID NOT NULL REFERENCES quotations(id) ON DELETE CASCADE,
     service_id UUID REFERENCES service_catalog(id) ON DELETE SET NULL,
     pack_id UUID REFERENCES service_packs(id) ON DELETE SET NULL,
@@ -174,6 +259,7 @@ CREATE TABLE IF NOT EXISTS quotation_items (
 CREATE TABLE IF NOT EXISTS quick_replies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     title TEXT NOT NULL,
     category TEXT,
     channel TEXT NOT NULL DEFAULT 'general' CHECK (channel IN ('Instagram', 'correo', 'WhatsApp', 'general')),
@@ -186,6 +272,7 @@ CREATE TABLE IF NOT EXISTS quick_replies (
 CREATE TABLE IF NOT EXISTS documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     name TEXT NOT NULL,
     file_path TEXT NOT NULL, -- Storage path
     file_type TEXT NOT NULL CHECK (file_type IN ('boleta', 'factura', 'comprobante de pago', 'contrato', 'archivo de cliente', 'otro')),
@@ -198,26 +285,11 @@ CREATE TABLE IF NOT EXISTS documents (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Enable Row Level Security (RLS) for all tables
-ALTER TABLE providers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
-ALTER TABLE prospects ENABLE ROW LEVEL SECURITY;
-ALTER TABLE services ENABLE ROW LEVEL SECURITY;
-ALTER TABLE service_stages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE incomes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
-ALTER TABLE service_catalog ENABLE ROW LEVEL SECURITY;
-ALTER TABLE service_packs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE service_pack_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE quotations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE quotation_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE quick_replies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
-
 -- 15. SETTINGS Table
 CREATE TABLE IF NOT EXISTS settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     editorial_name TEXT NOT NULL DEFAULT 'Somos Noveli Editorial',
     logo TEXT,
     email TEXT,
@@ -236,6 +308,7 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS exchange_rates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     currency_from TEXT NOT NULL,
     currency_to TEXT NOT NULL DEFAULT 'CLP',
     rate NUMERIC(12,4) NOT NULL,
@@ -248,6 +321,7 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
 CREATE TABLE IF NOT EXISTS editorial_stages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     name TEXT NOT NULL,
     description TEXT,
     "order" INTEGER NOT NULL DEFAULT 1,
@@ -260,6 +334,7 @@ CREATE TABLE IF NOT EXISTS editorial_stages (
 CREATE TABLE IF NOT EXISTS service_checklists (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
     task TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'en proceso', 'completada')),
@@ -273,6 +348,7 @@ CREATE TABLE IF NOT EXISTS service_checklists (
 CREATE TABLE IF NOT EXISTS activity_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     user_email TEXT,
     date TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     module TEXT NOT NULL,
@@ -286,6 +362,7 @@ CREATE TABLE IF NOT EXISTS activity_log (
 CREATE TABLE IF NOT EXISTS agenda_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     title TEXT NOT NULL,
     description TEXT,
     date DATE NOT NULL,
@@ -294,7 +371,30 @@ CREATE TABLE IF NOT EXISTS agenda_events (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Enable RLS for new tables
+
+-- =========================================================================
+-- 2. ROW LEVEL SECURITY (RLS) ACTIVATION & POLICIES
+-- =========================================================================
+
+-- Enable RLS for all core and business tables
+ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE providers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE prospects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE services ENABLE ROW LEVEL SECURITY;
+ALTER TABLE service_stages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE incomes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE service_catalog ENABLE ROW LEVEL SECURITY;
+ALTER TABLE service_packs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE service_pack_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quotations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quotation_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quick_replies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exchange_rates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE editorial_stages ENABLE ROW LEVEL SECURITY;
@@ -302,30 +402,168 @@ ALTER TABLE service_checklists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agenda_events ENABLE ROW LEVEL SECURITY;
 
--- Enable Policies (Users can only manage their own data)
-CREATE POLICY "Users can manage their own providers" ON providers FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own clients" ON clients FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own prospects" ON prospects FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own services" ON services FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own service_stages" ON service_stages FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own incomes" ON incomes FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own expenses" ON expenses FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own service_catalog" ON service_catalog FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own service_packs" ON service_packs FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own service_pack_items" ON service_pack_items FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own quotations" ON quotations FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own quotation_items" ON quotation_items FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own quick_replies" ON quick_replies FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own documents" ON documents FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+-- Clean drop any existing legacy policies
+DROP POLICY IF EXISTS "Users can manage their own providers" ON providers;
+DROP POLICY IF EXISTS "Users can manage their own clients" ON clients;
+DROP POLICY IF EXISTS "Users can manage their own prospects" ON prospects;
+DROP POLICY IF EXISTS "Users can manage their own services" ON services;
+DROP POLICY IF EXISTS "Users can manage their own service_stages" ON service_stages;
+DROP POLICY IF EXISTS "Users can manage their own incomes" ON incomes;
+DROP POLICY IF EXISTS "Users can manage their own expenses" ON expenses;
+DROP POLICY IF EXISTS "Users can manage their own service_catalog" ON service_catalog;
+DROP POLICY IF EXISTS "Users can manage their own service_packs" ON service_packs;
+DROP POLICY IF EXISTS "Users can manage their own service_pack_items" ON service_pack_items;
+DROP POLICY IF EXISTS "Users can manage their own quotations" ON quotations;
+DROP POLICY IF EXISTS "Users can manage their own quotation_items" ON quotation_items;
+DROP POLICY IF EXISTS "Users can manage their own quick_replies" ON quick_replies;
+DROP POLICY IF EXISTS "Users can manage their own documents" ON documents;
+DROP POLICY IF EXISTS "Users can manage their own settings" ON settings;
+DROP POLICY IF EXISTS "Users can manage their own exchange_rates" ON exchange_rates;
+DROP POLICY IF EXISTS "Users can manage their own editorial_stages" ON editorial_stages;
+DROP POLICY IF EXISTS "Users can manage their own service_checklists" ON service_checklists;
+DROP POLICY IF EXISTS "Users can manage their own activity_log" ON activity_log;
+DROP POLICY IF EXISTS "Users can manage their own agenda_events" ON agenda_events;
 
-CREATE POLICY "Users can manage their own settings" ON settings FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own exchange_rates" ON exchange_rates FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own editorial_stages" ON editorial_stages FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own service_checklists" ON service_checklists FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own activity_log" ON activity_log FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own agenda_events" ON agenda_events FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+-- RLS Policies for Organizations & Members
+CREATE POLICY "Select organization" ON organizations FOR SELECT USING (id = get_user_org_id());
+CREATE POLICY "Manage organization" ON organizations FOR ALL USING (id = get_user_org_id() AND get_user_role() = 'administrador');
 
--- Performance Indexes
+CREATE POLICY "Select members" ON organization_members FOR SELECT USING (organization_id = get_user_org_id());
+CREATE POLICY "Manage members" ON organization_members FOR ALL USING (organization_id = get_user_org_id() AND get_user_role() = 'administrador');
+
+CREATE POLICY "Select profile" ON user_profiles FOR SELECT USING (true);
+CREATE POLICY "Manage profile" ON user_profiles FOR ALL USING (auth.uid() = id);
+
+-- Macro helper generator: Group definitions of RLS Policies for business tables.
+-- A user belongs to the same organization if get_user_org_id() matches the row's organization_id or they are the direct owner.
+-- In addition, write access (Insert, Update, Delete) is blocked if user has 'solo lectura' role.
+
+-- 1. PROVIDERS
+CREATE POLICY "Select providers" ON providers FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert providers" ON providers FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update providers" ON providers FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete providers" ON providers FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 2. CLIENTS
+CREATE POLICY "Select clients" ON clients FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert clients" ON clients FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update clients" ON clients FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete clients" ON clients FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 3. PROSPECTS
+CREATE POLICY "Select prospects" ON prospects FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert prospects" ON prospects FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update prospects" ON prospects FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete prospects" ON prospects FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 4. SERVICES
+CREATE POLICY "Select services" ON services FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert services" ON services FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update services" ON services FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete services" ON services FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 5. SERVICE_STAGES
+CREATE POLICY "Select service_stages" ON service_stages FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert service_stages" ON service_stages FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update service_stages" ON service_stages FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete service_stages" ON service_stages FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 6. INCOMES
+CREATE POLICY "Select incomes" ON incomes FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert incomes" ON incomes FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update incomes" ON incomes FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete incomes" ON incomes FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 7. EXPENSES
+CREATE POLICY "Select expenses" ON expenses FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert expenses" ON expenses FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update expenses" ON expenses FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete expenses" ON expenses FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 8. SERVICE_CATALOG
+CREATE POLICY "Select service_catalog" ON service_catalog FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert service_catalog" ON service_catalog FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update service_catalog" ON service_catalog FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete service_catalog" ON service_catalog FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 9. SERVICE_PACKS
+CREATE POLICY "Select service_packs" ON service_packs FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert service_packs" ON service_packs FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update service_packs" ON service_packs FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete service_packs" ON service_packs FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 10. SERVICE_PACK_ITEMS
+CREATE POLICY "Select service_pack_items" ON service_pack_items FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert service_pack_items" ON service_pack_items FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update service_pack_items" ON service_pack_items FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete service_pack_items" ON service_pack_items FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 11. QUOTATIONS
+CREATE POLICY "Select quotations" ON quotations FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert quotations" ON quotations FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update quotations" ON quotations FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete quotations" ON quotations FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 12. QUOTATION_ITEMS
+CREATE POLICY "Select quotation_items" ON quotation_items FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert quotation_items" ON quotation_items FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update quotation_items" ON quotation_items FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete quotation_items" ON quotation_items FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 13. QUICK_REPLIES
+CREATE POLICY "Select quick_replies" ON quick_replies FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert quick_replies" ON quick_replies FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update quick_replies" ON quick_replies FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete quick_replies" ON quick_replies FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 14. DOCUMENTS
+CREATE POLICY "Select documents" ON documents FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert documents" ON documents FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update documents" ON documents FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete documents" ON documents FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 15. SETTINGS (Only administrator role can modify settings)
+CREATE POLICY "Select settings" ON settings FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert settings" ON settings FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND get_user_role() = 'administrador');
+CREATE POLICY "Update settings" ON settings FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() = 'administrador');
+CREATE POLICY "Delete settings" ON settings FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND get_user_role() = 'administrador');
+
+-- 16. EXCHANGE_RATES
+CREATE POLICY "Select exchange_rates" ON exchange_rates FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert exchange_rates" ON exchange_rates FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update exchange_rates" ON exchange_rates FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete exchange_rates" ON exchange_rates FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 17. EDITORIAL_STAGES
+CREATE POLICY "Select editorial_stages" ON editorial_stages FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert editorial_stages" ON editorial_stages FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update editorial_stages" ON editorial_stages FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete editorial_stages" ON editorial_stages FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 18. SERVICE_CHECKLISTS
+CREATE POLICY "Select service_checklists" ON service_checklists FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert service_checklists" ON service_checklists FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update service_checklists" ON service_checklists FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete service_checklists" ON service_checklists FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- 19. ACTIVITY_LOG
+CREATE POLICY "Select activity_log" ON activity_log FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert activity_log" ON activity_log FOR INSERT WITH CHECK (auth.uid() = user_id OR organization_id = get_user_org_id()); -- Anyone can log activity
+CREATE POLICY "Update activity_log" ON activity_log FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() = 'administrador');
+CREATE POLICY "Delete activity_log" ON activity_log FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND get_user_role() = 'administrador');
+
+-- 20. AGENDA_EVENTS
+CREATE POLICY "Select agenda_events" ON agenda_events FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
+CREATE POLICY "Insert agenda_events" ON agenda_events FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update agenda_events" ON agenda_events FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete agenda_events" ON agenda_events FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+
+-- =========================================================================
+-- 3. PERFORMANCE INDEXES
+-- =========================================================================
+
+-- Legacy User ID Indexes
 CREATE INDEX IF NOT EXISTS idx_providers_user_id ON providers(user_id);
 CREATE INDEX IF NOT EXISTS idx_clients_user_id ON clients(user_id);
 CREATE INDEX IF NOT EXISTS idx_prospects_user_id ON prospects(user_id);
@@ -340,7 +578,6 @@ CREATE INDEX IF NOT EXISTS idx_quotations_user_id ON quotations(user_id);
 CREATE INDEX IF NOT EXISTS idx_quotation_items_quot ON quotation_items(quotation_id);
 CREATE INDEX IF NOT EXISTS idx_quick_replies_user_id ON quick_replies(user_id);
 CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);
-
 CREATE INDEX IF NOT EXISTS idx_settings_user_id ON settings(user_id);
 CREATE INDEX IF NOT EXISTS idx_exchange_rates_user_id ON exchange_rates(user_id);
 CREATE INDEX IF NOT EXISTS idx_editorial_stages_user_id ON editorial_stages(user_id);
@@ -348,3 +585,60 @@ CREATE INDEX IF NOT EXISTS idx_service_checklists_serv ON service_checklists(ser
 CREATE INDEX IF NOT EXISTS idx_activity_log_user_id ON activity_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_agenda_events_user_id ON agenda_events(user_id);
 
+-- New Multi-tenant Organization ID Indexes
+CREATE INDEX IF NOT EXISTS idx_organization_members_org ON organization_members(organization_id);
+CREATE INDEX IF NOT EXISTS idx_organization_members_user ON organization_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_providers_org_id ON providers(organization_id);
+CREATE INDEX IF NOT EXISTS idx_clients_org_id ON clients(organization_id);
+CREATE INDEX IF NOT EXISTS idx_prospects_org_id ON prospects(organization_id);
+CREATE INDEX IF NOT EXISTS idx_services_org_id ON services(organization_id);
+CREATE INDEX IF NOT EXISTS idx_service_stages_org_id ON service_stages(organization_id);
+CREATE INDEX IF NOT EXISTS idx_incomes_org_id ON incomes(organization_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_org_id ON expenses(organization_id);
+CREATE INDEX IF NOT EXISTS idx_catalog_org_id ON service_catalog(organization_id);
+CREATE INDEX IF NOT EXISTS idx_packs_org_id ON service_packs(organization_id);
+CREATE INDEX IF NOT EXISTS idx_pack_items_org_id ON service_pack_items(organization_id);
+CREATE INDEX IF NOT EXISTS idx_quotations_org_id ON quotations(organization_id);
+CREATE INDEX IF NOT EXISTS idx_quotation_items_org_id ON quotation_items(organization_id);
+CREATE INDEX IF NOT EXISTS idx_quick_replies_org_id ON quick_replies(organization_id);
+CREATE INDEX IF NOT EXISTS idx_documents_org_id ON documents(organization_id);
+CREATE INDEX IF NOT EXISTS idx_settings_org_id ON settings(organization_id);
+CREATE INDEX IF NOT EXISTS idx_exchange_rates_org_id ON exchange_rates(organization_id);
+CREATE INDEX IF NOT EXISTS idx_editorial_stages_org_id ON editorial_stages(organization_id);
+CREATE INDEX IF NOT EXISTS idx_service_checklists_org_id ON service_checklists(organization_id);
+CREATE INDEX IF NOT EXISTS idx_activity_log_org_id ON activity_log(organization_id);
+CREATE INDEX IF NOT EXISTS idx_agenda_events_org_id ON agenda_events(organization_id);
+
+
+-- =========================================================================
+-- 4. DEFAULT DATA & ADMINS ASSOCIATION
+-- =========================================================================
+
+-- Insert default organization
+INSERT INTO organizations (id, name)
+VALUES ('org-noveli-1234', 'Somos Noveli Editorial')
+ON CONFLICT (id) DO NOTHING;
+
+-- Insert admins
+DO $$
+DECLARE
+    org_id UUID := 'org-noveli-1234';
+    v_user_id UUID;
+    j_user_id UUID;
+BEGIN
+    -- Look up user ID for v.barrios@novelieditorial.com
+    SELECT id INTO v_user_id FROM auth.users WHERE email = 'v.barrios@novelieditorial.com';
+    IF v_user_id IS NOT NULL THEN
+        INSERT INTO organization_members (organization_id, user_id, role)
+        VALUES (org_id, v_user_id, 'administrador')
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'administrador';
+    END IF;
+
+    -- Look up user ID for j.roman@novelieditorial.com
+    SELECT id INTO j_user_id FROM auth.users WHERE email = 'j.roman@novelieditorial.com';
+    IF j_user_id IS NOT NULL THEN
+        INSERT INTO organization_members (organization_id, user_id, role)
+        VALUES (org_id, j_user_id, 'administrador')
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'administrador';
+    END IF;
+END $$;

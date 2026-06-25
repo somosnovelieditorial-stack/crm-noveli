@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit, convertToClp, filterByPeriod } from '../utils';
 import PeriodFilter from './PeriodFilter';
@@ -46,11 +46,22 @@ export default function Dashboard() {
     month: new Date().getMonth() + 1
   });
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [period]);
+  const handlePeriodChange = useCallback((newPeriod) => {
+    setPeriod((prev) => {
+      if (
+        prev.mode === newPeriod.mode &&
+        prev.year === newPeriod.year &&
+        prev.month === newPeriod.month &&
+        prev.startDate === newPeriod.startDate &&
+        prev.endDate === newPeriod.endDate
+      ) {
+        return prev; // Structurally identical, keep reference to break render loop
+      }
+      return newPeriod;
+    });
+  }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     try {
       // Fetch everything
@@ -225,7 +236,11 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [period]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const monthsList = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -242,15 +257,7 @@ export default function Dashboard() {
     }
   };
 
-  const targetYear = period.year || new Date().getFullYear();
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[500px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600"></div>
-      </div>
-    );
-  }
+  const targetYear = useMemo(() => period.year || new Date().getFullYear(), [period.year]);
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -267,9 +274,18 @@ export default function Dashboard() {
       </div>
 
       {/* Period Filter Component */}
-      <PeriodFilter onChange={setPeriod} />
+      <PeriodFilter onChange={handlePeriodChange} />
 
-      {/* Main Month Metrics */}
+      {loading ? (
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex flex-col items-center gap-3">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600"></div>
+            <span className="text-sm font-semibold text-slate-400">Cargando datos...</span>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Main Month Metrics */}
       <div>
         <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-brand-500" />
@@ -549,6 +565,8 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase, isMock } from './supabaseClient';
 
 // Original Components
@@ -53,25 +53,109 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
-  useEffect(() => {
-    // 1. Fetch current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const activeUser = session?.user ?? null;
-      setUser(activeUser);
-      if (activeUser) {
-        setUserRole(activeUser.role || 'administrador');
+  const userRef = useRef(null);
+
+  const fetchUserRoleAndOrg = async (activeUser) => {
+    try {
+      const { data, error } = await supabase
+        .from('organization_members')
+        .select('role, organization_id')
+        .eq('user_id', activeUser.id);
+        
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        const membership = data[0];
+        setUserRole(membership.role || 'solo lectura');
+        localStorage.setItem('somos_noveli_crm_org_id', membership.organization_id);
+      } else {
+        setUserRole('solo lectura');
       }
+    } catch (err) {
+      console.error("Error fetching database role:", err);
+      setUserRole(activeUser.role || 'solo lectura');
+    } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+
+    const loadUserRoleAndOrg = async (activeUser) => {
+      if (!activeUser) {
+        if (active) {
+          setUser(null);
+          userRef.current = null;
+          setUserRole('solo lectura');
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('organization_members')
+          .select('role, organization_id')
+          .eq('user_id', activeUser.id);
+          
+        if (error) throw error;
+        
+        if (active) {
+          setUser(activeUser);
+          userRef.current = activeUser;
+          if (data && data.length > 0) {
+            const membership = data[0];
+            setUserRole(membership.role || 'solo lectura');
+            localStorage.setItem('somos_noveli_crm_org_id', membership.organization_id);
+          } else {
+            setUserRole('solo lectura');
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching database role:", err);
+        if (active) {
+          setUser(activeUser);
+          userRef.current = activeUser;
+          setUserRole(activeUser.role || 'solo lectura');
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    // 1. Fetch session first
+    setLoading(true);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!active) return;
+      const activeUser = session?.user ?? null;
+      loadUserRoleAndOrg(activeUser);
+    }).catch(err => {
+      console.error("Error getting session:", err);
+      if (active) {
+        setLoading(false);
+      }
     });
 
     // 2. Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
       const activeUser = session?.user ?? null;
-      setUser(activeUser);
-      if (activeUser) {
-        setUserRole(activeUser.role || 'administrador');
+
+      const prevUserId = userRef.current ? userRef.current.id : null;
+      const nextUserId = activeUser ? activeUser.id : null;
+
+      if (prevUserId !== nextUserId || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+        if (prevUserId !== nextUserId) {
+          setLoading(true);
+          loadUserRoleAndOrg(activeUser);
+        } else {
+          setUser(activeUser);
+          userRef.current = activeUser;
+        }
       }
-      setLoading(false);
     });
 
     // 3. Initialize theme
@@ -85,7 +169,10 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Sync notifications whenever tab switches or user updates data
@@ -120,17 +207,11 @@ export default function App() {
 
   const handleAuthSuccess = (authUser) => {
     setUser(authUser);
+    userRef.current = authUser;
     setUserRole(authUser.role || 'administrador');
   };
 
-  // Simulated Role Switcher
-  const handleRoleChange = (newRole) => {
-    setUserRole(newRole);
-    const updatedUser = { ...user, role: newRole };
-    setUser(updatedUser);
-    localStorage.setItem('somos_noveli_crm_user', JSON.stringify(updatedUser));
-    loadNotifications();
-  };
+
 
   // Global Search Engine across tables
   const searchGlobal = (query) => {
@@ -472,30 +553,29 @@ export default function App() {
             </button>
           </div>
 
-          {/* User profile with interactive simulation roles selector */}
-          <div className="flex flex-col gap-2.5 p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-100 dark:border-slate-850 text-xs shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-brand-500/10 text-brand-500 rounded-full shrink-0">
-                <ShieldCheck className="w-4 h-4" />
+          {/* User profile */}
+          <div className="flex flex-col gap-2.5 p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-100 dark:border-slate-850 text-xs shrink-0 font-sans">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-brand-500/10 text-brand-500 rounded-full shrink-0">
+                <User className="w-4 h-4" />
               </div>
-              <div className="truncate">
-                <p className="font-extrabold text-[11px] text-slate-400 uppercase tracking-wider">Rol Simulado</p>
-                <p className="font-semibold text-slate-400 truncate max-w-[150px]">{user.email}</p>
+              <div className="truncate flex-1">
+                <p className="font-semibold text-slate-700 dark:text-slate-200 truncate" title={user?.email}>
+                  {user?.email}
+                </p>
+                <div className="mt-1 flex items-center gap-1">
+                  {userRole === 'administrador' ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400 border border-green-200 dark:border-green-900/50 uppercase tracking-wide">
+                      Administrador
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-400 border border-brand-100 dark:border-brand-900/40 uppercase tracking-wide capitalize">
+                      {userRole}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-            
-            <select
-              value={userRole}
-              onChange={(e) => handleRoleChange(e.target.value)}
-              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-200 font-bold focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer text-xs transition-all shadow-sm"
-            >
-              <option value="administrador">Administrador</option>
-              <option value="editor">Editor</option>
-              <option value="diseñador">Diseñador</option>
-              <option value="corrector">Corrector</option>
-              <option value="contador">Contador</option>
-              <option value="solo lectura">Solo Lectura</option>
-            </select>
           </div>
 
           {/* Nav links (Scrollable area) */}
@@ -624,6 +704,15 @@ export default function App() {
 
           {/* Right Header Controls */}
           <div className="flex items-center gap-3">
+            {/* Theme Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-xl border border-slate-100 dark:border-slate-850/50 bg-white dark:bg-slate-900 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-slate-850"
+              title={isDarkMode ? 'Activar Modo Claro' : 'Activar Modo Nocturno'}
+            >
+              {isDarkMode ? <Sun className="w-4.5 h-4.5 text-amber-500" /> : <Moon className="w-4.5 h-4.5" />}
+            </button>
+
             {/* Notification Center Bell */}
             <div className="relative">
               <button

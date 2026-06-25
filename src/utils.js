@@ -183,20 +183,7 @@ export const hasPermission = (role, module) => {
   if (!role) return false;
   const userRole = role.toLowerCase();
   
-  if (userRole === 'administrador') return true;
   if (userRole === 'solo lectura') return false;
-  
-  switch (userRole) {
-    case 'editor':
-      return ['clients', 'prospects', 'services', 'agenda', 'documents', 'quick_replies'].includes(module);
-    case 'contador':
-      return ['incomes', 'expenses', 'taxes', 'reports', 'completed_sales', 'currency_rates'].includes(module);
-    case 'diseñador':
-    case 'corrector':
-      // Diseñadores y correctores solo pueden modificar tareas del checklist o subir/modificar documentos
-      return ['services', 'documents'].includes(module);
-    default:
-      return false;
-  }
+  return true; // All other roles can create, edit, and delete
 };
 

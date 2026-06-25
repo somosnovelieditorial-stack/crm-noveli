@@ -1,20 +1,103 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --color-brand-50: #f5f3ff;
-  --color-brand-100: #ede9fe;
-  --color-brand-200: #ddd6fe;
-  --color-brand-300: #c084fc;
-  --color-brand-400: #a855f7;
-  --color-brand-500: #8b5cf6;
-  --color-brand-600: #7c3aed;
-  --color-brand-700: #6d28d9;
-  --color-brand-800: #5b21b6;
-  --color-brand-900: #4c1d95;
-  --color-brand-950: #2e1065;
-  
+  /* Dynamic Brand Colors (Gold in Light / Purple in Dark) */
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-450: var(--brand-450);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-brand-950: var(--brand-950);
+
+  /* Dynamic Slate/Neutral Colors (Ivory/Gold-Slate in Light / Standard Slate in Dark) */
+  --color-slate-50: var(--slate-50);
+  --color-slate-100: var(--slate-100);
+  --color-slate-200: var(--slate-200);
+  --color-slate-300: var(--slate-300);
+  --color-slate-400: var(--slate-400);
+  --color-slate-500: var(--slate-500);
+  --color-slate-600: var(--slate-600);
+  --color-slate-700: var(--slate-700);
+  --color-slate-800: var(--slate-800);
+  --color-slate-900: var(--slate-900);
+  --color-slate-950: var(--slate-950);
+
   --font-serif: "Playfair Display", Georgia, Cambria, "Times New Roman", Times, serif;
   --font-sans: "Outfit", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+:root {
+  /* =========================================================================
+     LIGHT MODE: Elegant Ivory & Gold Editorial Theme
+     ========================================================================= */
+  
+  /* Brand/Primary: Elegant Gold Palette */
+  --brand-50: #FFF7D6;      /* Active sidebar backgrounds / highlight tint */
+  --brand-100: #FFF3C4;
+  --brand-200: #F6E5A6;
+  --brand-300: #E8D9A8;     /* Soft gold borders */
+  --brand-400: #D8C37C;
+  --brand-450: #B8921F;     /* Intermediate gold accent */
+  --brand-500: #B8921F;     /* Hover Gold State */
+  --brand-600: #C9A227;     /* Main Editorial Gold */
+  --brand-700: #9E7D17;
+  --brand-800: #7E630F;
+  --brand-900: #5F4B0B;
+  --brand-950: #302605;
+
+  /* Neutrals: Marfil/Ivory & Dark Slate Text */
+  --slate-50: #FAF8F2;      /* Main application background (soft ivory) */
+  --slate-100: #F3ECD8;     /* Second level backgrounds (soft warm marfil) */
+  --slate-200: #E8D9A8;     /* Neutral gold borders #E8D9A8 */
+  --slate-300: #DCD0B4;
+  --slate-400: #9E9379;
+  --slate-500: #6B7280;     /* Muted grey text (Texto secundario) */
+  --slate-600: #525B6C;
+  --slate-700: #374151;     /* Secondary text */
+  --slate-800: #111827;     /* Main text (Texto principal oscuro #111827) */
+  --slate-900: #111827;     /* Azul noche / Deep text */
+  --slate-950: #0B0E14;     /* Modal overlays */
+}
+
+.dark {
+  /* =========================================================================
+     DARK MODE: Preserves the Beautiful Original Slate & Purple Theme
+     ========================================================================= */
+  
+  /* Brand/Primary: Violet Palette */
+  --brand-50: #f5f3ff;
+  --brand-100: #ede9fe;
+  --brand-200: #ddd6fe;
+  --brand-300: #c084fc;
+  --brand-400: #a855f7;
+  --brand-450: #a855f7;
+  --brand-500: #8b5cf6;
+  --brand-600: #7c3aed;
+  --brand-700: #6d28d9;
+  --brand-800: #5b21b6;
+  --brand-900: #4c1d95;
+  --brand-950: #2e1065;
+
+  /* Neutrals: Dark Slates */
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+  --slate-950: #020617;
 }
 
 @layer base {
@@ -24,6 +107,17 @@
   
   .dark body {
     @apply bg-slate-950 text-slate-100;
+  }
+
+  /* Global inputs/selects clear styling for light mode and dark mode */
+  input, select, textarea {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+  }
+
+  .dark input, .dark select, .dark textarea {
+    background-color: var(--slate-900) !important;
+    color: #f1f5f9 !important;
   }
 
   /* Custom Scrollbar */
@@ -54,7 +148,7 @@
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(232, 217, 168, 0.3);
 }
 
 .dark .glass {
@@ -70,7 +164,11 @@
 }
 .animate-hover-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 20px -10px rgba(124, 58, 237, 0.3);
+  box-shadow: 0 10px 20px -10px rgba(201, 162, 39, 0.2);
+}
+
+.dark .animate-hover-card:hover {
+  box-shadow: 0 10px 20px -10px rgba(139, 92, 246, 0.3);
 }
 
 /* Hide default App.css styles since we're using Tailwind */

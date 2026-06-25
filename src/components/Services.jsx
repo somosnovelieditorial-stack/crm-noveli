@@ -8,7 +8,7 @@ import {
   Download, AlertTriangle, Clock, ChevronDown, ChevronUp, Check, Info, Trash
 } from 'lucide-react';
 
-export default function Services() {
+export default function Services({ isReadOnly = false }) {
   const [services, setServices] = useState([]);
   const [clients, setClients] = useState([]);
   const [editorialStages, setEditorialStages] = useState([]);
@@ -58,6 +58,9 @@ export default function Services() {
     notes: ''
   });
 
+  // Services list filtered for current selected client in form
+  const [formServices, setFormServices] = useState([]);
+
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -82,7 +85,7 @@ export default function Services() {
       const [servicesRes, clientsRes, stagesRes] = await Promise.all([
         supabase.from('services').select('*').order('created_at', { ascending: false }),
         supabase.from('clients').select('id, name').order('name', { ascending: true }),
-        supabase.from('editorial_stages').select('*').order('order', { ascending: true })
+        supabase.from('editorial_stages').select('*').eq('active', true).order('order', { ascending: true })
       ]);
 
       if (servicesRes.error) throw servicesRes.error;
@@ -93,13 +96,14 @@ export default function Services() {
       setClients(clientsRes.data || []);
       setEditorialStages(stagesRes.data || []);
     } catch (err) {
-      console.error('Error fetching services/clients/stages:', err);
+      console.error('Error fetching services data:', err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleOpenAddModal = () => {
+    if (isReadOnly) return;
     setSelectedService(null);
     setFormData({
       client_id: clients[0]?.id || '',
@@ -120,6 +124,7 @@ export default function Services() {
   };
 
   const handleOpenEditModal = (service) => {
+    if (isReadOnly) return;
     setSelectedService(service);
     setFormData({
       client_id: service.client_id || '',
@@ -140,6 +145,10 @@ export default function Services() {
   };
 
   const handleDeleteService = async (id) => {
+    if (isReadOnly) {
+      alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
+      return;
+    }
     if (window.confirm('¿Estás seguro de que deseas eliminar este servicio editorial?')) {
       try {
         const { error } = await supabase
@@ -158,6 +167,10 @@ export default function Services() {
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
+    if (isReadOnly) {
+      alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
+      return;
+    }
     if (!formData.client_id) {
       setFormError('Debe seleccionar un cliente.');
       return;
@@ -207,6 +220,10 @@ export default function Services() {
 
   // Inline Stage Update
   const handleUpdateStageStatus = async (serviceId, stageId, newStatus) => {
+    if (isReadOnly) {
+      alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
+      return;
+    }
     try {
       const { error } = await supabase
         .from('service_stages')
@@ -237,6 +254,10 @@ export default function Services() {
   // Checklist Action Handlers
   const handleAddChecklistTask = async (e, serviceId) => {
     e.preventDefault();
+    if (isReadOnly) {
+      alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
+      return;
+    }
     if (!checklistForm.task.trim()) return;
 
     try {
@@ -267,6 +288,7 @@ export default function Services() {
   };
 
   const handleUpdateChecklistTaskStatus = async (taskId, newStatus) => {
+    if (isReadOnly) return;
     try {
       const { error } = await supabase
         .from('service_checklists')
@@ -455,7 +477,7 @@ export default function Services() {
           </button>
           <button
             onClick={handleOpenAddModal}
-            disabled={clients.length === 0}
+            disabled={clients.length === 0 || isReadOnly}
             className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-xs transition-all shadow-md shadow-brand-600/20 disabled:opacity-50 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
