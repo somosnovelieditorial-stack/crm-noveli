@@ -25,7 +25,12 @@ export default function Catalog() {
     currency: 'CLP',
     includes_vat: false,
     category: 'corrección',
-    active: true
+    active: true,
+    requires_manuscript: true,
+    requires_materials: false,
+    requires_signed_contract: true,
+    requires_agreement_sent: false,
+    requires_duration: false
   });
 
   const [formError, setFormError] = useState('');
@@ -60,8 +65,13 @@ export default function Catalog() {
       base_price: 0,
       currency: 'CLP',
       includes_vat: false,
-      category: 'corrección',
-      active: true
+      category: 'editorial',
+      active: true,
+      requires_manuscript: true,
+      requires_materials: false,
+      requires_signed_contract: true,
+      requires_agreement_sent: false,
+      requires_duration: false
     });
     setFormError('');
     setIsModalOpen(true);
@@ -75,8 +85,13 @@ export default function Catalog() {
       base_price: item.base_price || 0,
       currency: item.currency || 'CLP',
       includes_vat: item.includes_vat || false,
-      category: item.category || 'corrección',
-      active: item.active !== undefined ? item.active : true
+      category: item.category || 'editorial',
+      active: item.active !== undefined ? item.active : true,
+      requires_manuscript: item.requires_manuscript !== undefined ? item.requires_manuscript : true,
+      requires_materials: item.requires_materials !== undefined ? item.requires_materials : false,
+      requires_signed_contract: item.requires_signed_contract !== undefined ? item.requires_signed_contract : true,
+      requires_agreement_sent: item.requires_agreement_sent !== undefined ? item.requires_agreement_sent : false,
+      requires_duration: item.requires_duration !== undefined ? item.requires_duration : false
     });
     setFormError('');
     setIsModalOpen(true);
@@ -160,8 +175,7 @@ export default function Catalog() {
   };
 
   const categories = [
-    'corrección', 'diseño', 'maquetación', 'difusión', 
-    'derechos de autor', 'publicación', 'asesoría', 'otro'
+    'editorial', 'publicidad', 'diseño', 'corrección', 'maquetación', 'derechos de autor', 'asesoría', 'otro'
   ];
 
   // Filters logic
@@ -181,12 +195,12 @@ export default function Catalog() {
 
   const getCategoryColor = (cat) => {
     switch (cat) {
-      case 'corrección': return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900';
+      case 'editorial': return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900';
+      case 'publicidad': return 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-950/30 dark:text-pink-400 dark:border-pink-900';
       case 'diseño': return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900';
+      case 'corrección': return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900';
       case 'maquetación': return 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-400 dark:border-violet-900';
-      case 'difusión': return 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-950/30 dark:text-pink-400 dark:border-pink-900';
       case 'derechos de autor': return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900';
-      case 'publicación': return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900';
       case 'asesoría': return 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/30 dark:text-cyan-400 dark:border-cyan-900';
       default: return 'bg-slate-50 text-slate-700 border-slate-200';
     }
@@ -379,7 +393,52 @@ export default function Catalog() {
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Categoría</label>
                   <select
                     value={formData.category}
-                    onChange={(e) => setFormData({...formData, category: e.target.value})}
+                    onChange={(e) => {
+                      const newCat = e.target.value;
+                      let defaults = {};
+                      if (newCat === 'editorial' || newCat === 'corrección' || newCat === 'maquetación') {
+                        defaults = {
+                          requires_manuscript: true,
+                          requires_materials: false,
+                          requires_signed_contract: true,
+                          requires_agreement_sent: false,
+                          requires_duration: false
+                        };
+                      } else if (newCat === 'publicidad') {
+                        defaults = {
+                          requires_manuscript: false,
+                          requires_materials: false,
+                          requires_signed_contract: false,
+                          requires_agreement_sent: true,
+                          requires_duration: true
+                        };
+                      } else if (newCat === 'diseño') {
+                        defaults = {
+                          requires_manuscript: false,
+                          requires_materials: true,
+                          requires_signed_contract: false,
+                          requires_agreement_sent: true,
+                          requires_duration: false
+                        };
+                      } else if (newCat === 'asesoría') {
+                        defaults = {
+                          requires_manuscript: false,
+                          requires_materials: false,
+                          requires_signed_contract: false,
+                          requires_agreement_sent: true,
+                          requires_duration: true
+                        };
+                      } else {
+                        defaults = {
+                          requires_manuscript: false,
+                          requires_materials: false,
+                          requires_signed_contract: false,
+                          requires_agreement_sent: true,
+                          requires_duration: false
+                        };
+                      }
+                      setFormData({...formData, category: newCat, ...defaults});
+                    }}
                     className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none capitalize"
                   >
                     {categories.map(c => (
@@ -440,6 +499,58 @@ export default function Catalog() {
                     className="block w-full p-3 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                     placeholder="Detalles sobre el servicio, lo que incluye, plazos promedio, etc..."
                   ></textarea>
+                </div>
+
+                {/* Requisitos de inicio */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Requisitos para iniciar trabajo</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-950/30 border border-slate-100 dark:border-slate-850 rounded-xl">
+                    <label className="flex items-center gap-2 text-xs text-slate-750 dark:text-slate-300 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.requires_manuscript} 
+                        onChange={(e) => setFormData({...formData, requires_manuscript: e.target.checked})}
+                        className="rounded text-brand-650 focus:ring-brand-500 border-slate-300"
+                      />
+                      <span>Manuscrito/Archivos</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-750 dark:text-slate-300 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.requires_materials} 
+                        onChange={(e) => setFormData({...formData, requires_materials: e.target.checked})}
+                        className="rounded text-brand-650 focus:ring-brand-500 border-slate-300"
+                      />
+                      <span>Materiales/Briefing</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-750 dark:text-slate-300 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.requires_signed_contract} 
+                        onChange={(e) => setFormData({...formData, requires_signed_contract: e.target.checked})}
+                        className="rounded text-brand-650 focus:ring-brand-500 border-slate-300"
+                      />
+                      <span>Contrato Firmado</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-750 dark:text-slate-300 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.requires_agreement_sent} 
+                        onChange={(e) => setFormData({...formData, requires_agreement_sent: e.target.checked})}
+                        className="rounded text-brand-650 focus:ring-brand-500 border-slate-300"
+                      />
+                      <span>Acuerdo Enviado/Aceptado</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-750 dark:text-slate-300 cursor-pointer col-span-1 md:col-span-2">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.requires_duration} 
+                        onChange={(e) => setFormData({...formData, requires_duration: e.target.checked})}
+                        className="rounded text-brand-650 focus:ring-brand-500 border-slate-300"
+                      />
+                      <span>Periodo/Duración Definido</span>
+                    </label>
+                  </div>
                 </div>
 
                 {/* Active switch */}

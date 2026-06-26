@@ -36,8 +36,182 @@ import {
   Briefcase, Contact, Percent, LogOut, Sun, Moon, 
   Menu, X, Sparkles, User, Tag, Package, Receipt,
   MessageSquare, FileText, BarChart3, Settings2, CheckCircle,
-  Calendar, Coins, Bell, Search, AlertTriangle, Info, Clock, ShieldCheck
+  Calendar, Coins, Bell, Search, AlertTriangle, Info, Clock, ShieldCheck,
+  ChevronDown, ChevronUp, ChevronRight
 } from 'lucide-react';
+
+const menuGroups = [
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    icon: <Library className="w-4 h-4" />,
+    tab: 'dashboard'
+  },
+  {
+    id: 'agenda',
+    label: 'Agenda',
+    icon: <Calendar className="w-4 h-4" />,
+    items: [
+      { id: 'agenda', label: 'Agenda Editorial', tab: 'agenda' },
+      { id: 'notifications', label: 'Notificaciones', tab: 'notifications' }
+    ]
+  },
+  {
+    id: 'clients_prospects',
+    label: 'Clientes y Prospectos',
+    icon: <Users className="w-4 h-4" />,
+    items: [
+      { id: 'clients', label: 'Clientes', tab: 'clients' },
+      { id: 'prospects', label: 'Prospectos', tab: 'prospects' },
+      { id: 'seguimientos', label: 'Seguimientos', tab: 'seguimientos' }
+    ]
+  },
+  {
+    id: 'editorial_management',
+    label: 'Gestión Editorial',
+    icon: <BookOpen className="w-4 h-4" />,
+    items: [
+      { id: 'services', label: 'Servicios Contratados', tab: 'services' },
+      { id: 'timeline', label: 'Etapas / Timeline', tab: 'services' },
+      { id: 'completed_sales', label: 'Ventas Finalizadas', tab: 'completed_sales' },
+      { id: 'documents', label: 'Documentos', tab: 'documents' }
+    ]
+  },
+  {
+    id: 'sales_quotes',
+    label: 'Ventas y Cotizaciones',
+    icon: <Receipt className="w-4 h-4" />,
+    items: [
+      { id: 'catalog', label: 'Catálogo', tab: 'catalog' },
+      { id: 'packs', label: 'Packs Editoriales', tab: 'packs' },
+      { id: 'quotations', label: 'Cotizaciones', tab: 'quotations' },
+      { id: 'replies', label: 'Respuestas Rápidas', tab: 'replies' }
+    ]
+  },
+  {
+    id: 'finances',
+    label: 'Finanzas',
+    icon: <DollarSign className="w-4 h-4" />,
+    items: [
+      { id: 'incomes', label: 'Ingresos', tab: 'incomes' },
+      { id: 'expenses', label: 'Gastos', tab: 'expenses' },
+      { id: 'taxes', label: 'Impuestos', tab: 'taxes' },
+      { id: 'currency_rates', label: 'Monedas al día', tab: 'currency_rates' }
+    ]
+  },
+  {
+    id: 'contacts',
+    label: 'Contactos',
+    icon: <Contact className="w-4 h-4" />,
+    items: [
+      { id: 'providers', label: 'Proveedores', tab: 'providers' }
+    ]
+  },
+  {
+    id: 'reports',
+    label: 'Reportes',
+    icon: <BarChart3 className="w-4 h-4" />,
+    items: [
+      { id: 'reports', label: 'Reportes', tab: 'reports' }
+    ]
+  },
+  {
+    id: 'configuration',
+    label: 'Configuración',
+    icon: <Settings2 className="w-4 h-4" />,
+    items: [
+      { id: 'configuration', label: 'Configuración General', tab: 'configuration' },
+      { id: 'integrations', label: 'Integraciones', tab: 'integrations' }
+    ]
+  }
+];
+
+function SeguimientosView({ isReadOnly }) {
+  const [followups, setFollowups] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFollowups = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('prospects')
+          .select('*')
+          .is('converted_to_client_id', null)
+          .not('followup_date', 'is', null)
+          .order('followup_date', { ascending: true });
+
+        if (error) throw error;
+        setFollowups(data || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFollowups();
+  }, []);
+
+  return (
+    <div className="space-y-6 animate-fade-in text-slate-800 dark:text-slate-100">
+      <div>
+        <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100 font-sans tracking-tight">
+          Seguimiento de Prospectos
+        </h1>
+        <p className="text-slate-500 dark:text-slate-400 text-sm">
+          Planificación de próximas acciones y fechas de contacto para interesados.
+        </p>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-205 dark:border-slate-800 shadow-sm">
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
+          </div>
+        ) : followups.length === 0 ? (
+          <p className="text-slate-450 py-6 text-center">No hay seguimientos planificados actualmente.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-450 font-bold uppercase">
+                  <th className="py-3 px-4">Prospecto</th>
+                  <th className="py-3 px-4">Contacto</th>
+                  <th className="py-3 px-4">Servicio de Interés</th>
+                  <th className="py-3 px-4">Próxima Acción</th>
+                  <th className="py-3 px-4">Fecha Límite</th>
+                  <th className="py-3 px-4 text-center">Probabilidad</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-150 dark:divide-slate-850">
+                {followups.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20">
+                    <td className="py-3.5 px-4 font-bold text-slate-700 dark:text-slate-200">{item.name}</td>
+                    <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{item.contact || '-'}</td>
+                    <td className="py-3.5 px-4 font-medium text-slate-700 dark:text-slate-200 capitalize">{item.interest_service || '-'}</td>
+                    <td className="py-3.5 px-4 text-slate-600 dark:text-slate-350">{item.next_action || '-'}</td>
+                    <td className="py-3.5 px-4 font-bold text-brand-600 dark:text-brand-400">{item.followup_date}</td>
+                    <td className="py-3.5 px-4 text-center">
+                      <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold capitalize ${
+                        item.probability === 'alta' 
+                          ? 'bg-emerald-50 text-emerald-650 dark:bg-emerald-950/30' 
+                          : item.probability === 'media'
+                            ? 'bg-amber-50 text-amber-650 dark:bg-amber-950/30'
+                            : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {item.probability}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -54,6 +228,38 @@ export default function App() {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
   const userRef = useRef(null);
+
+  const [expandedGroups, setExpandedGroups] = useState(() => {
+    try {
+      const saved = localStorage.getItem('noveli_expanded_groups');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return {};
+  });
+
+  const toggleGroup = (groupId) => {
+    setExpandedGroups(prev => {
+      const next = { ...prev, [groupId]: !prev[groupId] };
+      localStorage.setItem('noveli_expanded_groups', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const group = menuGroups.find(g => 
+      g.tab === activeTab || 
+      (g.items && g.items.some(item => item.id === activeTab || item.tab === activeTab))
+    );
+    if (group && !expandedGroups[group.id]) {
+      setExpandedGroups(prev => {
+        const next = { ...prev, [group.id]: true };
+        localStorage.setItem('noveli_expanded_groups', JSON.stringify(next));
+        return next;
+      });
+    }
+  }, [activeTab]);
 
   const fetchUserRoleAndOrg = async (activeUser) => {
     try {
@@ -513,11 +719,58 @@ export default function App() {
       case 'reports': return <Reports {...commonProps} />;
       case 'configuration': return <Configuration {...commonProps} />;
       case 'integrations': return <Integrations {...commonProps} />;
+      case 'notifications': return (
+        <div className="space-y-6 animate-fade-in text-slate-800 dark:text-slate-100">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
+              <Bell className="w-5 h-5 text-brand-500" />
+              Notificaciones y Alertas de Control Interno
+            </h2>
+            <div className="divide-y divide-slate-150 dark:divide-slate-800 text-sm">
+              {notifications.length === 0 ? (
+                <div className="p-12 text-center text-slate-400 font-semibold flex flex-col items-center gap-2">
+                  <CheckCircle className="w-12 h-12 text-emerald-500 shrink-0" />
+                  <span>¡Al día! No se registran alertas de plazos o cobros pendientes hoy.</span>
+                </div>
+              ) : (
+                notifications.map((notif) => (
+                  <div key={notif.id} className="py-4 flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <span className={`p-2 rounded-lg shrink-0 mt-0.5 ${
+                        notif.severity === 'high' 
+                          ? 'bg-rose-50 text-rose-650 dark:bg-rose-950/30' 
+                          : notif.severity === 'medium'
+                            ? 'bg-amber-50 text-amber-650 dark:bg-amber-950/30' 
+                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800'
+                      }`}>
+                        {notif.severity === 'high' ? <AlertTriangle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                      </span>
+                      <div>
+                        <h4 className="font-bold text-slate-800 dark:text-slate-100">{notif.title}</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{notif.desc}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab(notif.tab)}
+                      className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs"
+                    >
+                      Ir al Módulo
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      );
+      case 'seguimientos': return <SeguimientosView isReadOnly={isReadOnly} />;
       default: return <Dashboard {...commonProps} />;
     }
   };
 
   const getActiveTabTitle = () => {
+    if (activeTab === 'notifications') return 'Notificaciones';
+    if (activeTab === 'seguimientos') return 'Seguimiento de Prospectos';
     const tab = tabs.find(t => t.id === activeTab);
     return tab ? tab.label : 'CRM Editorial';
   };
@@ -527,109 +780,153 @@ export default function App() {
       
       {/* Sidebar - Desktop persistent / Mobile drawer */}
       <aside className={`
-        fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800/80 p-5 flex flex-col justify-between transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 z-40 w-64 bg-[var(--sidebar-bg)] border-r border-slate-200 dark:border-slate-800/80 p-5 flex flex-col justify-between transition-transform duration-300 ease-in-out
         lg:translate-x-0 lg:static lg:h-screen lg:flex-shrink-0
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Upper menu links */}
-        <div className="space-y-4 flex flex-col h-full overflow-hidden">
+        <div className="space-y-3.5 flex flex-col h-full overflow-hidden">
           {/* Logo & Branding */}
-          <div className="flex justify-between items-center pb-2 border-b border-slate-50 dark:border-slate-850 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-brand-500/10 text-brand-500 rounded-xl">
-                <BookOpen className="w-6 h-6" />
+          <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800 shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-brand-500/10 text-brand-600 rounded-lg">
+                <BookOpen className="w-4.5 h-4.5" />
               </div>
               <div>
-                <h2 className="text-base font-extrabold text-slate-855 dark:text-slate-150 font-sans tracking-tight">Somos Noveli</h2>
-                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Editorial CRM</p>
+                <h2 className="text-sm font-extrabold text-slate-800 dark:text-slate-150 font-sans tracking-tight">Somos Noveli</h2>
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Editorial CRM</p>
               </div>
             </div>
             {/* Close Sidebar Mobile */}
             <button 
               onClick={() => setIsSidebarOpen(false)}
-              className="lg:hidden p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 cursor-pointer"
+              className="lg:hidden p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4.5 h-4.5" />
             </button>
           </div>
 
           {/* User profile */}
-          <div className="flex flex-col gap-2.5 p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-100 dark:border-slate-850 text-xs shrink-0 font-sans">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-brand-500/10 text-brand-500 rounded-full shrink-0">
-                <User className="w-4 h-4" />
-              </div>
-              <div className="truncate flex-1">
-                <p className="font-semibold text-slate-700 dark:text-slate-200 truncate" title={user?.email}>
-                  {user?.email}
-                </p>
-                <div className="mt-1 flex items-center gap-1">
-                  {userRole === 'administrador' ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400 border border-green-200 dark:border-green-900/50 uppercase tracking-wide">
-                      Administrador
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-400 border border-brand-100 dark:border-brand-900/40 uppercase tracking-wide capitalize">
-                      {userRole}
-                    </span>
-                  )}
-                </div>
-              </div>
+          <div className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-50 dark:bg-slate-950/20 rounded-lg border border-slate-205 dark:border-slate-850 text-[11px] shrink-0 font-sans">
+            <div className="p-1 bg-brand-500/10 text-brand-500 rounded-full shrink-0">
+              <User className="w-3.5 h-3.5" />
+            </div>
+            <div className="truncate flex-1">
+              <p className="font-bold text-slate-700 dark:text-slate-200 truncate" title={user?.email}>
+                {user?.email}
+              </p>
             </div>
           </div>
 
           {/* Nav links (Scrollable area) */}
-          <nav className="flex-1 overflow-y-auto pr-1 space-y-0.5 scrollbar-thin">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setIsSidebarOpen(false);
-                }}
-                className={`
-                  w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border
-                  ${activeTab === tab.id 
-                    ? 'bg-brand-50/50 border-brand-100 text-brand-600 dark:bg-brand-950/20 dark:border-brand-900/50 dark:text-brand-450' 
-                    : 'border-transparent text-slate-550 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850 hover:text-slate-855 dark:hover:text-slate-200'}
-                `}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-              </button>
-            ))}
+          <nav className="flex-1 overflow-y-auto pr-1 space-y-1 scrollbar-thin text-xs">
+            {menuGroups.map((group) => {
+              const isGroupActive = group.tab === activeTab || 
+                (group.items && group.items.some(item => item.id === activeTab || item.tab === activeTab));
+              const isExpanded = expandedGroups[group.id];
+
+              if (group.tab) {
+                return (
+                  <button
+                    key={group.id}
+                    onClick={() => {
+                      setActiveTab(group.tab);
+                      setIsSidebarOpen(false);
+                    }}
+                    className={`
+                      w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border
+                      ${activeTab === group.tab 
+                        ? 'bg-[var(--menu-active-bg)] border-[var(--menu-active-border)] text-[var(--menu-active-text)]' 
+                        : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 hover:text-slate-800 dark:hover:text-slate-200'}
+                    `}
+                  >
+                    {group.icon}
+                    <span className="font-bold">{group.label}</span>
+                  </button>
+                );
+              }
+
+              return (
+                <div key={group.id} className="space-y-0.5">
+                  <button
+                    onClick={() => toggleGroup(group.id)}
+                    className={`
+                      w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all cursor-pointer border text-xs
+                      ${isGroupActive 
+                        ? 'border-brand-300/30 text-brand-655 dark:text-brand-400 font-bold bg-brand-50/10 dark:bg-brand-950/5' 
+                        : 'border-transparent text-slate-655 dark:text-slate-400 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 hover:text-slate-800'}
+                    `}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      {group.icon}
+                      <span className="font-bold">{group.label}</span>
+                    </span>
+                    {isExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    )}
+                  </button>
+
+                  {isExpanded && (
+                    <div className="pl-3.5 space-y-0.5 border-l border-slate-200 dark:border-slate-800 ml-4.5 my-1 animate-slide-down">
+                      {group.items.map((item) => {
+                        const isItemActive = activeTab === item.id || activeTab === item.tab;
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => {
+                              setActiveTab(item.tab);
+                              setIsSidebarOpen(false);
+                            }}
+                            className={`
+                              w-full flex items-center px-3 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer text-left
+                              ${isItemActive 
+                                ? 'bg-[var(--menu-active-bg)] text-[var(--menu-active-text)] font-bold shadow-xs' 
+                                : 'text-slate-500 hover:text-slate-850 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100/50 dark:hover:bg-slate-800/20'}
+                            `}
+                          >
+                            <span>{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </nav>
         </div>
 
         {/* Lower actions */}
-        <div className="space-y-2 pt-3 border-t border-slate-50 dark:border-slate-800/80 shrink-0">
+        <div className="space-y-2 pt-2.5 border-t border-slate-200 dark:border-slate-800/80 shrink-0">
           {/* Demo status alert */}
           {isMock && (
-            <div className="p-2.5 bg-brand-950/30 border border-brand-500/20 rounded-xl text-[10px] text-brand-300 flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-brand-400 shrink-0" />
-              <span className="truncate">Modo Demo Local</span>
+            <div className="p-2 bg-brand-950/20 border border-brand-500/10 rounded-lg text-[9px] text-brand-400 dark:text-brand-300 flex items-center gap-1.5 justify-center">
+              <Sparkles className="w-3 h-3 text-brand-450 shrink-0 animate-pulse" />
+              <span className="truncate font-semibold">Demo Local</span>
             </div>
           )}
 
-          {/* Theme toggler */}
-          <button
-            onClick={toggleTheme}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850 hover:text-slate-855 dark:hover:text-slate-200 transition-all border border-transparent cursor-pointer"
-          >
-            <span className="flex items-center gap-3">
-              {isDarkMode ? <Sun className="w-4.5 h-4.5 text-amber-500" /> : <Moon className="w-4.5 h-4.5 text-slate-500" />}
-              <span>{isDarkMode ? 'Modo Claro' : 'Modo Oscuro'}</span>
-            </span>
-          </button>
+          {/* Compact Buttons Row */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              className="flex-1 flex items-center justify-center gap-1.5 p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 hover:text-brand-600 dark:text-slate-400 dark:hover:text-slate-250 cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-slate-800 shadow-xs hover:shadow-sm text-[11px] font-semibold font-sans"
+              title={isDarkMode ? 'Activar Modo Claro' : 'Activar Modo Nocturno'}
+            >
+              {isDarkMode ? <Sun className="w-3.5 h-3.5 text-amber-500" /> : <Moon className="w-3.5 h-3.5 text-slate-500" />}
+              <span>{isDarkMode ? 'Claro' : 'Oscuro'}</span>
+            </button>
 
-          {/* Logout */}
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all border border-transparent cursor-pointer"
-          >
-            <LogOut className="w-4.5 h-4.5" />
-            <span>Cerrar Sesión</span>
-          </button>
+            <button
+              onClick={handleLogout}
+              className="flex-1 flex items-center justify-center gap-1.5 p-1.5 rounded-lg border border-rose-200 dark:border-rose-955/20 bg-rose-50 dark:bg-rose-955/20 text-rose-650 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/40 cursor-pointer transition-all hover:shadow-xs text-[11px] font-bold"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Salir</span>
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -637,7 +934,7 @@ export default function App() {
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         
         {/* Dynamic Global Top Header Bar */}
-        <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800/80 px-6 py-4 flex items-center justify-between z-30 shrink-0 shadow-xs">
+        <header className="bg-[var(--header-bg)] border-b border-slate-200 dark:border-slate-800/80 px-6 py-4 flex items-center justify-between z-30 shrink-0 shadow-sm">
           <div className="flex items-center gap-4 flex-1">
             {/* Hamburger for mobile */}
             <button 
@@ -648,7 +945,7 @@ export default function App() {
             </button>
 
             {/* Active Tab Title in desktop */}
-            <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100 hidden md:block select-none shrink-0 font-sans tracking-tight pr-4 border-r border-slate-100 dark:border-slate-800">
+            <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100 hidden md:block select-none shrink-0 font-sans tracking-tight pr-4 border-r border-slate-200 dark:border-slate-800">
               {getActiveTabTitle()}
             </h1>
 
@@ -661,7 +958,7 @@ export default function App() {
                   placeholder="Buscar en el CRM..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-slate-700 dark:text-slate-200"
+                  className="w-full pl-9 pr-8 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-slate-700 dark:text-slate-200"
                 />
                 {searchQuery && (
                   <button 
@@ -707,7 +1004,7 @@ export default function App() {
             {/* Theme Toggle Button */}
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-xl border border-slate-100 dark:border-slate-850/50 bg-white dark:bg-slate-900 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-slate-850"
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 hover:text-brand-600 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-slate-800 shadow-xs hover:shadow-sm"
               title={isDarkMode ? 'Activar Modo Claro' : 'Activar Modo Nocturno'}
             >
               {isDarkMode ? <Sun className="w-4.5 h-4.5 text-amber-500" /> : <Moon className="w-4.5 h-4.5" />}
@@ -717,10 +1014,10 @@ export default function App() {
             <div className="relative">
               <button
                 onClick={() => setIsNotifOpen(!isNotifOpen)}
-                className={`p-2 rounded-xl border text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer transition-all relative ${
+                className={`p-2 rounded-xl border text-slate-600 hover:text-brand-600 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer transition-all relative shadow-xs hover:shadow-sm ${
                   isNotifOpen 
-                    ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700' 
-                    : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-850/50 hover:bg-slate-50 dark:hover:bg-slate-850'
+                    ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-750' 
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
                 <Bell className="w-4.5 h-4.5" />
@@ -747,7 +1044,7 @@ export default function App() {
                   <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-850">
                     {notifications.length === 0 ? (
                       <div className="p-6 text-center text-slate-400 text-xs font-semibold flex flex-col items-center gap-2">
-                        <CheckCircle2 className="w-8 h-8 text-emerald-500 shrink-0" />
+                        <CheckCircle className="w-8 h-8 text-emerald-500 shrink-0" />
                         <span>¡Al día! No se registran alertas de plazos o cobros pendientes hoy.</span>
                       </div>
                     ) : (

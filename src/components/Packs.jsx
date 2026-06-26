@@ -25,6 +25,12 @@ export default function Packs() {
     currency: 'CLP',
     includes_vat: false,
     active: true,
+    category: 'editorial',
+    requires_manuscript: true,
+    requires_materials: false,
+    requires_signed_contract: true,
+    requires_agreement_sent: false,
+    requires_duration: false,
     selectedServiceIds: [] // local array of catalog IDs
   });
 
@@ -90,6 +96,12 @@ export default function Packs() {
       currency: 'CLP',
       includes_vat: false,
       active: true,
+      category: 'editorial',
+      requires_manuscript: true,
+      requires_materials: false,
+      requires_signed_contract: true,
+      requires_agreement_sent: false,
+      requires_duration: false,
       selectedServiceIds: []
     });
     setFormError('');
@@ -105,6 +117,12 @@ export default function Packs() {
       currency: pack.currency || 'CLP',
       includes_vat: pack.includes_vat || false,
       active: pack.active !== undefined ? pack.active : true,
+      category: pack.category || 'editorial',
+      requires_manuscript: pack.requires_manuscript !== undefined ? pack.requires_manuscript : true,
+      requires_materials: pack.requires_materials !== undefined ? pack.requires_materials : false,
+      requires_signed_contract: pack.requires_signed_contract !== undefined ? pack.requires_signed_contract : true,
+      requires_agreement_sent: pack.requires_agreement_sent !== undefined ? pack.requires_agreement_sent : false,
+      requires_duration: pack.requires_duration !== undefined ? pack.requires_duration : false,
       selectedServiceIds: pack.serviceIds || []
     });
     setFormError('');
@@ -193,7 +211,13 @@ export default function Packs() {
             price_special: formData.price_special,
             currency: formData.currency,
             includes_vat: formData.includes_vat,
-            active: formData.active
+            active: formData.active,
+            category: formData.category,
+            requires_manuscript: formData.requires_manuscript,
+            requires_materials: formData.requires_materials,
+            requires_signed_contract: formData.requires_signed_contract,
+            requires_agreement_sent: formData.requires_agreement_sent,
+            requires_duration: formData.requires_duration
           })
           .eq('id', packId);
 
@@ -216,7 +240,13 @@ export default function Packs() {
             price_special: formData.price_special,
             currency: formData.currency,
             includes_vat: formData.includes_vat,
-            active: formData.active
+            active: formData.active,
+            category: formData.category,
+            requires_manuscript: formData.requires_manuscript,
+            requires_materials: formData.requires_materials,
+            requires_signed_contract: formData.requires_signed_contract,
+            requires_agreement_sent: formData.requires_agreement_sent,
+            requires_duration: formData.requires_duration
           }])
           .select()
           .single();
@@ -259,6 +289,10 @@ export default function Packs() {
 
     return matchesSearch && matchesActive;
   });
+
+  const categories = [
+    'editorial', 'publicidad', 'diseño', 'corrección', 'maquetación', 'derechos de autor', 'asesoría', 'otro'
+  ];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -459,6 +493,65 @@ export default function Packs() {
                   />
                 </div>
 
+                {/* Category */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Categoría</label>
+                  <select
+                    value={formData.category}
+                    onChange={(e) => {
+                      const newCat = e.target.value;
+                      let defaults = {};
+                      if (newCat === 'editorial' || newCat === 'corrección' || newCat === 'maquetación') {
+                        defaults = {
+                          requires_manuscript: true,
+                          requires_materials: false,
+                          requires_signed_contract: true,
+                          requires_agreement_sent: false,
+                          requires_duration: false
+                        };
+                      } else if (newCat === 'publicidad') {
+                        defaults = {
+                          requires_manuscript: false,
+                          requires_materials: false,
+                          requires_signed_contract: false,
+                          requires_agreement_sent: true,
+                          requires_duration: true
+                        };
+                      } else if (newCat === 'diseño') {
+                        defaults = {
+                          requires_manuscript: false,
+                          requires_materials: true,
+                          requires_signed_contract: false,
+                          requires_agreement_sent: true,
+                          requires_duration: false
+                        };
+                      } else if (newCat === 'asesoría') {
+                        defaults = {
+                          requires_manuscript: false,
+                          requires_materials: false,
+                          requires_signed_contract: false,
+                          requires_agreement_sent: true,
+                          requires_duration: true
+                        };
+                      } else {
+                        defaults = {
+                          requires_manuscript: false,
+                          requires_materials: false,
+                          requires_signed_contract: false,
+                          requires_agreement_sent: true,
+                          requires_duration: false
+                        };
+                      }
+                      setFormData({...formData, category: newCat, ...defaults});
+                    }}
+                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-705 dark:text-slate-200 text-sm focus:outline-none capitalize"
+                  >
+                    {categories.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Services Checkboxes Selection */}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1">
@@ -541,8 +634,60 @@ export default function Packs() {
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                     className="block w-full p-3 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    placeholder="Detalles comerciales, condiciones de promoción, plazos promedio..."
+                    placeholder="Detalles comercial, plazos promedio..."
                   ></textarea>
+                </div>
+
+                {/* Requisitos de inicio */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Requisitos para iniciar trabajo</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-950/30 border border-slate-100 dark:border-slate-850 rounded-xl">
+                    <label className="flex items-center gap-2 text-xs text-slate-750 dark:text-slate-300 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.requires_manuscript} 
+                        onChange={(e) => setFormData({...formData, requires_manuscript: e.target.checked})}
+                        className="rounded text-brand-650 focus:ring-brand-500 border-slate-300"
+                      />
+                      <span>Manuscrito/Archivos</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-750 dark:text-slate-300 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.requires_materials} 
+                        onChange={(e) => setFormData({...formData, requires_materials: e.target.checked})}
+                        className="rounded text-brand-650 focus:ring-brand-500 border-slate-300"
+                      />
+                      <span>Materiales/Briefing</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-750 dark:text-slate-300 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.requires_signed_contract} 
+                        onChange={(e) => setFormData({...formData, requires_signed_contract: e.target.checked})}
+                        className="rounded text-brand-650 focus:ring-brand-500 border-slate-300"
+                      />
+                      <span>Contrato Firmado</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-750 dark:text-slate-300 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.requires_agreement_sent} 
+                        onChange={(e) => setFormData({...formData, requires_agreement_sent: e.target.checked})}
+                        className="rounded text-brand-650 focus:ring-brand-500 border-slate-300"
+                      />
+                      <span>Acuerdo Enviado/Aceptado</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-750 dark:text-slate-300 cursor-pointer col-span-1 md:col-span-2">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.requires_duration} 
+                        onChange={(e) => setFormData({...formData, requires_duration: e.target.checked})}
+                        className="rounded text-brand-650 focus:ring-brand-500 border-slate-300"
+                      />
+                      <span>Periodo/Duración Definido</span>
+                    </label>
+                  </div>
                 </div>
 
                 {/* Active switch */}

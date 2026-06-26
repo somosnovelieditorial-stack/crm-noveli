@@ -198,6 +198,11 @@ CREATE TABLE IF NOT EXISTS service_catalog (
     includes_vat BOOLEAN NOT NULL DEFAULT FALSE,
     category TEXT NOT NULL CHECK (category IN ('corrección', 'diseño', 'maquetación', 'difusión', 'derechos de autor', 'publicación', 'asesoría', 'otro')),
     active BOOLEAN NOT NULL DEFAULT TRUE,
+    requires_manuscript BOOLEAN NOT NULL DEFAULT TRUE,
+    requires_materials BOOLEAN NOT NULL DEFAULT FALSE,
+    requires_signed_contract BOOLEAN NOT NULL DEFAULT TRUE,
+    requires_agreement_sent BOOLEAN NOT NULL DEFAULT FALSE,
+    requires_duration BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -212,6 +217,11 @@ CREATE TABLE IF NOT EXISTS service_packs (
     currency TEXT NOT NULL DEFAULT 'CLP' CHECK (currency IN ('CLP', 'USD')),
     includes_vat BOOLEAN NOT NULL DEFAULT FALSE,
     active BOOLEAN NOT NULL DEFAULT TRUE,
+    requires_manuscript BOOLEAN NOT NULL DEFAULT TRUE,
+    requires_materials BOOLEAN NOT NULL DEFAULT FALSE,
+    requires_signed_contract BOOLEAN NOT NULL DEFAULT TRUE,
+    requires_agreement_sent BOOLEAN NOT NULL DEFAULT FALSE,
+    requires_duration BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

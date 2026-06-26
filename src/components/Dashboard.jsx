@@ -294,82 +294,82 @@ export default function Dashboard() {
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {/* Incomes */}
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm animate-hover-card">
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all animate-hover-card">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Ingresos Totales (Mes)</p>
-                <h3 className="text-2xl font-bold mt-2 text-emerald-600 dark:text-emerald-400">
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ingresos Totales (Mes)</p>
+                <h3 className="text-2xl font-extrabold mt-2 text-emerald-600 dark:text-emerald-400">
                   {formatCurrency(stats.month.incomesTotal, 'CLP')}
                 </h3>
                 {stats.month.incomesUsd > 0 && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  <p className="text-xs text-slate-600 dark:text-slate-450 mt-1 font-medium">
                     Incluye USD {formatCurrency(stats.month.incomesUsd, 'USD')}
                   </p>
                 )}
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-semibold">
                   Neto: {formatCurrency(stats.month.incomesNet, 'CLP')}
                 </p>
               </div>
-              <span className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
+              <span className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-650 dark:text-emerald-400 rounded-xl shadow-xs">
                 <TrendingUp className="w-5 h-5" />
               </span>
             </div>
           </div>
 
           {/* Expenses */}
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm animate-hover-card">
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all animate-hover-card">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Gastos Totales (Mes)</p>
-                <h3 className="text-2xl font-bold mt-2 text-rose-600 dark:text-rose-400">
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Gastos Totales (Mes)</p>
+                <h3 className="text-2xl font-extrabold mt-2 text-rose-600 dark:text-rose-400">
                   {formatCurrency(stats.month.expensesTotal, 'CLP')}
                 </h3>
                 {stats.month.expensesUsd > 0 && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  <p className="text-xs text-slate-600 dark:text-slate-450 mt-1 font-medium">
                     Incluye USD {formatCurrency(stats.month.expensesUsd, 'USD')}
                   </p>
                 )}
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-semibold">
                   Neto Deducible: {formatCurrency(stats.month.expensesNet, 'CLP')}
                 </p>
               </div>
-              <span className="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl">
+              <span className="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-650 dark:text-rose-400 rounded-xl shadow-xs">
                 <TrendingDown className="w-5 h-5" />
               </span>
             </div>
           </div>
 
           {/* Utility */}
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm animate-hover-card">
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all animate-hover-card">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Utilidad Estimada (Mes)</p>
-                <h3 className={`text-2xl font-bold mt-2 ${stats.month.utility >= 0 ? 'text-brand-600 dark:text-brand-400' : 'text-rose-600'}`}>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Utilidad Estimada (Mes)</p>
+                <h3 className={`text-2xl font-extrabold mt-2 ${stats.month.utility >= 0 ? 'text-brand-600 dark:text-brand-405' : 'text-rose-600'}`}>
                   {formatCurrency(stats.month.utility, 'CLP')}
                 </h3>
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-semibold">
                   Ingresos Netos - Gastos Netos
                 </p>
               </div>
-              <span className="p-3 bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 rounded-xl">
+              <span className="p-3 bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 rounded-xl shadow-xs">
                 <DollarSign className="w-5 h-5" />
               </span>
             </div>
           </div>
 
           {/* VAT Estimate */}
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm animate-hover-card">
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all animate-hover-card">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">IVA Estimado por Pagar</p>
-                <h3 className={`text-2xl font-bold mt-2 ${stats.month.vatToPay >= 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-500'}`}>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">IVA Estimado por Pagar</p>
+                <h3 className={`text-2xl font-extrabold mt-2 ${stats.month.vatToPay >= 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-500'}`}>
                   {formatCurrency(stats.month.vatToPay, 'CLP')}
                 </h3>
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-semibold">
                   Débito {formatCurrency(stats.month.incomesVat, 'CLP')} - Crédito {formatCurrency(stats.month.expensesVat, 'CLP')}
                 </p>
               </div>
-              <span className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
+              <span className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl shadow-xs">
                 <Percent className="w-5 h-5" />
               </span>
             </div>
@@ -378,49 +378,49 @@ export default function Dashboard() {
       </div>
 
       {/* Operations Counts Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Active Clients */}
-        <div className="bg-slate-100/50 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/80 p-4 rounded-xl flex items-center gap-4">
-          <div className="p-2.5 bg-blue-500/10 text-blue-500 rounded-lg">
+        <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 p-4 rounded-xl flex items-center gap-4 shadow-xs">
+          <div className="p-2.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg">
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="text-xl font-bold text-slate-700 dark:text-slate-200">{stats.counts.activeClients}</h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Clientes Activos</p>
+            <h4 className="text-xl font-bold text-slate-805 dark:text-slate-200">{stats.counts.activeClients}</h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Clientes Activos</p>
           </div>
         </div>
 
         {/* Active Prospects */}
-        <div className="bg-slate-100/50 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/80 p-4 rounded-xl flex items-center gap-4">
-          <div className="p-2.5 bg-indigo-500/10 text-indigo-500 rounded-lg">
+        <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 p-4 rounded-xl flex items-center gap-4 shadow-xs">
+          <div className="p-2.5 bg-indigo-500/10 text-indigo-650 dark:text-indigo-400 rounded-lg">
             <UserCheck className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="text-xl font-bold text-slate-700 dark:text-slate-200">{stats.counts.activeProspects}</h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Prospectos Activos</p>
+            <h4 className="text-xl font-bold text-slate-850 dark:text-slate-200">{stats.counts.activeProspects}</h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Prospectos Activos</p>
           </div>
         </div>
 
         {/* Services in Process */}
-        <div className="bg-slate-100/50 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/80 p-4 rounded-xl flex items-center gap-4">
-          <div className="p-2.5 bg-violet-500/10 text-violet-500 rounded-lg">
+        <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 p-4 rounded-xl flex items-center gap-4 shadow-xs">
+          <div className="p-2.5 bg-violet-500/10 text-violet-600 dark:text-violet-400 rounded-lg">
             <BookOpen className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="text-xl font-bold text-slate-700 dark:text-slate-200">{stats.counts.servicesInProcess}</h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Servicios en Proceso</p>
+            <h4 className="text-xl font-bold text-slate-850 dark:text-slate-200">{stats.counts.servicesInProcess}</h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Servicios en Proceso</p>
           </div>
         </div>
 
         {/* Pending Payments */}
-        <div className="bg-slate-100/50 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/80 p-4 rounded-xl flex items-center gap-4">
-          <div className="p-2.5 bg-amber-500/10 text-amber-500 rounded-lg">
+        <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 p-4 rounded-xl flex items-center gap-4 shadow-xs">
+          <div className="p-2.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-lg">
             <AlertCircle className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="text-xl font-bold text-slate-700 dark:text-slate-200">{stats.counts.pendingPayments}</h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              Pagos Pendientes: <span className="font-semibold text-amber-600 dark:text-amber-400">{formatCurrency(stats.counts.pendingPaymentsValue, 'CLP')}</span>
+            <h4 className="text-xl font-bold text-slate-850 dark:text-slate-200">{stats.counts.pendingPayments}</h4>
+            <p className="text-xs text-slate-550 dark:text-slate-400 font-semibold">
+              Pagos Pendientes: <span className="font-bold text-amber-600 dark:text-amber-400">{formatCurrency(stats.counts.pendingPaymentsValue, 'CLP')}</span>
             </p>
           </div>
         </div>
@@ -429,47 +429,55 @@ export default function Dashboard() {
       {/* Mid Section: SVG Analytics Chart & Annual Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Simple Chart */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md flex flex-col justify-between">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-slate-700 dark:text-slate-200 text-base">Ingresos vs Gastos del Mes</h3>
+            <h3 className="font-bold text-slate-800 dark:text-slate-200 text-base">Ingresos vs Gastos del Mes</h3>
             <div className="flex gap-4 text-xs font-semibold">
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-emerald-500 rounded"></span>Ingresos</span>
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-rose-500 rounded"></span>Gastos</span>
             </div>
           </div>
 
-          <div className="h-64 flex items-end justify-center gap-12 pt-6 relative border-b border-slate-100 dark:border-slate-800 pb-2">
-            {/* Background Grid Lines */}
-            <div className="absolute inset-x-0 top-1/4 border-t border-slate-100 dark:border-slate-800/40 border-dashed"></div>
-            <div className="absolute inset-x-0 top-2/4 border-t border-slate-100 dark:border-slate-800/40 border-dashed"></div>
-            <div className="absolute inset-x-0 top-3/4 border-t border-slate-100 dark:border-slate-800/40 border-dashed"></div>
-
-            {/* Income Bar */}
-            <div className="w-20 flex flex-col items-center gap-2 group z-10">
-              <div 
-                className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-t-xl hover:brightness-105 transition-all duration-500 shadow-lg shadow-emerald-500/20"
-                style={{ 
-                  height: `${Math.max(20, Math.min(200, (stats.month.incomesTotal / (Math.max(stats.month.incomesTotal, stats.month.expensesTotal) || 1)) * 200))}px` 
-                }}
-              ></div>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold">{formatCurrency(stats.month.incomesTotal, 'CLP')}</span>
+          {stats.month.incomesTotal === 0 && stats.month.expensesTotal === 0 ? (
+            <div className="h-64 flex flex-col items-center justify-center text-center p-6 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+              <AlertCircle className="w-8 h-8 text-brand-500/60 mb-2 animate-pulse" />
+              <p className="text-sm font-bold text-slate-750 dark:text-slate-300">Aún no hay datos para este periodo</p>
+              <p className="text-xs text-slate-400 mt-1">Registra transacciones en Ingresos o Gastos para poblar el gráfico.</p>
             </div>
+          ) : (
+            <div className="h-64 flex items-end justify-center gap-12 pt-6 relative border-b border-slate-150 dark:border-slate-800 pb-2">
+              {/* Background Grid Lines */}
+              <div className="absolute inset-x-0 top-1/4 border-t border-slate-100 dark:border-slate-800/40 border-dashed"></div>
+              <div className="absolute inset-x-0 top-2/4 border-t border-slate-100 dark:border-slate-800/40 border-dashed"></div>
+              <div className="absolute inset-x-0 top-3/4 border-t border-slate-100 dark:border-slate-800/40 border-dashed"></div>
 
-            {/* Expense Bar */}
-            <div className="w-20 flex flex-col items-center gap-2 group z-10">
-              <div 
-                className="w-full bg-gradient-to-t from-rose-600 to-rose-400 rounded-t-xl hover:brightness-105 transition-all duration-500 shadow-lg shadow-rose-500/20"
-                style={{ 
-                  height: `${Math.max(20, Math.min(200, (stats.month.expensesTotal / (Math.max(stats.month.incomesTotal, stats.month.expensesTotal) || 1)) * 200))}px` 
-                }}
-              ></div>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold">{formatCurrency(stats.month.expensesTotal, 'CLP')}</span>
+              {/* Income Bar */}
+              <div className="w-20 flex flex-col items-center gap-2 group z-10">
+                <div 
+                  className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-t-xl hover:brightness-105 transition-all duration-500 shadow-lg shadow-emerald-500/20"
+                  style={{ 
+                    height: `${Math.max(20, Math.min(200, (stats.month.incomesTotal / (Math.max(stats.month.incomesTotal, stats.month.expensesTotal) || 1)) * 200))}px` 
+                  }}
+                ></div>
+                <span className="text-xs text-slate-700 dark:text-slate-350 font-bold">{formatCurrency(stats.month.incomesTotal, 'CLP')}</span>
+              </div>
+
+              {/* Expense Bar */}
+              <div className="w-20 flex flex-col items-center gap-2 group z-10">
+                <div 
+                  className="w-full bg-gradient-to-t from-rose-600 to-rose-400 rounded-t-xl hover:brightness-105 transition-all duration-500 shadow-lg shadow-rose-500/20"
+                  style={{ 
+                    height: `${Math.max(20, Math.min(200, (stats.month.expensesTotal / (Math.max(stats.month.incomesTotal, stats.month.expensesTotal) || 1)) * 200))}px` 
+                  }}
+                ></div>
+                <span className="text-xs text-slate-700 dark:text-slate-350 font-bold">{formatCurrency(stats.month.expensesTotal, 'CLP')}</span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Year Summary Card */}
-        <div className="bg-slate-900 text-white p-6 rounded-2xl flex flex-col justify-between relative overflow-hidden shadow-xl shadow-brand-950/20">
+        <div className="bg-slate-900 text-white p-6 rounded-2xl flex flex-col justify-between relative overflow-hidden border border-brand-500/20 shadow-xl shadow-brand-950/20">
           <div className="absolute top-0 right-0 w-32 h-32 bg-brand-500/20 rounded-full blur-2xl"></div>
           <div>
             <span className="text-[10px] font-bold tracking-widest text-brand-300 uppercase px-2.5 py-1 bg-brand-950/80 rounded-full border border-brand-500/20 inline-block mb-3">

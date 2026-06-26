@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase, isMock } from '../supabaseClient';
 import { formatCurrency, formatDate, calculateVatSplit, filterByPeriod, exportToCSV } from '../utils';
 import PeriodFilter from './PeriodFilter';
 import { 
   Plus, Search, Edit2, Trash2, X, DollarSign, 
-  Briefcase, Calendar, ShieldCheck, ShieldAlert, FileText, Download
+  Briefcase, Calendar, ShieldCheck, ShieldAlert, FileText, Download,
+  UploadCloud, FileSpreadsheet, Image, File, Eye, Trash
 } from 'lucide-react';
 
 export default function Expenses() {
@@ -42,6 +43,16 @@ export default function Expenses() {
 
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Document integration states
+  const [expenseDocuments, setExpenseDocuments] = useState([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [newDocFile, setNewDocFile] = useState(null);
+  const [newDocTitle, setNewDocTitle] = useState('');
+  const [newDocType, setNewDocType] = useState('factura');
+  const [newDocNotes, setNewDocNotes] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -93,6 +104,11 @@ export default function Expenses() {
     });
     setFormError('');
     setIsModalOpen(true);
+    setNewDocFile(null);
+    setNewDocTitle('');
+    setNewDocNotes('');
+    setNewDocType('factura');
+    setExpenseDocuments([]);
   };
 
   const handleOpenEditModal = (expense) => {
@@ -110,6 +126,11 @@ export default function Expenses() {
     });
     setFormError('');
     setIsModalOpen(true);
+    setNewDocFile(null);
+    setNewDocTitle('');
+    setNewDocNotes('');
+    setNewDocType('factura');
+    handleFetchExpenseDocuments(expense.id);
   };
 
   const handleDeleteExpense = async (id) => {
@@ -125,6 +146,227 @@ export default function Expenses() {
       } catch (err) {
         console.error('Error deleting expense:', err);
         alert('Error al eliminar el gasto');
+      }
+    }
+  };
+
+  // Document integration handlers and helper functions
+  const getDocTypeColor = (type) => {
+    switch (type) {
+      case 'factura': return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-455 dark:border-rose-900';
+      case 'boleta': return 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/30 dark:text-cyan-400 dark:border-cyan-900';
+      case 'comprobante de pago': return 'bg-emerald-50 text-emerald-705 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-450 dark:border-emerald-900';
+      default: return 'bg-slate-100 text-slate-700 border-slate-205 dark:bg-slate-800 dark:text-slate-350 dark:border-slate-700';
+    }
+  };
+
+  const getFileFormatDetails = (fileName) => {
+    const ext = fileName?.split('.').pop().toLowerCase() || '';
+    switch (ext) {
+      case 'pdf':
+        return {
+          icon: FileText,
+          bgClass: 'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-950/25 dark:text-rose-405 dark:border-rose-900/40',
+          label: 'PDF'
+        };
+      case 'doc':
+      case 'docx':
+        return {
+          icon: FileText,
+          bgClass: 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-950/25 dark:text-blue-400 dark:border-blue-900/40',
+          label: 'Word'
+        };
+      case 'xls':
+      case 'xlsx':
+        return {
+          icon: FileSpreadsheet,
+          bgClass: 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-950/25 dark:text-emerald-450 dark:border-emerald-900/40',
+          label: 'Excel'
+        };
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'webp':
+        return {
+          icon: Image,
+          bgClass: 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-955/25 dark:text-amber-400 dark:border-amber-900/40',
+          label: 'Imagen'
+        };
+      default:
+        return {
+          icon: File,
+          bgClass: 'bg-slate-50 text-slate-600 border-slate-100 dark:bg-slate-950/25 dark:text-slate-400 dark:border-slate-900/40',
+          label: 'Archivo'
+        };
+    }
+  };
+
+  const handleFetchExpenseDocuments = async (expenseId) => {
+    setLoadingDocuments(true);
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('expense_id', expenseId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setExpenseDocuments(data || []);
+    } catch (err) {
+      console.error('Error fetching expense documents:', err);
+      setExpenseDocuments([]);
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  const handleUploadExpenseDocument = async (file, docType, notes, docTitle, expenseId, providerId) => {
+    if (!file || !docTitle || !expenseId) return;
+    
+    setIsUploading(true);
+    setUploadProgress(10);
+    
+    try {
+      const { data: profile } = await supabase.from('profiles').select('organization_id').single();
+      const orgId = profile?.organization_id || 'default-org';
+
+      const fileName = file.name;
+      const sanitizedFileName = fileName.replace(/\s+/g, '_');
+      const storagePath = `${orgId}/proveedores/${providerId || 'general'}/gastos/${expenseId}/${docType}/${sanitizedFileName}`;
+
+      setUploadProgress(50);
+
+      const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
+
+      let fileUrl = '';
+      if (!isMockVal) {
+        const { error: uploadErr } = await supabase.storage
+          .from('documents')
+          .upload(storagePath, file, { upsert: true });
+
+        if (uploadErr) throw uploadErr;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(storagePath);
+        
+        fileUrl = publicUrlData?.publicUrl || '';
+      } else {
+        fileUrl = `mock://documents/${storagePath}`;
+      }
+
+      setUploadProgress(80);
+
+      let userId = 'mock-user-123';
+      if (!isMockVal) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) userId = user.id;
+      }
+
+      const dbPayload = {
+        title: docTitle.trim(),
+        document_type: docType,
+        file_name: fileName,
+        file_path: storagePath,
+        file_url: fileUrl,
+        mime_type: file.type || 'application/octet-stream',
+        file_size: file.size || 0,
+        notes: notes || '',
+        organization_id: orgId,
+        user_id: userId,
+        provider_id: providerId || null,
+        expense_id: expenseId
+      };
+
+      const { error: dbErr } = await supabase
+        .from('documents')
+        .insert([dbPayload]);
+
+      if (dbErr) throw dbErr;
+
+      setUploadProgress(100);
+      setNewDocFile(null);
+      setNewDocTitle('');
+      setNewDocNotes('');
+      
+      // Refresh documents
+      await handleFetchExpenseDocuments(expenseId);
+    } catch (err) {
+      console.error('Error uploading expense document:', err);
+      alert(err.message || 'Error al subir el archivo.');
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleDeleteExpenseDocument = async (doc) => {
+    const docName = doc.title || doc.name || doc.file_name || 'Documento';
+    if (window.confirm(`¿Estás seguro de que deseas eliminar el documento "${docName}"?`)) {
+      try {
+        const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
+        if (!isMockVal) {
+          const { error: storageErr } = await supabase.storage
+            .from('documents')
+            .remove([doc.file_path]);
+          if (storageErr) {
+            console.warn("Storage warning:", storageErr);
+          }
+        }
+
+        const { error: dbErr } = await supabase
+          .from('documents')
+          .delete()
+          .eq('id', doc.id);
+
+        if (dbErr) throw dbErr;
+
+        setExpenseDocuments(prev => prev.filter(d => d.id !== doc.id));
+      } catch (err) {
+        console.error("Error deleting document:", err);
+        alert("Error al eliminar el documento.");
+      }
+    }
+  };
+
+  const handleDownloadExpenseFile = (doc) => {
+    const docName = doc.title || doc.name || doc.file_name || 'Documento';
+    const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
+    if (isMockVal) {
+      alert(`Simulación de descarga en Modo Demo: descargando archivo "${docName}"`);
+    } else {
+      if (doc.file_url) {
+        window.open(doc.file_url, '_blank');
+      } else {
+        const { data } = supabase.storage
+          .from('documents')
+          .getPublicUrl(doc.file_path);
+        if (data?.publicUrl) {
+          window.open(data.publicUrl, '_blank');
+        } else {
+          alert('No se pudo generar el enlace de descarga');
+        }
+      }
+    }
+  };
+
+  const handleViewExpenseFile = (doc) => {
+    const docName = doc.title || doc.name || doc.file_name || 'Documento';
+    const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
+    if (isMockVal) {
+      alert(`Simulación de visualización en Modo Demo: viendo archivo "${docName}"`);
+    } else {
+      if (doc.file_url) {
+        window.open(doc.file_url, '_blank');
+      } else {
+        const { data } = supabase.storage
+          .from('documents')
+          .getPublicUrl(doc.file_path);
+        if (data?.publicUrl) {
+          window.open(data.publicUrl, '_blank');
+        } else {
+          alert('No se pudo generar el enlace de visualización');
+        }
       }
     }
   };
@@ -158,11 +400,17 @@ export default function Expenses() {
         if (error) throw error;
       } else {
         // Add Mode
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('expenses')
-          .insert([payload]);
+          .insert([payload])
+          .select();
 
         if (error) throw error;
+        
+        const createdExpense = data?.[0];
+        if (createdExpense && newDocFile) {
+          await handleUploadExpenseDocument(newDocFile, newDocType, newDocNotes, newDocTitle, createdExpense.id, createdExpense.provider_id);
+        }
       }
 
       await fetchData();
@@ -578,11 +826,204 @@ export default function Expenses() {
                     rows="3"
                     value={formData.notes}
                     onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                    className="block w-full p-3 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="block w-full p-3 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                     placeholder="Detalles de la compra, justificación de gasto..."
                   ></textarea>
                 </div>
-              </div>
+
+                {/* Document Attachment Integration */}
+                {selectedExpense ? (
+                  <div className="border-t border-slate-100 dark:border-slate-800/80 pt-4 space-y-3">
+                     <h4 className="text-xs font-bold text-slate-400 uppercase text-left">Documentos Adjuntos ({expenseDocuments.length})</h4>
+                     {loadingDocuments ? (
+                       <div className="flex justify-center py-2">
+                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-600"></div>
+                       </div>
+                     ) : expenseDocuments.length === 0 ? (
+                       <p className="text-xs text-slate-400 italic bg-slate-50 dark:bg-slate-955/20 p-3 rounded-xl border border-slate-100 dark:border-slate-850 text-center">
+                         No hay comprobantes, boletas o facturas adjuntas.
+                       </p>
+                     ) : (
+                       <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                         {expenseDocuments.map(doc => {
+                           const fileFormat = getFileFormatDetails(doc.file_name);
+                           const FormatIcon = fileFormat.icon;
+                           const docName = doc.title || doc.name || doc.file_name || 'Sin título';
+                           const docTypeVal = doc.document_type || doc.file_type || 'otro';
+                           return (
+                             <div key={doc.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/80 text-xs gap-3">
+                               <div className="flex items-center gap-2 min-w-0">
+                                 <div className={`p-1.5 rounded-lg border shrink-0 ${fileFormat.bgClass}`}>
+                                   <FormatIcon className="w-3.5 h-3.5" />
+                                 </div>
+                                 <div className="min-w-0 text-left">
+                                   <h6 className="font-bold text-[11px] text-slate-800 dark:text-slate-100 truncate" title={docName}>{docName}</h6>
+                                   <span className="text-[9px] font-mono text-slate-450 truncate block">{doc.file_name}</span>
+                                 </div>
+                               </div>
+                               <div className="flex items-center gap-1.5 shrink-0 text-right">
+                                 <span className={`inline-flex items-center px-1.5 py-0.2 rounded-full text-[8px] font-bold border uppercase tracking-wider mr-1 ${getDocTypeColor(docTypeVal)}`}>
+                                   {docTypeVal}
+                                 </span>
+                                 <button
+                                   type="button"
+                                   onClick={() => handleViewExpenseFile(doc)}
+                                   className="p-1 rounded border border-slate-205 dark:border-slate-800 text-slate-550 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-white dark:hover:bg-slate-900 cursor-pointer mr-0.5"
+                                   title="Ver"
+                                 >
+                                   <Eye className="w-3 h-3" />
+                                 </button>
+                                 <button
+                                   type="button"
+                                   onClick={() => handleDownloadExpenseFile(doc)}
+                                   className="p-1 rounded border border-slate-205 dark:border-slate-800 text-slate-550 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-white dark:hover:bg-slate-900 cursor-pointer mr-0.5"
+                                   title="Descargar"
+                                 >
+                                   <Download className="w-3 h-3" />
+                                 </button>
+                                 <button
+                                   type="button"
+                                   onClick={() => handleDeleteExpenseDocument(doc)}
+                                   className="p-1 rounded border border-slate-205 dark:border-slate-800 text-slate-400 hover:text-rose-600 hover:bg-white dark:hover:bg-slate-900 cursor-pointer"
+                                   title="Eliminar"
+                                 >
+                                   <Trash className="w-3 h-3" />
+                                 </button>
+                               </div>
+                             </div>
+                           );
+                         })}
+                       </div>
+                     )}
+ 
+                     {/* Upload button/form for existing expense */}
+                     <div className="space-y-3 bg-slate-50 dark:bg-slate-950/20 p-3 rounded-xl border border-slate-100 dark:border-slate-850 text-xs text-left">
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                         <div>
+                           <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Archivo *</label>
+                           <input
+                             type="file"
+                             onChange={(e) => {
+                               const file = e.target.files[0];
+                               if (file) {
+                                 setNewDocFile(file);
+                                 setNewDocTitle(file.name);
+                               }
+                             }}
+                             className="block w-full text-[10px] text-slate-505 border border-slate-200 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900"
+                           />
+                         </div>
+                         <div>
+                           <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Nombre Visual *</label>
+                           <input
+                             type="text"
+                             value={newDocTitle}
+                             onChange={(e) => setNewDocTitle(e.target.value)}
+                             placeholder="Título del documento"
+                             className="block w-full text-[10px] border border-slate-200 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                           />
+                         </div>
+                         <div>
+                           <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Categoría</label>
+                           <select
+                             value={newDocType}
+                             onChange={(e) => setNewDocType(e.target.value)}
+                             className="block w-full text-[10px] border border-slate-205 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                           >
+                             {['factura', 'boleta', 'comprobante de pago', 'otro'].map(t => (
+                               <option key={t} value={t}>{t}</option>
+                             ))}
+                           </select>
+                         </div>
+                         <div>
+                           <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Notas</label>
+                           <input
+                             type="text"
+                             value={newDocNotes}
+                             onChange={(e) => setNewDocNotes(e.target.value)}
+                             placeholder="Observaciones..."
+                             className="block w-full text-[10px] border border-slate-205 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                           />
+                         </div>
+                       </div>
+ 
+                       {isUploading && (
+                         <div className="space-y-1 pt-1">
+                           <div className="flex justify-between text-[10px] text-slate-455 font-bold">
+                             <span>Subiendo archivo...</span>
+                             <span>{uploadProgress}%</span>
+                           </div>
+                           <div className="w-full bg-slate-200 dark:bg-slate-850 h-1 rounded-full overflow-hidden">
+                             <div className="bg-brand-500 h-full transition-all" style={{ width: `${uploadProgress}%` }}></div>
+                           </div>
+                         </div>
+                       )}
+ 
+                       <button
+                         type="button"
+                         disabled={isUploading || !newDocFile || !newDocTitle}
+                         onClick={() => handleUploadExpenseDocument(newDocFile, newDocType, newDocNotes, newDocTitle, selectedExpense.id, selectedExpense.provider_id)}
+                         className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold text-[11px] cursor-pointer transition-all disabled:opacity-50"
+                       >
+                         <UploadCloud className="w-3.5 h-3.5" />
+                         Subir Documento
+                       </button>
+                     </div>
+                   </div>
+                 ) : (
+                   <div className="border-t border-slate-100 dark:border-slate-800/80 pt-4 space-y-3">
+                     <h4 className="text-xs font-bold text-slate-400 uppercase text-left">Adjuntar Boleta, Factura o Comprobante</h4>
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs bg-slate-50 dark:bg-slate-955/20 p-3 rounded-xl border border-slate-100 dark:border-slate-850 text-left">
+                       <div>
+                         <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Archivo</label>
+                         <input
+                           type="file"
+                           onChange={(e) => {
+                             const file = e.target.files[0];
+                             if (file) {
+                               setNewDocFile(file);
+                               setNewDocTitle(file.name);
+                             }
+                           }}
+                           className="block w-full text-[10px] text-slate-550 border border-slate-200 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900"
+                         />
+                       </div>
+                       <div>
+                         <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Nombre Visual</label>
+                         <input
+                           type="text"
+                           value={newDocTitle}
+                           onChange={(e) => setNewDocTitle(e.target.value)}
+                           placeholder="Título del documento"
+                           className="block w-full text-[10px] border border-slate-200 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                         />
+                       </div>
+                       <div>
+                         <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Categoría</label>
+                         <select
+                           value={newDocType}
+                           onChange={(e) => setNewDocType(e.target.value)}
+                           className="block w-full text-[10px] border border-slate-205 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                         >
+                           {['factura', 'boleta', 'comprobante de pago', 'otro'].map(t => (
+                             <option key={t} value={t}>{t}</option>
+                           ))}
+                         </select>
+                       </div>
+                       <div>
+                         <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Notas</label>
+                         <input
+                           type="text"
+                           value={newDocNotes}
+                           onChange={(e) => setNewDocNotes(e.target.value)}
+                           placeholder="Observaciones..."
+                           className="block w-full text-[10px] border border-slate-205 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                         />
+                       </div>
+                     </div>
+                   </div>
+                 )}
+               </div>
 
               <div className="flex gap-3 justify-end pt-4 border-t border-slate-100 dark:border-slate-800 mt-6">
                 <button

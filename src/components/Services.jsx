@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase, isMock } from '../supabaseClient';
 import { formatCurrency, formatDate, filterByPeriod, exportToCSV } from '../utils';
 import PeriodFilter from './PeriodFilter';
 import { 
   Plus, Search, Edit2, Trash2, X, BookOpen, User, 
   Calendar, ClipboardList, CheckCircle2, PlayCircle, Circle,
-  Download, AlertTriangle, Clock, ChevronDown, ChevronUp, Check, Info, Trash
+  Download, AlertTriangle, Clock, ChevronDown, ChevronUp, Check, Info, Trash,
+  UploadCloud, FileSpreadsheet, Image, File, Eye, FileText
 } from 'lucide-react';
 
 export default function Services({ isReadOnly = false }) {
@@ -29,6 +30,15 @@ export default function Services({ isReadOnly = false }) {
   // Expandable sections
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
   const [expandedChecklistId, setExpandedChecklistId] = useState(null);
+  const [expandedDocsId, setExpandedDocsId] = useState(null);
+  const [serviceDocuments, setServiceDocuments] = useState([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [newDocFile, setNewDocFile] = useState(null);
+  const [newDocTitle, setNewDocTitle] = useState('');
+  const [newDocType, setNewDocType] = useState('otro');
+  const [newDocNotes, setNewDocNotes] = useState('');
 
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -47,7 +57,15 @@ export default function Services({ isReadOnly = false }) {
     estimated_delivery: '',
     notes: '',
     current_stage: 'recepción de material',
-    advance_percent: 0
+    advance_percent: 0,
+    contract_duration_value: '6',
+    contract_duration_unit: 'meses',
+    amount_paid: 0,
+    balance_due: 0,
+    payment_status: 'pendiente',
+    payment_method: 'transferencia',
+    paid_at: '',
+    contract_notes: ''
   });
 
   // Checklist form inline state
@@ -78,6 +96,31 @@ export default function Services({ isReadOnly = false }) {
       setFormData(prev => ({ ...prev, exchange_rate: 1010 }));
     }
   }, [formData.currency]);
+
+  // Recalculate estimated delivery date based on start date and contract duration
+  useEffect(() => {
+    if (formData.start_date) {
+      const start = new Date(formData.start_date);
+      if (!isNaN(start.getTime())) {
+        const val = formData.contract_duration_value !== '' ? parseInt(formData.contract_duration_value, 10) : 6;
+        const unit = formData.contract_duration_unit || 'meses';
+        if (unit === 'meses') {
+          start.setMonth(start.getMonth() + val);
+        } else if (unit === 'semanas') {
+          start.setDate(start.getDate() + (val * 7));
+        } else if (unit === 'días') {
+          start.setDate(start.getDate() + val);
+        }
+        const newDelivery = start.toISOString().split('T')[0];
+        setFormData(prev => {
+          if (prev.estimated_delivery !== newDelivery) {
+            return { ...prev, estimated_delivery: newDelivery };
+          }
+          return prev;
+        });
+      }
+    }
+  }, [formData.start_date, formData.contract_duration_value, formData.contract_duration_unit]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -117,7 +160,15 @@ export default function Services({ isReadOnly = false }) {
       estimated_delivery: '',
       notes: '',
       current_stage: editorialStages.filter(st => st.active)[0]?.name || 'recepción de material',
-      advance_percent: 0
+      advance_percent: 0,
+      contract_duration_value: '6',
+      contract_duration_unit: 'meses',
+      amount_paid: 0,
+      balance_due: 0,
+      payment_status: 'pendiente',
+      payment_method: 'transferencia',
+      paid_at: '',
+      contract_notes: ''
     });
     setFormError('');
     setIsModalOpen(true);
@@ -138,7 +189,15 @@ export default function Services({ isReadOnly = false }) {
       estimated_delivery: service.estimated_delivery || '',
       notes: service.notes || '',
       current_stage: service.current_stage || 'recepción de material',
-      advance_percent: service.advance_percent || 0
+      advance_percent: service.advance_percent || 0,
+      contract_duration_value: service.contract_duration_value || '6',
+      contract_duration_unit: service.contract_duration_unit || 'meses',
+      amount_paid: service.amount_paid || 0,
+      balance_due: service.balance_due || 0,
+      payment_status: service.payment_status || 'pendiente',
+      payment_method: service.payment_method || 'transferencia',
+      paid_at: service.paid_at || '',
+      contract_notes: service.contract_notes || ''
     });
     setFormError('');
     setIsModalOpen(true);
@@ -317,59 +376,327 @@ export default function Services({ isReadOnly = false }) {
     }
   };
 
+  // Document integration handlers and helper functions
+  const getDocTypeColor = (type) => {
+    switch (type) {
+      case 'contrato': return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900';
+      case 'factura': return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-455 dark:border-rose-900';
+      case 'boleta': return 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/30 dark:text-cyan-400 dark:border-cyan-900';
+      case 'comprobante de pago': return 'bg-emerald-50 text-emerald-705 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-450 dark:border-emerald-900';
+      case 'manuscrito': return 'bg-amber-50 text-amber-755 border-amber-200 dark:bg-amber-955/30 dark:text-amber-400 dark:border-amber-900';
+      case 'portada': return 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-950/30 dark:text-pink-400 dark:border-pink-900';
+      case 'archivo final': return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-900';
+      case 'documento legal': return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900';
+      case 'imagen': return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-900';
+      default: return 'bg-slate-100 text-slate-700 border-slate-205 dark:bg-slate-800 dark:text-slate-350 dark:border-slate-700';
+    }
+  };
+
+  const getFileFormatDetails = (fileName) => {
+    const ext = fileName?.split('.').pop().toLowerCase() || '';
+    switch (ext) {
+      case 'pdf':
+        return {
+          icon: FileText,
+          bgClass: 'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-950/25 dark:text-rose-400 dark:border-rose-900/40',
+          label: 'PDF'
+        };
+      case 'doc':
+      case 'docx':
+        return {
+          icon: FileText,
+          bgClass: 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-950/25 dark:text-blue-400 dark:border-blue-900/40',
+          label: 'Word'
+        };
+      case 'xls':
+      case 'xlsx':
+        return {
+          icon: FileSpreadsheet,
+          bgClass: 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-950/25 dark:text-emerald-450 dark:border-emerald-900/40',
+          label: 'Excel'
+        };
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'webp':
+        return {
+          icon: Image,
+          bgClass: 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-955/25 dark:text-amber-400 dark:border-amber-900/40',
+          label: 'Imagen'
+        };
+      default:
+        return {
+          icon: File,
+          bgClass: 'bg-slate-50 text-slate-600 border-slate-100 dark:bg-slate-950/25 dark:text-slate-400 dark:border-slate-900/40',
+          label: 'Archivo'
+        };
+    }
+  };
+
+  const handleFetchServiceDocuments = async (serviceId) => {
+    setLoadingDocuments(true);
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('service_id', serviceId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setServiceDocuments(data || []);
+    } catch (err) {
+      console.error('Error fetching service documents:', err);
+      setServiceDocuments([]);
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  const handleUploadServiceDocument = async (file, docType, notes, docTitle, service) => {
+    if (!file || !docTitle) {
+      alert('Debe seleccionar un archivo y especificar un título.');
+      return;
+    }
+    
+    setIsUploading(true);
+    setUploadProgress(10);
+    
+    try {
+      let orgId = service.organization_id;
+      if (!orgId) {
+        const { data: profile } = await supabase.from('profiles').select('organization_id').single();
+        orgId = profile?.organization_id || 'default-org';
+      }
+
+      const fileName = file.name;
+      const sanitizedFileName = fileName.replace(/\s+/g, '_');
+      const storagePath = `${orgId}/clientes/${service.client_id}/servicios/${service.id}/${docType}/${sanitizedFileName}`;
+
+      setUploadProgress(55);
+
+      const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
+
+      let fileUrl = '';
+      if (!isMockVal) {
+        const { error: uploadErr } = await supabase.storage
+          .from('documents')
+          .upload(storagePath, file, { upsert: true });
+
+        if (uploadErr) throw uploadErr;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(storagePath);
+        
+        fileUrl = publicUrlData?.publicUrl || '';
+      } else {
+        fileUrl = `mock://documents/${storagePath}`;
+      }
+
+      setUploadProgress(85);
+
+      let userId = 'mock-user-123';
+      if (!isMockVal) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) userId = user.id;
+      }
+
+      const dbPayload = {
+        title: docTitle.trim(),
+        document_type: docType,
+        file_name: fileName,
+        file_path: storagePath,
+        file_url: fileUrl,
+        mime_type: file.type || 'application/octet-stream',
+        file_size: file.size || 0,
+        notes: notes || '',
+        organization_id: orgId,
+        user_id: userId,
+        client_id: service.client_id,
+        service_id: service.id
+      };
+
+      const { error: dbErr } = await supabase
+        .from('documents')
+        .insert([dbPayload]);
+
+      if (dbErr) throw dbErr;
+
+      setUploadProgress(100);
+      setNewDocFile(null);
+      setNewDocTitle('');
+      setNewDocNotes('');
+      
+      // Refresh documents
+      await handleFetchServiceDocuments(service.id);
+    } catch (err) {
+      console.error('Error uploading service document:', err);
+      alert(err.message || 'Error al subir el archivo.');
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleDeleteServiceDocument = async (doc, serviceId) => {
+    const docName = doc.title || doc.name || doc.file_name || 'Documento';
+    if (window.confirm(`¿Estás seguro de que deseas eliminar el documento "${docName}"?`)) {
+      try {
+        const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
+        if (!isMockVal) {
+          const { error: storageErr } = await supabase.storage
+            .from('documents')
+            .remove([doc.file_path]);
+          if (storageErr) {
+            console.warn("Storage warning:", storageErr);
+          }
+        }
+
+        const { error: dbErr } = await supabase
+          .from('documents')
+          .delete()
+          .eq('id', doc.id);
+
+        if (dbErr) throw dbErr;
+
+        setServiceDocuments(prev => prev.filter(d => d.id !== doc.id));
+      } catch (err) {
+        console.error("Error deleting document:", err);
+        alert("Error al eliminar el documento.");
+      }
+    }
+  };
+
+  const handleDownloadServiceFile = (doc) => {
+    const docName = doc.title || doc.name || doc.file_name || 'Documento';
+    const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
+    if (isMockVal) {
+      alert(`Simulación de descarga en Modo Demo: descargando archivo "${docName}"`);
+    } else {
+      if (doc.file_url) {
+        window.open(doc.file_url, '_blank');
+      } else {
+        const { data } = supabase.storage
+          .from('documents')
+          .getPublicUrl(doc.file_path);
+        if (data?.publicUrl) {
+          window.open(data.publicUrl, '_blank');
+        } else {
+          alert('No se pudo generar el enlace de descarga');
+        }
+      }
+    }
+  };
+
+  const handleViewServiceFile = (doc) => {
+    const docName = doc.title || doc.name || doc.file_name || 'Documento';
+    const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
+    if (isMockVal) {
+      alert(`Simulación de visualización en Modo Demo: viendo archivo "${docName}"`);
+    } else {
+      if (doc.file_url) {
+        window.open(doc.file_url, '_blank');
+      } else {
+        const { data } = supabase.storage
+          .from('documents')
+          .getPublicUrl(doc.file_path);
+        if (data?.publicUrl) {
+          window.open(data.publicUrl, '_blank');
+        } else {
+          alert('No se pudo generar el enlace de visualización');
+        }
+      }
+    }
+  };
+
   // Duration computations
-  const getDurationStats = (startDateStr, estDeliveryStr, currentStage) => {
+  const getDurationStats = (startDateStr, estDeliveryStr, durationVal, durationUnit) => {
     const start = new Date(startDateStr);
-    const end = estDeliveryStr ? new Date(estDeliveryStr) : null;
     const today = new Date();
+    
+    const val = durationVal !== undefined && durationVal !== null && durationVal !== '' ? parseInt(durationVal, 10) : 6;
+    const unit = durationUnit || 'meses';
 
     const diffTime = today - start;
     const elapsedDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-    const elapsedMonths = Math.floor(elapsedDays / 30);
-    const elapsedRemainingDays = elapsedDays % 30;
+    
+    let elapsedText = '';
+    if (unit === 'meses') {
+      const elapsedMonths = Math.floor(elapsedDays / 30);
+      const elapsedRemainingDays = elapsedDays % 30;
+      elapsedText = elapsedMonths > 0 
+        ? `${elapsedMonths} meses y ${elapsedRemainingDays} días` 
+        : `${elapsedDays} días`;
+    } else if (unit === 'semanas') {
+      const elapsedWeeks = Math.floor(elapsedDays / 7);
+      const elapsedRemainingDays = elapsedDays % 7;
+      elapsedText = elapsedWeeks > 0 
+        ? `${elapsedWeeks} semanas y ${elapsedRemainingDays} días` 
+        : `${elapsedDays} días`;
+    } else { // 'días'
+      elapsedText = `${elapsedDays} días`;
+    }
 
-    let elapsedText = `${elapsedMonths} meses y ${elapsedRemainingDays} días`;
-    if (elapsedMonths === 0) elapsedText = `${elapsedDays} días`;
+    const totalText = `${val} ${unit}`;
 
-    let totalDays = 0;
-    let totalText = 'Sin definir';
-    let remainingDays = 0;
+    let end = estDeliveryStr ? new Date(estDeliveryStr) : null;
+    if (!end && startDateStr) {
+      const computedEnd = new Date(startDateStr);
+      if (unit === 'meses') {
+        computedEnd.setMonth(computedEnd.getMonth() + val);
+      } else if (unit === 'semanas') {
+        computedEnd.setDate(computedEnd.getDate() + (val * 7));
+      } else { // 'días'
+        computedEnd.setDate(computedEnd.getDate() + val);
+      }
+      end = computedEnd;
+    }
+
+    let remainingDays = null;
     let remainingText = 'Sin definir';
     let alertNear = false;
     let alertLate = false;
 
     if (end) {
-      const totalDiff = end - start;
-      totalDays = Math.max(0, Math.ceil(totalDiff / (1000 * 60 * 60 * 24)));
-      const totalMonths = Math.round(totalDays / 30);
-      totalText = `${totalMonths} meses (${totalDays} días)`;
-
       const remainingDiff = end - today;
       remainingDays = Math.ceil(remainingDiff / (1000 * 60 * 60 * 24));
-
+      
       if (remainingDays < 0) {
         alertLate = true;
         remainingText = `Atrasado por ${Math.abs(remainingDays)} días`;
       } else {
-        if (remainingDays <= 15) {
+        if (unit === 'meses' && remainingDays <= 15) {
+          alertNear = true;
+        } else if (unit === 'semanas' && remainingDays <= 7) {
+          alertNear = true;
+        } else if (unit === 'días' && remainingDays <= 3) {
           alertNear = true;
         }
-        const remMonths = Math.floor(remainingDays / 30);
-        const remRemainingDays = remainingDays % 30;
-        remainingText = `${remMonths} meses y ${remRemainingDays} días`;
-        if (remMonths === 0) remainingText = `${remainingDays} días`;
+        
+        if (unit === 'meses') {
+          const remMonths = Math.floor(remainingDays / 30);
+          const remRemainingDays = remainingDays % 30;
+          remainingText = remMonths > 0 ? `${remMonths} meses y ${remRemainingDays} días` : `${remainingDays} días`;
+        } else if (unit === 'semanas') {
+          const remWeeks = Math.floor(remainingDays / 7);
+          const remRemainingDays = remainingDays % 7;
+          remainingText = remWeeks > 0 ? `${remWeeks} semanas y ${remRemainingDays} días` : `${remainingDays} días`;
+        } else {
+          remainingText = `${remainingDays} días`;
+        }
       }
     }
 
-    const autoText = `Este servicio lleva ${elapsedText} de trabajo. Plazo total: ${totalText}. Etapa actual: ${currentStage}. Quedan aproximadamente ${remainingText}.`;
+    const autoText = `Lleva ${elapsedText} de trabajo. Plazo total: ${totalText}.`;
 
     return {
       elapsedDays,
       remainingDays,
-      totalDays,
       alertNear,
       alertLate,
-      autoText
+      autoText,
+      totalText,
+      remainingText: end ? end.toISOString().split('T')[0] : 'Sin definir'
     };
   };
 
@@ -387,7 +714,7 @@ export default function Services({ isReadOnly = false }) {
   // Exporter to CSV
   const handleExportCSV = () => {
     const csvData = finalFilteredServices.map(s => {
-      const duration = getDurationStats(s.start_date, s.estimated_delivery, s.current_stage);
+      const duration = getDurationStats(s.start_date, s.estimated_delivery, s.contract_duration_value, s.contract_duration_unit);
       return {
         Autor: s.clientName,
         Libro: s.book_title,
@@ -549,7 +876,7 @@ export default function Services({ isReadOnly = false }) {
       ) : (
         <div className="grid grid-cols-1 gap-6">
           {finalFilteredServices.map(service => {
-            const duration = getDurationStats(service.start_date, service.estimated_delivery, service.current_stage);
+            const duration = getDurationStats(service.start_date, service.estimated_delivery, service.contract_duration_value, service.contract_duration_unit);
             const showConverted = service.currency !== 'CLP';
 
             // Calculate checklist progress
@@ -679,10 +1006,11 @@ export default function Services({ isReadOnly = false }) {
                     onClick={() => {
                       setExpandedTimelineId(expandedTimelineId === service.id ? null : service.id);
                       setExpandedChecklistId(null);
+                      setExpandedDocsId(null);
                     }}
                     className="flex-1 flex items-center justify-center gap-2 py-1.5 bg-slate-50 dark:bg-slate-955/40 hover:bg-slate-100 dark:hover:bg-slate-950 border border-slate-100 dark:border-slate-850 rounded-xl text-xs font-semibold text-slate-550 dark:text-slate-350 cursor-pointer"
                   >
-                    <span>Línea de Tiempo del Proyecto (Flujo)</span>
+                    <span>Línea de Tiempo</span>
                     {expandedTimelineId === service.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </button>
 
@@ -690,11 +1018,28 @@ export default function Services({ isReadOnly = false }) {
                     onClick={() => {
                       setExpandedChecklistId(expandedChecklistId === service.id ? null : service.id);
                       setExpandedTimelineId(null);
+                      setExpandedDocsId(null);
                     }}
                     className="flex-1 flex items-center justify-center gap-2 py-1.5 bg-slate-50 dark:bg-slate-955/40 hover:bg-slate-100 dark:hover:bg-slate-950 border border-slate-100 dark:border-slate-850 rounded-xl text-xs font-semibold text-slate-550 dark:text-slate-350 cursor-pointer"
                   >
-                    <span>Tareas de Checklist</span>
+                    <span>Checklist</span>
                     {expandedChecklistId === service.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const willExpand = expandedDocsId !== service.id;
+                      setExpandedDocsId(willExpand ? service.id : null);
+                      setExpandedTimelineId(null);
+                      setExpandedChecklistId(null);
+                      if (willExpand) {
+                        handleFetchServiceDocuments(service.id);
+                      }
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 py-1.5 bg-slate-50 dark:bg-slate-955/40 hover:bg-slate-100 dark:hover:bg-slate-950 border border-slate-100 dark:border-slate-850 rounded-xl text-xs font-semibold text-slate-550 dark:text-slate-350 cursor-pointer"
+                  >
+                    <span>Documentos</span>
+                    {expandedDocsId === service.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </button>
                 </div>
 
@@ -852,6 +1197,150 @@ export default function Services({ isReadOnly = false }) {
                         + Agregar Tarea
                       </button>
                     </form>
+                  </div>
+                )}
+
+                {/* DOCUMENTS DRAWER */}
+                {expandedDocsId === service.id && (
+                  <div className="mt-2 p-4 border border-slate-100 dark:border-slate-850 rounded-xl bg-slate-50/30 dark:bg-slate-950/20 animate-slide-down space-y-4">
+                    <h4 className="font-bold text-xs text-slate-550 dark:text-slate-350 uppercase tracking-wider text-left">Documentos del Servicio</h4>
+                    
+                    {loadingDocuments ? (
+                      <div className="flex justify-center py-4">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600"></div>
+                      </div>
+                    ) : serviceDocuments.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-3 text-center italic">Este servicio no posee documentos asociados.</p>
+                    ) : (
+                      <div className="space-y-2.5 max-h-[30vh] overflow-y-auto pr-1">
+                        {serviceDocuments.map((doc) => {
+                          const fileFormat = getFileFormatDetails(doc.file_name);
+                          const FormatIcon = fileFormat.icon;
+                          const docName = doc.title || doc.name || doc.file_name || 'Sin título';
+                          const docTypeVal = doc.document_type || doc.file_type || 'otro';
+                          return (
+                            <div key={doc.id} className="flex items-center justify-between bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 hover:border-brand-200 transition-all gap-3">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className={`p-1.5 rounded-lg border shrink-0 ${fileFormat.bgClass}`}>
+                                  <FormatIcon className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0 text-left">
+                                  <h6 className="font-bold text-xs text-slate-800 dark:text-slate-100 truncate" title={docName}>{docName}</h6>
+                                  <span className="text-[9px] font-mono text-slate-450 truncate block">{doc.file_name}</span>
+                                  {doc.notes && <span className="text-[10px] text-slate-500 italic block truncate">"{doc.notes}"</span>}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 text-right">
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold border uppercase tracking-wider mr-2 ${getDocTypeColor(docTypeVal)}`}>
+                                  {docTypeVal}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewServiceFile(doc)}
+                                  className="p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-white dark:hover:bg-slate-900 cursor-pointer mr-1"
+                                  title="Ver"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadServiceFile(doc)}
+                                  className="p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-white dark:hover:bg-slate-900 cursor-pointer mr-1"
+                                  title="Descargar"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteServiceDocument(doc, service.id)}
+                                  className="p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-405 hover:text-rose-600 hover:bg-white dark:hover:bg-slate-900 cursor-pointer"
+                                  title="Eliminar"
+                                >
+                                  <Trash className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Direct upload form */}
+                    <div className="border-t border-slate-100 dark:border-slate-850 pt-4 space-y-3">
+                      <h6 className="text-[11px] font-bold uppercase tracking-wider text-slate-450 text-left">Subir Documento Nuevo</h6>
+                      <div className="space-y-3 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800/60 text-xs text-left">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Archivo *</label>
+                            <input
+                              type="file"
+                              onChange={(e) => {
+                                const file = e.target.files[0];
+                                if (file) {
+                                  setNewDocFile(file);
+                                  setNewDocTitle(file.name);
+                                }
+                              }}
+                              className="block w-full text-[11px] text-slate-500 border border-slate-200 dark:border-slate-850 rounded-lg p-1.5 focus:outline-none bg-slate-50 dark:bg-slate-950"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Nombre Visual *</label>
+                            <input
+                              type="text"
+                              value={newDocTitle}
+                              onChange={(e) => setNewDocTitle(e.target.value)}
+                              placeholder="Título del documento"
+                              className="block w-full text-[11px] border border-slate-200 dark:border-slate-850 rounded-lg p-1.5 focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Categoría</label>
+                            <select
+                              value={newDocType}
+                              onChange={(e) => setNewDocType(e.target.value)}
+                              className="block w-full text-[11px] border border-slate-205 dark:border-slate-850 rounded-lg p-1.5 focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                            >
+                              {['contrato', 'factura', 'boleta', 'comprobante de pago', 'manuscrito', 'portada', 'archivo final', 'documento legal', 'imagen', 'otro'].map(t => (
+                                <option key={t} value={t}>{t}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Notas (Opcional)</label>
+                            <input
+                              type="text"
+                              value={newDocNotes}
+                              onChange={(e) => setNewDocNotes(e.target.value)}
+                              placeholder="Observaciones..."
+                              className="block w-full text-[11px] border border-slate-205 dark:border-slate-850 rounded-lg p-1.5 focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100"
+                            />
+                          </div>
+                        </div>
+
+                        {isUploading && (
+                          <div className="space-y-1 pt-1.5">
+                            <div className="flex justify-between text-[10px] text-slate-455 font-bold">
+                              <span>Subiendo archivo...</span>
+                              <span>{uploadProgress}%</span>
+                            </div>
+                            <div className="w-full bg-slate-200 dark:bg-slate-850 h-1 rounded-full overflow-hidden">
+                              <div className="bg-brand-500 h-full transition-all" style={{ width: `${uploadProgress}%` }}></div>
+                            </div>
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          disabled={isUploading || !newDocFile || !newDocTitle}
+                          onClick={() => handleUploadServiceDocument(newDocFile, newDocType, newDocNotes, newDocTitle, service)}
+                          className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold text-xs cursor-pointer transition-all disabled:opacity-50"
+                        >
+                          <UploadCloud className="w-3.5 h-3.5" />
+                          Subir Documento
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
 
