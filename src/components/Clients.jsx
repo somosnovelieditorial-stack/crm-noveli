@@ -309,9 +309,20 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
     if (!isMaterialsOk) reasons.push("Falta briefing/materiales");
     if (!isPeriodOk) reasons.push("Falta definir periodo");
     
-    const reasonText = isReady ? "Todos los requisitos cumplidos" : reasons.join(", ");
-
-    return { isReady, reasonText };
+    return { 
+      isReady, 
+      reasonText, 
+      isPaymentOk, 
+      isSignedContractOk, 
+      isManuscriptOk, 
+      isMaterialsOk, 
+      isPeriodOk,
+      reqSignedContract, 
+      reqManuscript, 
+      reqMaterials, 
+      reqAgreementSent, 
+      reqDuration 
+    };
   };
 
   const handleUploadClientDocument = async (file, docType, notes, docTitle) => {
@@ -684,7 +695,18 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
       }
 
       // Check checklist condition for ready_to_start
-      const { isReady, reasonText } = calculateIsReadyToStart(next);
+      const { 
+        isReady, 
+        reasonText,
+        isPaymentOk,
+        isSignedContractOk,
+        isManuscriptOk,
+        isMaterialsOk,
+        reqSignedContract,
+        reqManuscript,
+        reqMaterials
+      } = calculateIsReadyToStart(next);
+
       if (next.ready_to_start !== isReady) {
         next.ready_to_start = isReady;
         updated = true;
@@ -694,10 +716,25 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
         updated = true;
       }
 
-      // Auto status update when ready to start
-      if (isReady && ['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales'].includes(next.status)) {
-        next.status = 'listo para iniciar';
-        updated = true;
+      // Auto status update when ready to start / requirements change
+      if (isReady) {
+        if (['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales', 'listo para iniciar'].includes(next.status)) {
+          next.status = 'en proceso';
+          updated = true;
+        }
+      } else {
+        if (['en proceso', 'trabajo iniciado', 'listo para iniciar'].includes(next.status)) {
+          if (!isPaymentOk) {
+            next.status = 'esperando pago';
+          } else if (!isSignedContractOk && reqSignedContract) {
+            next.status = 'esperando contrato firmado';
+          } else if ((!isManuscriptOk && reqManuscript) || (!isMaterialsOk && reqMaterials)) {
+            next.status = 'esperando archivos/materiales';
+          } else {
+            next.status = 'esperando pago';
+          }
+          updated = true;
+        }
       }
 
       // Keep initial service values in sync if register_service is checked
@@ -1020,6 +1057,185 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
     }
   };
 
+  const syncClientIncome = async (clientId, serviceId, data) => {
+    const amount = parseFloat(data.amount_paid) || 0;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const autoMark = 'Ingreso generado desde cliente';
+    const notes = `Pago registrado desde formulario de cliente para la obra: ${data.service_book_title || 'Sin obra'} (${autoMark})`;
+
+    let incomeStatus = 'pendiente';
+    if (data.payment_status === 'pagado') {
+      incomeStatus = 'pagado';
+    } else if (data.payment_status === 'pendiente' || data.payment_status === 'sin pago') {
+      incomeStatus = 'pendiente';
+    }
+
+    // 1. Search if an automatic income already exists for this client and service (or client alone if serviceId is null)
+    let query = supabase
+      .from('incomes')
+      .select('*')
+      .eq('client_id', clientId);
+    
+    if (serviceId) {
+      query = query.eq('service_id', serviceId);
+    } else {
+      query = query.is('service_id', null);
+    }
+    
+    query = query.ilike('notes', `%${autoMark}%`);
+    const { data: existingIncomes, error: searchError } = await query;
+    if (searchError) {
+      console.error("Error searching automatic income:", searchError);
+    }
+
+    const incomePayload = {
+      client_id: clientId,
+      service_id: serviceId || null,
+      amount: amount,
+      currency: data.currency || 'CLP',
+      date: data.paid_at || data.service_start_date || todayStr,
+      payment_method: data.payment_method || 'transferencia',
+      includes_vat: data.includes_vat || false,
+      status: incomeStatus,
+      notes: notes,
+      source: 'cliente'
+    };
+
+    if (existingIncomes && existingIncomes.length > 0) {
+      const existingIncome = existingIncomes[0];
+      if (amount > 0) {
+        // Update existing income
+        const { error } = await supabase
+          .from('incomes')
+          .update(incomePayload)
+          .eq('id', existingIncome.id);
+        if (error) throw error;
+      } else {
+        // Delete to avoid clutter if amount is 0
+        const { error } = await supabase
+          .from('incomes')
+          .delete()
+          .eq('id', existingIncome.id);
+        if (error) throw error;
+      }
+    } else if (amount > 0) {
+      // Create new automatic income
+      const { error } = await supabase
+        .from('incomes')
+        .insert([incomePayload]);
+      if (error) throw error;
+    }
+  };
+
+  const handleToggleRequirement = async (field, currentValue) => {
+    if (isReadOnly) return;
+    
+    const newValue = !currentValue;
+    
+    const updatedClient = {
+      ...selectedClient,
+      [field]: newValue
+    };
+
+    if (field === 'amount_paid' || field === 'payment_status') {
+      if (field === 'payment_status') {
+        updatedClient.payment_status = currentValue === 'pagado' ? 'sin pago' : 'pagado';
+        updatedClient.amount_paid = updatedClient.payment_status === 'pagado' ? (updatedClient.total_agreed_amount || 1) : 0;
+      }
+    }
+
+    const { 
+      isReady, 
+      reasonText,
+      isPaymentOk,
+      isSignedContractOk,
+      isManuscriptOk,
+      isMaterialsOk,
+      reqSignedContract,
+      reqManuscript,
+      reqMaterials
+    } = calculateIsReadyToStart(updatedClient);
+
+    updatedClient.ready_to_start = isReady;
+    updatedClient.ready_to_start_reason = reasonText;
+
+    if (isReady) {
+      if (['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales', 'listo para iniciar'].includes(updatedClient.status)) {
+        updatedClient.status = 'en proceso';
+      }
+    } else {
+      if (['en proceso', 'trabajo iniciado', 'listo para iniciar'].includes(updatedClient.status)) {
+        if (!isPaymentOk) {
+          updatedClient.status = 'esperando pago';
+        } else if (!isSignedContractOk && reqSignedContract) {
+          updatedClient.status = 'esperando contrato firmado';
+        } else if ((!isManuscriptOk && reqManuscript) || (!isMaterialsOk && reqMaterials)) {
+          updatedClient.status = 'esperando archivos/materiales';
+        } else {
+          updatedClient.status = 'esperando pago';
+        }
+      }
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (field === 'payment_link_sent') {
+      updatedClient.payment_link_sent_at = newValue ? todayStr : null;
+    } else if (field === 'contract_sent') {
+      updatedClient.contract_sent_at = newValue ? todayStr : null;
+    } else if (field === 'contract_signed_received') {
+      updatedClient.contract_signed_received_at = newValue ? todayStr : null;
+    } else if (field === 'files_received') {
+      updatedClient.files_received_at = newValue ? todayStr : null;
+    } else if (field === 'materials_received') {
+      updatedClient.materials_received_at = newValue ? todayStr : null;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .update({
+          payment_link_sent: updatedClient.payment_link_sent,
+          payment_link_sent_at: updatedClient.payment_link_sent_at,
+          contract_sent: updatedClient.contract_sent,
+          contract_sent_at: updatedClient.contract_sent_at,
+          contract_signed_received: updatedClient.contract_signed_received,
+          contract_signed_received_at: updatedClient.contract_signed_received_at,
+          files_received: updatedClient.files_received,
+          files_received_at: updatedClient.files_received_at,
+          materials_received: updatedClient.materials_received,
+          materials_received_at: updatedClient.materials_received_at,
+          payment_status: updatedClient.payment_status,
+          amount_paid: updatedClient.amount_paid,
+          ready_to_start: updatedClient.ready_to_start,
+          ready_to_start_reason: updatedClient.ready_to_start_reason,
+          status: updatedClient.status
+        })
+        .eq('id', selectedClient.id);
+
+      if (error) throw error;
+
+      let serviceId = null;
+      const { data: servicesRes } = await supabase
+        .from('services')
+        .select('id')
+        .eq('client_id', selectedClient.id)
+        .order('created_at', { ascending: true });
+      if (servicesRes && servicesRes.length > 0) {
+        serviceId = servicesRes[0].id;
+      }
+      
+      await syncClientIncome(selectedClient.id, serviceId, updatedClient);
+
+      await logActivity('requisito actualizado', `Requisito modificado desde checklist rápido del cliente: ${field} = ${newValue ? 'Sí' : 'No'}`, selectedClient.id);
+
+      setSelectedClient(updatedClient);
+      setClients(clients.map(c => c.id === selectedClient.id ? { ...c, ...updatedClient } : c));
+    } catch (err) {
+      console.error("Error updating requirement quick checkbox:", err);
+      alert("Error al actualizar el requisito.");
+    }
+  };
+
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     if (isReadOnly) {
@@ -1208,16 +1424,6 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
             };
 
             if (formData.service_id && sidx === 0) {
-              const { data: oldService } = await supabase
-                .from('services')
-                .select('amount_paid')
-                .eq('id', formData.service_id)
-                .single();
-
-              const oldAmountPaid = oldService ? parseFloat(oldService.amount_paid) || 0 : 0;
-              const newAmountPaid = parseFloat(formData.amount_paid) || 0;
-              const diffAmount = newAmountPaid - oldAmountPaid;
-
               const { error: serviceError } = await supabase
                 .from('services')
                 .update(servicePayload)
@@ -1225,22 +1431,7 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
               if (serviceError) throw serviceError;
 
-              if (diffAmount > 0) {
-                const { error: incomeError } = await supabase
-                  .from('incomes')
-                  .insert({
-                    client_id: selectedClient.id,
-                    service_id: formData.service_id,
-                    amount: diffAmount,
-                    currency: currency,
-                    date: formData.paid_at || new Date().toISOString().split('T')[0],
-                    payment_method: formData.payment_method || 'transferencia',
-                    includes_vat: formData.includes_vat || false,
-                    status: 'pagado',
-                    notes: `Pago registrado desde edición de cliente para la obra: ${formData.service_book_title}`
-                  });
-                if (incomeError) throw incomeError;
-              }
+              await syncClientIncome(selectedClient.id, formData.service_id, formData);
             } else {
               const { data: newService, error: serviceError } = await supabase
                 .from('services')
@@ -1254,27 +1445,13 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
                 throw new Error('Servicio creado, pero Supabase no devolvió ID');
               }
 
-              const amtPaidVal = sidx === 0 ? (parseFloat(formData.amount_paid) || 0) : 0;
-              if (amtPaidVal > 0) {
-                const { error: incomeError } = await supabase
-                  .from('incomes')
-                  .insert({
-                    client_id: selectedClient.id,
-                    service_id: newService.id,
-                    amount: amtPaidVal,
-                    currency: currency,
-                    date: formData.paid_at || formData.service_start_date || new Date().toISOString().split('T')[0],
-                    payment_method: formData.payment_method || 'transferencia',
-                    includes_vat: formData.includes_vat || false,
-                    status: 'pagado',
-                    notes: `Pago inicial registrado para la obra: ${formData.service_book_title}`
-                  });
-                if (incomeError) throw incomeError;
-              }
+              await syncClientIncome(selectedClient.id, newService.id, formData);
 
               await logActivity('contrato creado', `Se registró contrato con período definido: ${contract_duration_value} ${contract_duration_unit} para la obra ${formData.service_book_title}`, newService.id, 'Servicios');
             }
           }
+        } else {
+          await syncClientIncome(selectedClient.id, null, formData);
         }
       } else {
         // Add Mode
@@ -1367,26 +1544,14 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
               throw new Error('Servicio creado, pero Supabase no devolvió ID');
             }
 
-            const amtPaidVal = sidx === 0 ? (parseFloat(formData.amount_paid) || 0) : 0;
-            if (amtPaidVal > 0) {
-              const { error: incomeError } = await supabase
-                .from('incomes')
-                .insert({
-                  client_id: createdClient.id,
-                  service_id: createdService.id,
-                  amount: amtPaidVal,
-                  currency: currency,
-                  date: formData.paid_at || formData.service_start_date || new Date().toISOString().split('T')[0],
-                  payment_method: formData.payment_method || 'transferencia',
-                  includes_vat: formData.includes_vat || false,
-                  status: 'pagado',
-                  notes: `Pago inicial registrado para la obra: ${formData.service_book_title}`
-                });
-              if (incomeError) throw incomeError;
+            if (sidx === 0) {
+              await syncClientIncome(createdClient.id, createdService.id, formData);
             }
 
             await logActivity('contrato creado', `Se registró contrato con período definido: ${contract_duration_value} ${contract_duration_unit} para la obra ${formData.service_book_title}`, createdService.id, 'Servicios');
           }
+        } else {
+          await syncClientIncome(createdClient.id, null, formData);
         }
 
         // Paso B: Logs de auditoría del cliente (activity_log) - solo después de registrar servicios con éxito
@@ -2764,63 +2929,125 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
                       {selectedClient.ready_to_start ? (
                         <span className="text-[9px] bg-emerald-100 text-emerald-850 px-2 py-0.5 rounded font-bold uppercase dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/50">Listo para iniciar</span>
                       ) : (
-                        <span className="text-[9px] bg-rose-100 text-rose-850 px-2 py-0.5 rounded font-bold uppercase dark:bg-rose-950/40 dark:text-rose-455 border border-rose-200/50">Requisitos pendientes</span>
+                        <span className="text-[9px] bg-rose-100 text-rose-850 px-2 py-0.5 rounded dark:bg-rose-950/40 dark:text-rose-455 border border-rose-200/50">Requisitos pendientes</span>
                       )}
                     </h5>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                       {/* Link de pago */}
-                      <div className="flex items-start gap-2 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                        <span className={`text-sm ${selectedClient.payment_link_sent ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>✓</span>
+                      <label className="flex items-start gap-2.5 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-850 transition-colors select-none">
+                        <input
+                          type="checkbox"
+                          checked={!!selectedClient.payment_link_sent}
+                          disabled={isReadOnly}
+                          onChange={() => handleToggleRequirement('payment_link_sent', selectedClient.payment_link_sent)}
+                          className="mt-0.5 h-3.5 w-3.5 rounded border-slate-350 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                        />
                         <div>
                           <span className="font-bold text-slate-700 dark:text-slate-300 block text-[11px]">Link de Pago Enviado</span>
                           <span className="text-[10px] text-slate-400">
                             {selectedClient.payment_link_sent ? `Enviado el ${formatDate(selectedClient.payment_link_sent_at)}` : 'No enviado'}
                           </span>
                         </div>
-                      </div>
+                      </label>
 
                       {/* Contrato enviado */}
-                      <div className="flex items-start gap-2 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                        <span className={`text-sm ${selectedClient.contract_sent ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>✓</span>
+                      <label className="flex items-start gap-2.5 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-850 transition-colors select-none">
+                        <input
+                          type="checkbox"
+                          checked={!!selectedClient.contract_sent}
+                          disabled={isReadOnly}
+                          onChange={() => handleToggleRequirement('contract_sent', selectedClient.contract_sent)}
+                          className="mt-0.5 h-3.5 w-3.5 rounded border-slate-350 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                        />
                         <div>
-                          <span className="font-bold text-slate-700 dark:text-slate-300 block text-[11px]">Contrato Enviado</span>
+                          <span className="font-bold text-slate-700 dark:text-slate-300 block text-[11px]">Contrato / Acuerdo Enviado</span>
                           <span className="text-[10px] text-slate-400">
                             {selectedClient.contract_sent ? `Enviado el ${formatDate(selectedClient.contract_sent_at)}` : 'No enviado'}
                           </span>
                         </div>
-                      </div>
+                      </label>
 
                       {/* Contrato firmado */}
-                      <div className="flex items-start gap-2 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                        <span className={`text-sm ${selectedClient.contract_signed_received ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>✓</span>
+                      <label className="flex items-start gap-2.5 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-850 transition-colors select-none">
+                        <input
+                          type="checkbox"
+                          checked={!!selectedClient.contract_signed_received}
+                          disabled={isReadOnly}
+                          onChange={() => handleToggleRequirement('contract_signed_received', selectedClient.contract_signed_received)}
+                          className="mt-0.5 h-3.5 w-3.5 rounded border-slate-350 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                        />
                         <div>
-                          <span className="font-bold text-slate-700 dark:text-slate-300 block text-[11px]">Contrato Firmado</span>
+                          <span className="font-bold text-slate-700 dark:text-slate-300 block text-[11px]">Contrato Firmado Recibido</span>
                           <span className="text-[10px] text-slate-400">
                             {selectedClient.contract_signed_received ? `Recibido el ${formatDate(selectedClient.contract_signed_received_at)}` : 'Pendiente'}
                           </span>
                         </div>
-                      </div>
+                      </label>
 
                       {/* Manuscrito / Archivos */}
-                      <div className="flex items-start gap-2 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                        <span className={`text-sm ${selectedClient.files_received ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>✓</span>
+                      <label className="flex items-start gap-2.5 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-850 transition-colors select-none">
+                        <input
+                          type="checkbox"
+                          checked={!!selectedClient.files_received}
+                          disabled={isReadOnly}
+                          onChange={() => handleToggleRequirement('files_received', selectedClient.files_received)}
+                          className="mt-0.5 h-3.5 w-3.5 rounded border-slate-350 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                        />
                         <div>
-                          <span className="font-bold text-slate-700 dark:text-slate-300 block text-[11px]">Manuscrito / Archivos</span>
+                          <span className="font-bold text-slate-700 dark:text-slate-300 block text-[11px]">Manuscrito / Archivos Recibidos</span>
                           <span className="text-[10px] text-slate-400">
                             {selectedClient.files_received ? `Recibido el ${formatDate(selectedClient.files_received_at)}` : 'Pendiente'}
                           </span>
                         </div>
-                      </div>
+                      </label>
+
+                      {/* Materiales / Briefing */}
+                      <label className="flex items-start gap-2.5 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-850 transition-colors select-none">
+                        <input
+                          type="checkbox"
+                          checked={!!selectedClient.materials_received}
+                          disabled={isReadOnly}
+                          onChange={() => handleToggleRequirement('materials_received', selectedClient.materials_received)}
+                          className="mt-0.5 h-3.5 w-3.5 rounded border-slate-350 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                        />
+                        <div>
+                          <span className="font-bold text-slate-700 dark:text-slate-300 block text-[11px]">Materiales / Briefing Recibidos</span>
+                          <span className="text-[10px] text-slate-400">
+                            {selectedClient.materials_received ? `Recibido el ${formatDate(selectedClient.materials_received_at)}` : 'Pendiente'}
+                          </span>
+                        </div>
+                      </label>
+
+                      {/* Pago Recibido */}
+                      <label className="flex items-start gap-2.5 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-850 transition-colors select-none">
+                        <input
+                          type="checkbox"
+                          checked={selectedClient.payment_status === 'pagado'}
+                          disabled={isReadOnly}
+                          onChange={() => handleToggleRequirement('payment_status', selectedClient.payment_status)}
+                          className="mt-0.5 h-3.5 w-3.5 rounded border-slate-350 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                        />
+                        <div>
+                          <span className="font-bold text-slate-700 dark:text-slate-300 block text-[11px]">Pago Recibido</span>
+                          <span className="text-[10px] text-slate-400 font-semibold">
+                            Estado: <span className="uppercase text-brand-600 dark:text-brand-400">{selectedClient.payment_status || 'sin pago'}</span> ({selectedClient.currency} {parseFloat(selectedClient.amount_paid || 0).toLocaleString()})
+                          </span>
+                        </div>
+                      </label>
                     </div>
 
                     {!selectedClient.ready_to_start && (
                       <div className="p-2.5 bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100/50 dark:border-rose-900/20 rounded-lg text-[10.5px] text-rose-700 dark:text-rose-455">
                         <strong>Faltas para iniciar:</strong>
                         <ul className="list-disc pl-4 mt-1 space-y-0.5">
-                          {!(selectedClient.payment_status === 'pagado' || selectedClient.payment_status === 'pago parcial') && <li>Pago pendiente o pago parcial no autorizado.</li>}
-                          {!selectedClient.contract_signed_received && <li>Falta recibir contrato firmado.</li>}
-                          {!selectedClient.files_received && <li>Falta recibir manuscrito o archivos.</li>}
+                          {selectedClient.ready_to_start_reason ? (
+                            selectedClient.ready_to_start_reason.split(', ').map((reason, idx) => (
+                              <li key={idx}>{reason}</li>
+                            ))
+                          ) : (
+                            <li>Requisitos de inicio pendientes.</li>
+                          )}
                         </ul>
                       </div>
                     )}

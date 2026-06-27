@@ -260,6 +260,7 @@ CREATE TABLE IF NOT EXISTS incomes (
     includes_vat BOOLEAN NOT NULL DEFAULT FALSE,
     status TEXT NOT NULL DEFAULT 'pagado' CHECK (status IN ('pagado', 'pendiente', 'parcial')),
     notes TEXT,
+    source TEXT,
     exchange_rate NUMERIC(12,4) NOT NULL DEFAULT 1.0000,
     value_converted NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     rate_date DATE,
