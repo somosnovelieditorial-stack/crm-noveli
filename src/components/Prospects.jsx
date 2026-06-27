@@ -925,6 +925,10 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
 
       if (clientError) throw clientError;
 
+      if (!newClient?.id) {
+        throw new Error('Cliente creado, pero Supabase no devolvió ID');
+      }
+
       // 2. Insert into activity_log if any requirements are already completed
       if (payload.payment_link_sent) {
         await logActivity('link de pago enviado', `Link de pago enviado a ${payload.name}`, newClient.id);
@@ -1014,6 +1018,10 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
             .single();
 
           if (serviceError) throw serviceError;
+
+          if (!newService?.id) {
+            throw new Error('Servicio creado, pero Supabase no devolvió ID');
+          }
 
           if (sidx === 0) {
             const amtPaidVal = parseFloat(convertData.amount_paid) || 0;

@@ -1388,6 +1388,11 @@ class MockMutationBuilder {
     } else if (this.method === 'delete') {
       result = await this.builder._executeDelete();
     }
+    if (result && result.data && this.isSingle) {
+      if (Array.isArray(result.data)) {
+        result.data = result.data[0] || null;
+      }
+    }
     return result;
   }
 }
@@ -1714,8 +1719,13 @@ class MutationQueryBuilder {
       }
     }
 
-    const returnData = Array.isArray(returnedData) ? returnedData : returnedData[0];
-    return { data: returnData, error: null };
+    let finalData = result.data;
+    if (this.isSingle && Array.isArray(finalData)) {
+      finalData = finalData[0] || null;
+    } else if (!this.isSingle && !Array.isArray(finalData) && finalData !== null && finalData !== undefined) {
+      finalData = [finalData];
+    }
+    return { data: finalData, error: null };
   }
 }
 

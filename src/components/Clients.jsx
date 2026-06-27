@@ -867,6 +867,10 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
   };
 
   const handleOpenEditModal = async (client) => {
+    if (!client?.id) {
+      alert("Error: El cliente seleccionado no tiene un ID válido.");
+      return;
+    }
     setSelectedClient(client);
     
     // Fetch client services to check if there is an initial service
@@ -952,6 +956,10 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
   };
 
   const handleOpenDetailModal = async (client) => {
+    if (!client?.id) {
+      alert("Error: El cliente seleccionado no tiene un ID válido.");
+      return;
+    }
     setSelectedClient(client);
     setDetailTab('info');
     setIsDetailOpen(true);
@@ -1109,6 +1117,9 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
       if (selectedClient) {
         // Edit Mode
+        if (!selectedClient?.id) {
+          throw new Error('No se puede actualizar el cliente porque no tiene un ID válido.');
+        }
         const { error: clientError } = await supabase
           .from('clients')
           .update(clientPayload)
@@ -1239,6 +1250,10 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
               if (serviceError) throw serviceError;
 
+              if (!newService?.id) {
+                throw new Error('Servicio creado, pero Supabase no devolvió ID');
+              }
+
               const amtPaidVal = sidx === 0 ? (parseFloat(formData.amount_paid) || 0) : 0;
               if (amtPaidVal > 0) {
                 const { error: incomeError } = await supabase
@@ -1263,44 +1278,29 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
         }
       } else {
         // Add Mode
+        console.error("DEBUG CREAR CLIENTE - PAYLOAD ENVIADO:", clientPayload);
+
         const { data: newClient, error: clientError } = await supabase
           .from('clients')
-          .insert([clientPayload])
-          .select()
+          .insert(clientPayload)
+          .select('*')
           .single();
+
+        console.error("DEBUG CREAR CLIENTE - DATA SUPABASE:", newClient);
+        console.error("DEBUG CREAR CLIENTE - ERROR SUPABASE:", clientError);
 
         if (clientError) throw clientError;
 
-        // Audit Logs (initial values)
-        if (formData.selected_services && formData.selected_services.length > 0) {
-          const names = formData.selected_services.map(s => s.name).join(', ');
-          await logActivity('servicios seleccionados', `Servicios seleccionados: ${names}`, newClient.id);
-        }
-        if (formData.service_duration_value) {
-          await logActivity('periodo definido', `Periodo de contrato definido: ${formData.service_duration_value} ${formData.service_duration_unit}`, newClient.id);
-        }
-        if (formData.payment_link_sent) {
-          await logActivity('link de pago enviado', `Link de pago enviado a ${formData.name}`, newClient.id);
-        }
-        if (formData.contract_sent) {
-          await logActivity('contrato/acuerdo enviado', `Contrato/acuerdo enviado a ${formData.name}`, newClient.id);
-        }
-        if (formData.contract_signed_received) {
-          await logActivity('contrato firmado recibido', `Contrato firmado recibido de ${formData.name}`, newClient.id);
-        }
-        if (formData.files_received) {
-          await logActivity('manuscrito/archivos recibidos', `Manuscrito o archivos recibidos de ${formData.name}`, newClient.id);
-        }
-        if (formData.materials_received) {
-          await logActivity('materiales recibidos', `Materiales o briefing recibidos de ${formData.name}`, newClient.id);
-        }
-        if (formData.ready_to_start) {
-          await logActivity('servicio listo para iniciar', `Cliente ${formData.name} listo para iniciar trabajo`, newClient.id);
-        }
-        if (parseFloat(formData.amount_paid) > 0) {
-          await logActivity('pago recibido', `Pago de ${formData.currency} ${parseFloat(formData.amount_paid).toLocaleString()} recibido de ${formData.name}`, newClient.id);
+        let createdClient = newClient;
+        if (Array.isArray(createdClient)) {
+          createdClient = createdClient[0];
         }
 
+        if (!createdClient || !createdClient.id) {
+          throw new Error('No se pudo crear el cliente ni obtener su ID');
+        }
+
+        // Paso A: Registrar servicio inicial (si está activo)
         if (formData.register_service) {
           const servicesToRegister = formData.selected_services && formData.selected_services.length > 0
             ? formData.selected_services
@@ -1313,7 +1313,7 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
           for (const [sidx, sItem] of servicesToRegister.entries()) {
             const sValue = parseFloat(sItem.price) || 0;
             const servicePayload = {
-              client_id: newClient.id,
+              client_id: createdClient.id,
               type: sItem.name,
               book_title: formData.service_book_title,
               value: sValue,
@@ -1358,13 +1358,22 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
             if (serviceError) throw serviceError;
 
+            let createdService = newService;
+            if (Array.isArray(createdService)) {
+              createdService = createdService[0];
+            }
+
+            if (!createdService || !createdService.id) {
+              throw new Error('Servicio creado, pero Supabase no devolvió ID');
+            }
+
             const amtPaidVal = sidx === 0 ? (parseFloat(formData.amount_paid) || 0) : 0;
             if (amtPaidVal > 0) {
               const { error: incomeError } = await supabase
                 .from('incomes')
                 .insert({
-                  client_id: newClient.id,
-                  service_id: newService.id,
+                  client_id: createdClient.id,
+                  service_id: createdService.id,
                   amount: amtPaidVal,
                   currency: currency,
                   date: formData.paid_at || formData.service_start_date || new Date().toISOString().split('T')[0],
@@ -1376,8 +1385,38 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
               if (incomeError) throw incomeError;
             }
 
-            await logActivity('contrato creado', `Se registró contrato con período definido: ${contract_duration_value} ${contract_duration_unit} para la obra ${formData.service_book_title}`, newService.id, 'Servicios');
+            await logActivity('contrato creado', `Se registró contrato con período definido: ${contract_duration_value} ${contract_duration_unit} para la obra ${formData.service_book_title}`, createdService.id, 'Servicios');
           }
+        }
+
+        // Paso B: Logs de auditoría del cliente (activity_log) - solo después de registrar servicios con éxito
+        if (formData.selected_services && formData.selected_services.length > 0) {
+          const names = formData.selected_services.map(s => s.name).join(', ');
+          await logActivity('servicios seleccionados', `Servicios seleccionados: ${names}`, createdClient.id);
+        }
+        if (formData.service_duration_value) {
+          await logActivity('periodo definido', `Periodo de contrato definido: ${formData.service_duration_value} ${formData.service_duration_unit}`, createdClient.id);
+        }
+        if (formData.payment_link_sent) {
+          await logActivity('link de pago enviado', `Link de pago enviado a ${formData.name}`, createdClient.id);
+        }
+        if (formData.contract_sent) {
+          await logActivity('contrato/acuerdo enviado', `Contrato/acuerdo enviado a ${formData.name}`, createdClient.id);
+        }
+        if (formData.contract_signed_received) {
+          await logActivity('contrato firmado recibido', `Contrato firmado recibido de ${formData.name}`, createdClient.id);
+        }
+        if (formData.files_received) {
+          await logActivity('manuscrito/archivos recibidos', `Manuscrito o archivos recibidos de ${formData.name}`, createdClient.id);
+        }
+        if (formData.materials_received) {
+          await logActivity('materiales recibidos', `Materiales o briefing recibidos de ${formData.name}`, createdClient.id);
+        }
+        if (formData.ready_to_start) {
+          await logActivity('servicio listo para iniciar', `Cliente ${formData.name} listo para iniciar trabajo`, createdClient.id);
+        }
+        if (parseFloat(formData.amount_paid) > 0) {
+          await logActivity('pago recibido', `Pago de ${formData.currency} ${parseFloat(formData.amount_paid).toLocaleString()} recibido de ${formData.name}`, createdClient.id);
         }
       }
 

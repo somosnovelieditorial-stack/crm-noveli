@@ -6,6 +6,17 @@ import {
   ToggleLeft, ToggleRight, DollarSign, Tag, Info 
 } from 'lucide-react';
 
+const categoryLabels = {
+  'editorial': 'Editorial',
+  'publicidad': 'Publicidad',
+  'diseño': 'Diseño',
+  'corrección': 'Corrección',
+  'maquetación': 'Maquetación',
+  'derechos de autor': 'Derechos de Autor',
+  'asesoría': 'Asesoría',
+  'otro': 'Otro'
+};
+
 export default function Catalog() {
   const [catalog, setCatalog] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -248,11 +259,11 @@ export default function Catalog() {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="block px-2.5 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-200 text-sm focus:outline-none capitalize"
+              className="block px-2.5 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
             >
               <option value="todos">Todos</option>
               {categories.map(c => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>{categoryLabels[c] || c}</option>
               ))}
             </select>
           </div>
@@ -291,8 +302,8 @@ export default function Catalog() {
             >
               <div className="space-y-3">
                 <div className="flex justify-between items-start">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider capitalize ${getCategoryColor(item.category)}`}>
-                    {item.category}
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider ${getCategoryColor(item.category)}`}>
+                    {categoryLabels[item.category] || item.category}
                   </span>
                   
                   {/* Status Toggle Switch */}
@@ -439,10 +450,10 @@ export default function Catalog() {
                       }
                       setFormData({...formData, category: newCat, ...defaults});
                     }}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none capitalize"
+                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
                   >
                     {categories.map(c => (
-                      <option key={c} value={c}>{c}</option>
+                      <option key={c} value={c}>{categoryLabels[c] || c}</option>
                     ))}
                   </select>
                 </div>

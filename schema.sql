@@ -79,12 +79,50 @@ CREATE TABLE IF NOT EXISTS clients (
     instagram TEXT,
     phone TEXT,
     country TEXT,
-    status TEXT NOT NULL DEFAULT 'prospecto' CHECK (status IN ('prospecto', 'cliente', 'activo', 'finalizado', 'perdido')),
-    notes TEXT,
     city TEXT,
-    timezone TEXT,
     client_type TEXT DEFAULT 'Nacional',
     preferred_currency TEXT DEFAULT 'CLP',
+    status TEXT NOT NULL DEFAULT 'prospecto' CHECK (status IN (
+      'prospecto', 'interesado', 'contrato enviado', 'acuerdo enviado',
+      'link de pago enviado', 'esperando pago', 'pago recibido',
+      'contrato firmado recibido', 'esperando contrato firmado',
+      'esperando manuscrito/archivos', 'esperando archivos/materiales',
+      'listo para iniciar', 'en proceso editorial', 'en proceso',
+      'finalizado', 'perdido / rechazado', 'perdido'
+    )),
+    notes TEXT,
+    
+    -- Commercial & billing fields
+    interest_service TEXT,
+    total_agreed_amount NUMERIC(12,2) DEFAULT 0.00,
+    includes_vat BOOLEAN DEFAULT FALSE,
+    payment_status TEXT DEFAULT 'sin pago',
+    amount_paid NUMERIC(12,2) DEFAULT 0.00,
+    balance_due NUMERIC(12,2) DEFAULT 0.00,
+    payment_method TEXT,
+    paid_at DATE,
+    payment_link_sent BOOLEAN DEFAULT FALSE,
+    payment_link_sent_at DATE,
+    contract_sent BOOLEAN DEFAULT FALSE,
+    contract_sent_at DATE,
+    contract_signed_received BOOLEAN DEFAULT FALSE,
+    contract_signed_received_at DATE,
+    files_received BOOLEAN DEFAULT FALSE,
+    files_received_at DATE,
+    ready_to_start BOOLEAN DEFAULT FALSE,
+    agreement_notes TEXT,
+    currency TEXT DEFAULT 'CLP',
+
+    -- Dynamic requirements & services fields
+    selected_services JSONB DEFAULT '[]'::jsonb,
+    service_category TEXT DEFAULT 'editorial',
+    agreement_period_type TEXT,
+    materials_received BOOLEAN DEFAULT FALSE,
+    materials_received_at DATE,
+    partial_payment_authorized BOOLEAN DEFAULT FALSE,
+    ready_to_start_reason TEXT,
+    services_summary TEXT,
+
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -94,6 +132,9 @@ CREATE TABLE IF NOT EXISTS prospects (
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
     organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     name TEXT NOT NULL,
+    email TEXT,
+    instagram TEXT,
+    phone TEXT,
     contact TEXT,
     origin TEXT NOT NULL DEFAULT 'Instagram' CHECK (origin IN ('Instagram', 'web', 'referido', 'correo', 'otro')),
     interest_service TEXT,
@@ -103,10 +144,40 @@ CREATE TABLE IF NOT EXISTS prospects (
     notes TEXT,
     country TEXT,
     city TEXT,
-    timezone TEXT,
     client_type TEXT DEFAULT 'Nacional',
     preferred_currency TEXT DEFAULT 'CLP',
     converted_to_client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+
+    -- Commercial & billing fields
+    total_agreed_amount NUMERIC(12,2) DEFAULT 0.00,
+    includes_vat BOOLEAN DEFAULT FALSE,
+    payment_status TEXT DEFAULT 'sin pago',
+    amount_paid NUMERIC(12,2) DEFAULT 0.00,
+    balance_due NUMERIC(12,2) DEFAULT 0.00,
+    payment_method TEXT,
+    paid_at DATE,
+    payment_link_sent BOOLEAN DEFAULT FALSE,
+    payment_link_sent_at DATE,
+    contract_sent BOOLEAN DEFAULT FALSE,
+    contract_sent_at DATE,
+    contract_signed_received BOOLEAN DEFAULT FALSE,
+    contract_signed_received_at DATE,
+    files_received BOOLEAN DEFAULT FALSE,
+    files_received_at DATE,
+    ready_to_start BOOLEAN DEFAULT FALSE,
+    agreement_notes TEXT,
+    currency TEXT DEFAULT 'CLP',
+
+    -- Dynamic requirements & services fields
+    selected_services JSONB DEFAULT '[]'::jsonb,
+    service_category TEXT DEFAULT 'editorial',
+    agreement_period_type TEXT,
+    materials_received BOOLEAN DEFAULT FALSE,
+    materials_received_at DATE,
+    partial_payment_authorized BOOLEAN DEFAULT FALSE,
+    ready_to_start_reason TEXT,
+    services_summary TEXT,
+
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -120,7 +191,7 @@ CREATE TABLE IF NOT EXISTS services (
     book_title TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'recibido' CHECK (status IN ('recibido', 'contrato pendiente', 'pago pendiente', 'en revisión', 'en corrección', 'en diseño', 'en maquetación', 'entregado', 'cerrado')),
     value NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    currency TEXT NOT NULL DEFAULT 'CLP' CHECK (currency IN ('CLP', 'USD')),
+    currency TEXT NOT NULL DEFAULT 'CLP' CHECK (currency IN ('CLP', 'USD', 'EUR')),
     start_date DATE NOT NULL DEFAULT CURRENT_DATE,
     estimated_delivery DATE,
     notes TEXT,
@@ -129,6 +200,34 @@ CREATE TABLE IF NOT EXISTS services (
     exchange_rate NUMERIC(12,4) NOT NULL DEFAULT 1.0000,
     value_converted NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     rate_date DATE,
+
+    -- Missing columns
+    amount_paid NUMERIC(12,2) DEFAULT 0.00,
+    balance_due NUMERIC(12,2) DEFAULT 0.00,
+    payment_status TEXT DEFAULT 'pendiente',
+    payment_method TEXT,
+    paid_at DATE,
+    contract_duration_value INTEGER DEFAULT 6,
+    contract_duration_unit TEXT DEFAULT 'meses',
+    contract_notes TEXT,
+    payment_link_sent BOOLEAN DEFAULT FALSE,
+    payment_link_sent_at DATE,
+    contract_sent BOOLEAN DEFAULT FALSE,
+    contract_sent_at DATE,
+    contract_signed_received BOOLEAN DEFAULT FALSE,
+    contract_signed_received_at DATE,
+    files_received BOOLEAN DEFAULT FALSE,
+    files_received_at DATE,
+    ready_to_start BOOLEAN DEFAULT FALSE,
+    contract_start_date DATE,
+    contract_end_date DATE,
+    service_category TEXT DEFAULT 'editorial',
+    agreement_period_type TEXT,
+    materials_received BOOLEAN DEFAULT FALSE,
+    materials_received_at DATE,
+    partial_payment_authorized BOOLEAN DEFAULT FALSE,
+    ready_to_start_reason TEXT,
+
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -271,8 +370,9 @@ CREATE TABLE IF NOT EXISTS quick_replies (
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
     organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     title TEXT NOT NULL,
+    shortcut TEXT,
     category TEXT,
-    channel TEXT NOT NULL DEFAULT 'general' CHECK (channel IN ('Instagram', 'correo', 'WhatsApp', 'general')),
+    channel TEXT DEFAULT 'general' CHECK (channel IN ('Instagram', 'correo', 'WhatsApp', 'general')),
     message_text TEXT NOT NULL,
     active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -319,12 +419,13 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
     organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
-    currency_from TEXT NOT NULL,
+    currency_from TEXT NOT NULL DEFAULT 'USD',
     currency_to TEXT NOT NULL DEFAULT 'CLP',
     rate NUMERIC(12,4) NOT NULL,
     date DATE NOT NULL DEFAULT CURRENT_DATE,
-    source TEXT NOT NULL DEFAULT 'Manual',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    source TEXT DEFAULT 'Manual',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(organization_id, currency_from, currency_to, date)
 );
 
 -- 17. EDITORIAL_STAGES Table
@@ -375,9 +476,16 @@ CREATE TABLE IF NOT EXISTS agenda_events (
     organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     title TEXT NOT NULL,
     description TEXT,
-    date DATE NOT NULL,
-    time TIME,
-    type TEXT NOT NULL DEFAULT 'reunión' CHECK (type IN ('reunión', 'evento', 'otro')),
+    start_date TIMESTAMP WITH TIME ZONE,
+    end_date TIMESTAMP WITH TIME ZONE,
+    is_all_day BOOLEAN DEFAULT FALSE,
+    color TEXT,
+    category TEXT CHECK (category IN ('reunión', 'entrega', 'hito', 'cobro', 'otro')),
+    client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+    service_id UUID REFERENCES services(id) ON DELETE SET NULL,
+    date TEXT,
+    time TEXT,
+    type TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
