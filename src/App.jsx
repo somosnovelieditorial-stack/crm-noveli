@@ -213,12 +213,126 @@ function SeguimientosView({ isReadOnly }) {
   );
 }
 
+const getTabFromPath = (path) => {
+  const cleanPath = path.toLowerCase().replace(/^\/|\/$/g, '');
+  
+  const mapping = {
+    '': 'dashboard',
+    'dashboard': 'dashboard',
+    'agenda': 'agenda',
+    'clientes': 'clients',
+    'clients': 'clients',
+    'prospectos': 'prospects',
+    'prospects': 'prospects',
+    'servicios': 'services',
+    'services': 'services',
+    'timeline': 'services',
+    'completed_sales': 'completed_sales',
+    'ventas_finalizadas': 'completed_sales',
+    'catalogo': 'catalog',
+    'catalog': 'catalog',
+    'packs': 'packs',
+    'cotizaciones': 'quotations',
+    'quotations': 'quotations',
+    'incomes': 'incomes',
+    'ingresos': 'incomes',
+    'expenses': 'expenses',
+    'gastos': 'expenses',
+    'currency_rates': 'currency_rates',
+    'monedas': 'currency_rates',
+    'providers': 'providers',
+    'proveedores': 'providers',
+    'documents': 'documents',
+    'documentos': 'documents',
+    'replies': 'replies',
+    'respuestas': 'replies',
+    'taxes': 'taxes',
+    'impuestos': 'taxes',
+    'reports': 'reports',
+    'reportes': 'reports',
+    'configuration': 'configuration',
+    'configuracion': 'configuration',
+    'integrations': 'integrations',
+    'integraciones': 'integrations',
+    'notifications': 'notifications',
+    'notificaciones': 'notifications',
+    'seguimientos': 'seguimientos'
+  };
+
+  return mapping[cleanPath] || 'dashboard';
+};
+
+const getPathFromTab = (tab) => {
+  const mapping = {
+    'dashboard': '/dashboard',
+    'agenda': '/agenda',
+    'clients': '/clientes',
+    'prospects': '/prospects',
+    'services': '/services',
+    'completed_sales': '/completed_sales',
+    'catalog': '/catalogo',
+    'packs': '/packs',
+    'quotations': '/cotizaciones',
+    'incomes': '/ingresos',
+    'expenses': '/gastos',
+    'currency_rates': '/currency_rates',
+    'providers': '/proveedores',
+    'documents': '/documentos',
+    'replies': '/replies',
+    'taxes': '/taxes',
+    'reports': '/reportes',
+    'configuration': '/configuration',
+    'integrations': '/integraciones',
+    'notifications': '/notifications',
+    'seguimientos': '/seguimientos'
+  };
+
+  return mapping[tab] || '/';
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => getTabFromPath(window.location.pathname));
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Sync activeTab to window.location.pathname on popstate (back/forward browser buttons)
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveTab(getTabFromPath(window.location.pathname));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Sync activeTab changes to browser history URL pathname
+  useEffect(() => {
+    if (user) {
+      const targetPath = getPathFromTab(activeTab);
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState(null, '', targetPath);
+      }
+    }
+  }, [activeTab, user]);
+
+  // Handle redirects on login / initial load
+  useEffect(() => {
+    if (user) {
+      const currentTab = getTabFromPath(window.location.pathname);
+      const targetPath = getPathFromTab(currentTab);
+      const cleanPath = window.location.pathname.toLowerCase().replace(/^\/|\/$/g, '');
+      if (cleanPath === '' || cleanPath === 'login') {
+        window.history.replaceState(null, '', '/dashboard');
+        setActiveTab('dashboard');
+      } else {
+        setActiveTab(currentTab);
+        if (window.location.pathname !== targetPath) {
+          window.history.replaceState(null, '', targetPath);
+        }
+      }
+    }
+  }, [user]);
 
   // Advanced States
   const [userRole, setUserRole] = useState('administrador');

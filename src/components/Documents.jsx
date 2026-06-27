@@ -5,7 +5,7 @@ import {
   Plus, Search, X, Trash2, FileText, Download, Eye,
   User, Link, Calendar, UploadCloud, Tag, Layers, Briefcase, BookOpen,
   Folder, FolderOpen, ChevronRight, LayoutGrid, List, ArrowLeft, HardDrive,
-  FileSpreadsheet, Image, File
+  FileSpreadsheet, Image, File, AlertTriangle
 } from 'lucide-react';
 
 export default function Documents() {
@@ -48,6 +48,35 @@ export default function Documents() {
   });
 
   const [formError, setFormError] = useState('');
+
+  // Viewer State
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerDoc, setViewerDoc] = useState(null);
+  const [signedUrl, setSignedUrl] = useState('');
+  const [loadingViewer, setLoadingViewer] = useState(false);
+
+  const getMimeType = (doc) => {
+    if (!doc) return 'application/octet-stream';
+    if (doc.mime_type) return doc.mime_type.toLowerCase();
+    
+    // Fallback based on extension
+    const ext = (doc.file_name || doc.file_path || '').split('.').pop().toLowerCase();
+    const mimeMapping = {
+      'pdf': 'application/pdf',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'txt': 'text/plain',
+      'html': 'text/html',
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    };
+    return mimeMapping[ext] || 'application/octet-stream';
+  };
 
   useEffect(() => {
     fetchData();
@@ -149,44 +178,72 @@ export default function Documents() {
     }
   };
 
-  const handleDownloadFile = (doc) => {
+  const handleDownloadFile = async (doc) => {
     const docName = doc.title || doc.name || doc.file_name || 'Documento';
+    if (!doc.file_path) {
+      alert("Error: El documento no tiene una ruta de archivo (file_path) válida.");
+      return;
+    }
     if (isMock) {
       alert(`Simulación de descarga en Modo Demo: descargando archivo "${docName}" desde la ruta "${doc.file_path}"`);
     } else {
-      if (doc.file_url) {
-        window.open(doc.file_url, '_blank');
-      } else {
-        const { data } = supabase.storage
+      try {
+        const { data, error } = await supabase.storage
           .from('documents')
-          .getPublicUrl(doc.file_path);
+          .createSignedUrl(doc.file_path, 3600);
         
-        if (data?.publicUrl) {
-          window.open(data.publicUrl, '_blank');
+        if (error) throw error;
+        if (data?.signedUrl) {
+          const a = document.createElement('a');
+          a.href = data.signedUrl;
+          a.download = docName;
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
         } else {
-          alert('No se pudo generar el enlace de descarga');
+          alert('No se pudo generar la URL firmada para la descarga.');
         }
+      } catch (err) {
+        console.error("Error generating signed download URL:", err);
+        alert("Error al generar el enlace de descarga.");
       }
     }
   };
 
-  const handleViewFile = (doc) => {
+  const handleViewFile = async (doc) => {
     const docName = doc.title || doc.name || doc.file_name || 'Documento';
+    if (!doc.file_path) {
+      alert("Error: El documento no tiene una ruta de archivo (file_path) válida.");
+      return;
+    }
+    
+    setViewerDoc(doc);
+    setViewerOpen(true);
+    setSignedUrl('');
+    
     if (isMock) {
-      alert(`Simulación de visualización en Modo Demo: viendo archivo "${docName}" desde la ruta "${doc.file_path}"`);
+      setSignedUrl(`mock://documents/${doc.file_path}`);
     } else {
-      if (doc.file_url) {
-        window.open(doc.file_url, '_blank');
-      } else {
-        const { data } = supabase.storage
+      setLoadingViewer(true);
+      try {
+        const { data, error } = await supabase.storage
           .from('documents')
-          .getPublicUrl(doc.file_path);
+          .createSignedUrl(doc.file_path, 3600);
         
-        if (data?.publicUrl) {
-          window.open(data.publicUrl, '_blank');
+        if (error) throw error;
+        if (data?.signedUrl) {
+          setSignedUrl(data.signedUrl);
         } else {
-          alert('No se pudo generar el enlace para visualizar el archivo');
+          alert('No se pudo generar la URL de visualización.');
+          setViewerOpen(false);
         }
+      } catch (err) {
+        console.error("Error generating signed view URL:", err);
+        alert("Error al generar la vista previa del documento.");
+        setViewerOpen(false);
+      } finally {
+        setLoadingViewer(false);
       }
     }
   };
@@ -1282,6 +1339,109 @@ export default function Documents() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Visualizador de documento Modal */}
+      {viewerOpen && viewerDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs transition-opacity">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-slide-up">
+            {/* Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 truncate max-w-md">
+                  {viewerDoc.title || viewerDoc.file_name || 'Visualizador de Documento'}
+                </h3>
+                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">
+                  Tipo: {viewerDoc.document_type || viewerDoc.file_type || 'otro'} • {viewerDoc.mime_type || 'Desconocido'}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleDownloadFile(viewerDoc)}
+                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-350 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                  title="Descargar archivo"
+                >
+                  Descargar
+                </button>
+                <button
+                  onClick={() => {
+                    setViewerOpen(false);
+                    setViewerDoc(null);
+                    setSignedUrl('');
+                  }}
+                  className="p-1 text-slate-400 hover:text-slate-700 dark:text-slate-550 dark:hover:text-slate-200 hover:bg-slate-150 dark:hover:bg-slate-850 rounded-lg cursor-pointer transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content Area */}
+            <div className="p-6 flex-1 overflow-y-auto">
+              {loadingViewer ? (
+                <div className="flex flex-col items-center justify-center py-24 gap-3">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
+                  <span className="text-xs font-semibold text-slate-400">Generando acceso seguro al documento...</span>
+                </div>
+              ) : signedUrl ? (
+                (() => {
+                  const mime = getMimeType(viewerDoc);
+                  if (mime === 'application/pdf') {
+                    return (
+                      <iframe
+                        src={signedUrl}
+                        className="w-full h-[65vh] rounded-xl border border-slate-200 dark:border-slate-800"
+                        title={viewerDoc.title}
+                      />
+                    );
+                  } else if (mime.startsWith('image/')) {
+                    return (
+                      <div className="flex justify-center items-center bg-slate-100 dark:bg-slate-950 p-4 rounded-xl max-h-[65vh] overflow-auto">
+                        <img
+                          src={signedUrl}
+                          alt={viewerDoc.title}
+                          className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-md"
+                        />
+                      </div>
+                    );
+                  } else if (mime.startsWith('text/')) {
+                    return (
+                      <iframe
+                        src={signedUrl}
+                        className="w-full h-[65vh] bg-white rounded-xl border border-slate-200 dark:border-slate-850"
+                        title={viewerDoc.title}
+                      />
+                    );
+                  } else {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-16 px-6 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950/20">
+                        <FileText className="w-16 h-16 text-slate-400 dark:text-slate-600 mb-4 animate-pulse" />
+                        <h3 className="text-base font-bold text-slate-700 dark:text-slate-200">Vista previa no disponible</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm">
+                          El formato del archivo <strong>.{viewerDoc.file_name?.split('.').pop() || 'archivo'}</strong> no se puede previsualizar directamente en el navegador. Por favor descarga el archivo para visualizarlo en tu equipo.
+                        </p>
+                        <button
+                          onClick={() => handleDownloadFile(viewerDoc)}
+                          className="mt-6 inline-flex items-center gap-2 px-5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-colors"
+                        >
+                          Descargar Archivo
+                        </button>
+                      </div>
+                    );
+                  }
+                })()
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 px-6 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950/20">
+                  <AlertTriangle className="w-16 h-16 text-rose-500 mb-4" />
+                  <h3 className="text-base font-bold text-slate-700 dark:text-slate-200">Error de carga</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm">
+                    No se pudo cargar la vista previa de este archivo.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
