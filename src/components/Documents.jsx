@@ -55,6 +55,41 @@ export default function Documents() {
   const [signedUrl, setSignedUrl] = useState('');
   const [loadingViewer, setLoadingViewer] = useState(false);
 
+  const getCleanPath = (pathString) => {
+    if (!pathString) return '';
+    let clean = pathString;
+    
+    // If it's a full URL
+    if (clean.startsWith('http://') || clean.startsWith('https://')) {
+      try {
+        const url = new URL(clean);
+        const match = url.pathname.match(/\/object\/(?:sign|public|authenticated)\/documents\/(.+)$/);
+        if (match && match[1]) {
+          clean = match[1];
+        } else {
+          const parts = url.pathname.split('/documents/');
+          if (parts.length > 1) {
+            clean = parts.slice(1).join('/documents/');
+          }
+        }
+      } catch (e) {
+        console.error("Error parsing URL in getCleanPath:", e);
+      }
+    }
+    
+    // Decode URI component (e.g. spaces as %20)
+    try {
+      clean = decodeURIComponent(clean);
+    } catch (e) {}
+
+    // If it starts with 'documents/' prefix, remove it
+    if (clean.startsWith('documents/')) {
+      clean = clean.substring('documents/'.length);
+    }
+
+    return clean;
+  };
+
   const getMimeType = (doc) => {
     if (!doc) return 'application/octet-stream';
     if (doc.mime_type) return doc.mime_type.toLowerCase();
@@ -180,17 +215,21 @@ export default function Documents() {
 
   const handleDownloadFile = async (doc) => {
     const docName = doc.title || doc.name || doc.file_name || 'Documento';
-    if (!doc.file_path) {
-      alert("Error: El documento no tiene una ruta de archivo (file_path) válida.");
+    const rawPath = doc.file_path || doc.file_url;
+    const cleanPath = getCleanPath(rawPath);
+
+    if (!cleanPath) {
+      alert("Error: No se encontró la ruta del archivo.");
       return;
     }
+
     if (isMock) {
-      alert(`Simulación de descarga en Modo Demo: descargando archivo "${docName}" desde la ruta "${doc.file_path}"`);
+      alert(`Simulación de descarga en Modo Demo: descargando archivo "${docName}" desde la ruta "${cleanPath}"`);
     } else {
       try {
         const { data, error } = await supabase.storage
           .from('documents')
-          .createSignedUrl(doc.file_path, 3600);
+          .createSignedUrl(cleanPath, 3600);
         
         if (error) throw error;
         if (data?.signedUrl) {
@@ -213,8 +252,11 @@ export default function Documents() {
 
   const handleViewFile = async (doc) => {
     const docName = doc.title || doc.name || doc.file_name || 'Documento';
-    if (!doc.file_path) {
-      alert("Error: El documento no tiene una ruta de archivo (file_path) válida.");
+    const rawPath = doc.file_path || doc.file_url;
+    const cleanPath = getCleanPath(rawPath);
+
+    if (!cleanPath) {
+      alert("Error: No se encontró la ruta del archivo.");
       return;
     }
     
@@ -223,13 +265,13 @@ export default function Documents() {
     setSignedUrl('');
     
     if (isMock) {
-      setSignedUrl(`mock://documents/${doc.file_path}`);
+      setSignedUrl(`mock://documents/${cleanPath}`);
     } else {
       setLoadingViewer(true);
       try {
         const { data, error } = await supabase.storage
           .from('documents')
-          .createSignedUrl(doc.file_path, 3600);
+          .createSignedUrl(cleanPath, 3600);
         
         if (error) throw error;
         if (data?.signedUrl) {
