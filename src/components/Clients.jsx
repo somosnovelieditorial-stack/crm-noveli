@@ -339,7 +339,7 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
     setUploadProgress(20);
 
     try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || 'org-noveli-1234';
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
       const fileName = file.name;
       const fileExt = fileName.split('.').pop().toLowerCase();
       

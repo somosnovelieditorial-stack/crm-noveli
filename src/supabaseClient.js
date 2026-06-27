@@ -870,10 +870,10 @@ const INITIAL_MOCK_DATA = {
     { id: "evt-2", user_id: "mock-user-123", title: "Revisar muestras Imprenta Andina", description: "Verificar muestras de impresión física de prueba", date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], time: "15:30", type: "evento", created_at: new Date().toISOString() }
   ],
   organizations: [
-    { id: "org-noveli-1234", name: "Somos Noveli Editorial", created_at: new Date().toISOString() }
+    { id: "11111111-1111-1111-1111-111111111111", name: "Somos Noveli Editorial", created_at: new Date().toISOString() }
   ],
   organization_members: [
-    { id: "member-1", organization_id: "org-noveli-1234", user_id: "mock-user-123", role: "administrador", created_at: new Date().toISOString() }
+    { id: "member-1", organization_id: "11111111-1111-1111-1111-111111111111", user_id: "mock-user-123", role: "administrador", created_at: new Date().toISOString() }
   ]
 };
 
@@ -2035,6 +2035,36 @@ if (useRealSupabase) {
 
 export const supabase = supabaseInstance;
 export const isMock = !useRealSupabase;
+
+export const getValidOrgId = async () => {
+  const defaultOrgId = '11111111-1111-1111-1111-111111111111';
+  try {
+    const storedOrgId = localStorage.getItem('somos_noveli_crm_org_id');
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (storedOrgId && uuidRegex.test(storedOrgId)) {
+      return storedOrgId;
+    }
+
+    const { data: { user } } = await supabaseInstance.auth.getUser();
+    if (user) {
+      const { data, error } = await supabaseInstance
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id);
+
+      if (!error && data && data.length > 0) {
+        const orgId = data[0].organization_id;
+        if (orgId && uuidRegex.test(orgId)) {
+          localStorage.setItem('somos_noveli_crm_org_id', orgId);
+          return orgId;
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error retrieving valid org id:", err);
+  }
+  return defaultOrgId;
+};
 
 function formatCurrency(amount, currency = 'CLP') {
   if (currency === 'CLP') {

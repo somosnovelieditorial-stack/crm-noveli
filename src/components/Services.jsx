@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase, isMock } from '../supabaseClient';
+import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, formatDate, filterByPeriod, exportToCSV } from '../utils';
 import PeriodFilter from './PeriodFilter';
 import { 
@@ -464,8 +464,7 @@ export default function Services({ isReadOnly = false }) {
     try {
       let orgId = service.organization_id;
       if (!orgId) {
-        const { data: profile } = await supabase.from('profiles').select('organization_id').single();
-        orgId = profile?.organization_id || 'default-org';
+        orgId = await getValidOrgId();
       }
 
       const fileName = file.name;

@@ -387,13 +387,15 @@ export default function App() {
       if (data && data.length > 0) {
         const membership = data[0];
         setUserRole(membership.role || 'solo lectura');
-        localStorage.setItem('somos_noveli_crm_org_id', membership.organization_id);
+        localStorage.setItem('somos_noveli_crm_org_id', membership.organization_id || '11111111-1111-1111-1111-111111111111');
       } else {
         setUserRole('solo lectura');
+        localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
       }
     } catch (err) {
       console.error("Error fetching database role:", err);
       setUserRole(activeUser.role || 'solo lectura');
+      localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
     } finally {
       setLoading(false);
     }
@@ -427,9 +429,10 @@ export default function App() {
           if (data && data.length > 0) {
             const membership = data[0];
             setUserRole(membership.role || 'solo lectura');
-            localStorage.setItem('somos_noveli_crm_org_id', membership.organization_id);
+            localStorage.setItem('somos_noveli_crm_org_id', membership.organization_id || '11111111-1111-1111-1111-111111111111');
           } else {
             setUserRole('solo lectura');
+            localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
           }
         }
       } catch (err) {
@@ -438,6 +441,7 @@ export default function App() {
           setUser(activeUser);
           userRef.current = activeUser;
           setUserRole(activeUser.role || 'solo lectura');
+          localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
         }
       } finally {
         if (active) {

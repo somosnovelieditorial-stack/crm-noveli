@@ -306,7 +306,7 @@ export default function Documents() {
     setUploadProgress(20);
 
     try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || 'org-noveli-1234';
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
       const documentType = formData.document_type || 'otro';
       const fileName = selectedFile.name;
       const fileExt = fileName.split('.').pop().toLowerCase();

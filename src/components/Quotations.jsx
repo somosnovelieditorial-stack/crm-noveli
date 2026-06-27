@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase, isMock } from '../supabaseClient';
+import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit, filterByPeriod, exportToCSV } from '../utils';
 import PeriodFilter from './PeriodFilter';
 import { 
@@ -238,8 +238,7 @@ export default function Quotations() {
     setUploadProgress(10);
     
     try {
-      const { data: profile } = await supabase.from('profiles').select('organization_id').single();
-      const orgId = profile?.organization_id || 'default-org';
+      const orgId = await getValidOrgId();
 
       const fileName = file.name;
       const sanitizedFileName = fileName.replace(/\s+/g, '_');
