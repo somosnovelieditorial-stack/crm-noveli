@@ -247,7 +247,7 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
   };
 
   const calculateIsReadyToStart = (data) => {
-    const services = data.selected_services || [];
+    const services = Array.isArray(data?.selected_services) ? data.selected_services : [];
     
     let reqManuscript = true;
     let reqMaterials = false;
@@ -256,13 +256,13 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
     let reqDuration = false;
 
     if (services.length > 0) {
-      reqManuscript = services.some(s => s.requires_manuscript);
-      reqMaterials = services.some(s => s.requires_materials);
-      reqSignedContract = services.some(s => s.requires_signed_contract);
-      reqAgreementSent = services.some(s => s.requires_agreement_sent);
-      reqDuration = services.some(s => s.requires_duration);
+      reqManuscript = services.some(s => s && s.requires_manuscript);
+      reqMaterials = services.some(s => s && s.requires_materials);
+      reqSignedContract = services.some(s => s && s.requires_signed_contract);
+      reqAgreementSent = services.some(s => s && s.requires_agreement_sent);
+      reqDuration = services.some(s => s && s.requires_duration);
     } else {
-      const cat = data.service_category || 'editorial';
+      const cat = String(data?.service_category || 'editorial').toLowerCase();
       if (cat === 'publicidad' || cat === 'difusión') {
         reqManuscript = false;
         reqMaterials = false;
@@ -290,8 +290,8 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
       }
     }
 
-    const payStatus = data.payment_status;
-    const isPaymentOk = payStatus === 'pagado' || payStatus === 'pago parcial' || !!data.partial_payment_authorized;
+    const payStatus = String(data?.payment_status || 'sin pago').toLowerCase();
+    const isPaymentOk = payStatus === 'pagado' || payStatus === 'pago parcial' || !!data?.partial_payment_authorized;
     
     const isAgreementSentOk = !reqAgreementSent || !!data.contract_sent;
     const isSignedContractOk = !reqSignedContract || !!data.contract_signed_received;
@@ -683,13 +683,13 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
       // Status automatons:
       // When link sent, set status to "link de pago enviado" if in early states
-      if (next.payment_link_sent && ['prospecto', 'interesado', 'contrato enviado', 'acuerdo enviado'].includes(next.status)) {
+      if (next.payment_link_sent && ['prospecto', 'interesado', 'contrato enviado', 'acuerdo enviado'].includes(String(next.status || '').toLowerCase())) {
         next.status = 'link de pago enviado';
         updated = true;
       }
       
       // When contract sent, set status to "acuerdo enviado" or "contrato enviado" if in early states
-      if (next.contract_sent && !next.payment_link_sent && ['prospecto', 'interesado'].includes(next.status)) {
+      if (next.contract_sent && !next.payment_link_sent && ['prospecto', 'interesado'].includes(String(next.status || '').toLowerCase())) {
         next.status = next.service_category === 'editorial' ? 'contrato enviado' : 'acuerdo enviado';
         updated = true;
       }
@@ -718,12 +718,12 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
       // Auto status update when ready to start / requirements change
       if (isReady) {
-        if (['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales', 'listo para iniciar'].includes(next.status)) {
+        if (['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales', 'listo para iniciar'].includes(String(next.status || '').toLowerCase())) {
           next.status = 'en proceso';
           updated = true;
         }
       } else {
-        if (['en proceso', 'trabajo iniciado', 'listo para iniciar'].includes(next.status)) {
+        if (['en proceso', 'trabajo iniciado', 'listo para iniciar'].includes(String(next.status || '').toLowerCase())) {
           if (!isPaymentOk) {
             next.status = 'esperando pago';
           } else if (!isSignedContractOk && reqSignedContract) {
@@ -1160,11 +1160,11 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
     updatedClient.ready_to_start_reason = reasonText;
 
     if (isReady) {
-      if (['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales', 'listo para iniciar'].includes(updatedClient.status)) {
+      if (['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales', 'listo para iniciar'].includes(String(updatedClient.status || '').toLowerCase())) {
         updatedClient.status = 'en proceso';
       }
     } else {
-      if (['en proceso', 'trabajo iniciado', 'listo para iniciar'].includes(updatedClient.status)) {
+      if (['en proceso', 'trabajo iniciado', 'listo para iniciar'].includes(String(updatedClient.status || '').toLowerCase())) {
         if (!isPaymentOk) {
           updatedClient.status = 'esperando pago';
         } else if (!isSignedContractOk && reqSignedContract) {
@@ -1249,7 +1249,7 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
     // Commercial validations:
     // If value agreed is empty, allow saving as prospect/interesado, but require it for confirmed client
-    const isConfirmedClient = !['prospecto', 'interesado', 'perdido'].includes(formData.status);
+    const isConfirmedClient = !['prospecto', 'interesado', 'perdido', 'perdido / rechazado'].includes(String(formData.status || '').toLowerCase());
     const agreedAmount = parseFloat(formData.total_agreed_amount) || 0;
     if (isConfirmedClient && (formData.total_agreed_amount === '' || agreedAmount <= 0)) {
       setFormError('El valor acordado es requerido para clientes confirmados.');
@@ -1600,14 +1600,25 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
   // Filtering list
   const filteredClients = clients.filter(c => {
+    if (!c) return false;
+    const name = String(c.name || '').toLowerCase();
+    const email = String(c.email || '').toLowerCase();
+    const instagram = String(c.instagram || '').toLowerCase();
+    const query = String(searchQuery || '').toLowerCase();
+
     const matchesSearch = 
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.email && c.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (c.instagram && c.instagram.toLowerCase().includes(searchQuery.toLowerCase()));
+      name.includes(query) ||
+      email.includes(query) ||
+      instagram.includes(query);
       
-    const matchesStatus = statusFilter === 'todos' || c.status === statusFilter;
-    const matchesCountry = countryFilter === 'todos' || c.country === countryFilter;
-    const matchesType = clientTypeFilter === 'todos' || c.client_type === clientTypeFilter;
+    const status = String(c.status || '').toLowerCase();
+    const matchesStatus = statusFilter === 'todos' || status === String(statusFilter || '').toLowerCase();
+
+    const country = String(c.country || '').toLowerCase();
+    const matchesCountry = countryFilter === 'todos' || country === String(countryFilter || '').toLowerCase();
+
+    const clientType = String(c.client_type || '').toLowerCase();
+    const matchesType = clientTypeFilter === 'todos' || clientType === String(clientTypeFilter || '').toLowerCase();
     
     return matchesSearch && matchesStatus && matchesCountry && matchesType;
   });
