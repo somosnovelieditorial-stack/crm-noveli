@@ -26,7 +26,7 @@ export default function Staff({ defaultSubTab = 'members' }) {
     type: 'colaborador',
     agreed_payment: 0,
     currency: 'CLP',
-    frequency: 'mensual',
+    payment_frequency: 'mensual',
     status: 'activo',
     notes: ''
   });
@@ -153,7 +153,7 @@ export default function Staff({ defaultSubTab = 'members' }) {
       type: 'colaborador',
       agreed_payment: 0,
       currency: 'CLP',
-      frequency: 'mensual',
+      payment_frequency: 'mensual',
       status: 'activo',
       notes: ''
     });
@@ -168,7 +168,7 @@ export default function Staff({ defaultSubTab = 'members' }) {
       type: member.type,
       agreed_payment: member.agreed_payment,
       currency: member.currency,
-      frequency: member.frequency,
+      payment_frequency: member.payment_frequency,
       status: member.status,
       notes: member.notes || ''
     });
@@ -189,7 +189,7 @@ export default function Staff({ defaultSubTab = 'members' }) {
         type: staffForm.type,
         agreed_payment: Number(staffForm.agreed_payment) || 0,
         currency: staffForm.currency,
-        frequency: staffForm.frequency,
+        payment_frequency: staffForm.payment_frequency,
         status: staffForm.status,
         notes: staffForm.notes || '',
         organization_id: orgId
@@ -608,7 +608,7 @@ export default function Staff({ defaultSubTab = 'members' }) {
                         </span>
                       </td>
                       <td className="p-4 font-bold">{formatCurrency(member.agreed_payment, member.currency)}</td>
-                      <td className="p-4 capitalize">{member.frequency}</td>
+                      <td className="p-4 capitalize">{member.payment_frequency}</td>
                       <td className="p-4">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           member.status === 'activo' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
@@ -847,8 +847,8 @@ export default function Staff({ defaultSubTab = 'members' }) {
                 <div>
                   <label className="block font-bold text-slate-400 mb-1">Frecuencia de Pago</label>
                   <select
-                    value={staffForm.frequency}
-                    onChange={(e) => setStaffForm({ ...staffForm, frequency: e.target.value })}
+                    value={staffForm.payment_frequency}
+                    onChange={(e) => setStaffForm({ ...staffForm, payment_frequency: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-250 text-sm focus:outline-none"
                   >
                     <option value="mensual">Mensual</option>

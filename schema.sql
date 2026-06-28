@@ -786,7 +786,7 @@ CREATE TABLE IF NOT EXISTS staff (
     type TEXT NOT NULL CHECK (type IN ('fundador', 'colaborador', 'proveedor recurrente', 'externo')),
     agreed_payment NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     currency TEXT NOT NULL DEFAULT 'CLP' CHECK (currency IN ('CLP', 'USD')),
-    frequency TEXT NOT NULL CHECK (frequency IN ('mensual', 'proyecto', 'único')),
+    payment_frequency TEXT NOT NULL CHECK (payment_frequency IN ('mensual', 'proyecto', 'único')),
     status TEXT NOT NULL DEFAULT 'activo' CHECK (status IN ('activo', 'inactivo')),
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL

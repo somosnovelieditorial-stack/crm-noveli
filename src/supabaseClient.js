@@ -879,8 +879,8 @@ const INITIAL_MOCK_DATA = {
     { id: "member-1", organization_id: "11111111-1111-1111-1111-111111111111", user_id: "mock-user-123", role: "administrador", created_at: new Date().toISOString() }
   ],
   staff: [
-    { id: "staff-1", user_id: "mock-user-123", organization_id: "11111111-1111-1111-1111-111111111111", name: "Valentina Barrios", role: "Directora Editorial", type: "fundador", agreed_payment: 2500000, currency: "CLP", frequency: "mensual", status: "activo", notes: "Fundadora", created_at: new Date().toISOString() },
-    { id: "staff-2", user_id: "mock-user-123", organization_id: "11111111-1111-1111-1111-111111111111", name: "Javier Román", role: "Director Comercial", type: "fundador", agreed_payment: 2500000, currency: "CLP", frequency: "mensual", status: "activo", notes: "Fundador", created_at: new Date().toISOString() }
+    { id: "staff-1", user_id: "mock-user-123", organization_id: "11111111-1111-1111-1111-111111111111", name: "Valentina Barrios", role: "Directora Editorial", type: "fundador", agreed_payment: 2500000, currency: "CLP", payment_frequency: "mensual", status: "activo", notes: "Fundadora", created_at: new Date().toISOString() },
+    { id: "staff-2", user_id: "mock-user-123", organization_id: "11111111-1111-1111-1111-111111111111", name: "Javier Román", role: "Director Comercial", type: "fundador", agreed_payment: 2500000, currency: "CLP", payment_frequency: "mensual", status: "activo", notes: "Fundador", created_at: new Date().toISOString() }
   ],
   payroll_payments: [],
   operational_reserve_movements: []
