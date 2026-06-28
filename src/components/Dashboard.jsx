@@ -70,13 +70,15 @@ export default function Dashboard() {
         { data: prospects },
         { data: services },
         { data: incomes },
-        { data: expenses }
+        { data: expenses },
+        { data: payroll }
       ] = await Promise.all([
         supabase.from('clients').select('*'),
         supabase.from('prospects').select('*'),
         supabase.from('services').select('*'),
         supabase.from('incomes').select('*'),
-        supabase.from('expenses').select('*')
+        supabase.from('expenses').select('*'),
+        supabase.from('payroll_payments').select('*')
       ]);
 
       const now = new Date();
@@ -104,6 +106,11 @@ export default function Dashboard() {
       // Financials: Period Filter
       const monthIncomes = filterByPeriod(incomes || [], 'date', period);
       const monthExpenses = filterByPeriod(expenses || [], 'date', period);
+      const monthPayroll = filterByPeriod(payroll || [], 'date', period);
+
+      const mPayroll = (monthPayroll || [])
+        .filter(p => p.status === 'pagado')
+        .reduce((sum, item) => sum + convertToClp(item.amount, item.currency), 0);
 
       // Monthly aggregates
       let mIncTotal = 0;
@@ -209,7 +216,8 @@ export default function Dashboard() {
           expensesTotal: mExpTotal,
           expensesNet: mExpNet,
           expensesVat: mExpVat,
-          utility: mIncNet - mExpNet,
+          payrollTotal: mPayroll,
+          utility: mIncNet - mExpNet - mPayroll,
           vatToPay: mIncVat - mExpVat,
           incomesUsd: mIncUsd,
           expensesUsd: mExpUsd,
@@ -348,7 +356,7 @@ export default function Dashboard() {
                   {formatCurrency(stats.month.utility, 'CLP')}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-semibold">
-                  Ingresos Netos - Gastos Netos
+                  Ingresos Netos - Gastos - Sueldos
                 </p>
               </div>
               <span className="p-3 bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 rounded-xl shadow-xs">

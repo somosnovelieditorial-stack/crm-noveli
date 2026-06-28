@@ -26,6 +26,7 @@ import CompletedSales from './components/CompletedSales';
 import Agenda from './components/Agenda';
 import CurrencyRates from './components/CurrencyRates';
 import Configuration from './components/Configuration';
+import Staff from './components/Staff';
 
 // Permission Helper
 import { hasPermission, formatCurrency } from './utils';
@@ -37,7 +38,7 @@ import {
   Menu, X, Sparkles, User, Tag, Package, Receipt,
   MessageSquare, FileText, BarChart3, Settings2, CheckCircle,
   Calendar, Coins, Bell, Search, AlertTriangle, Info, Clock, ShieldCheck,
-  ChevronDown, ChevronUp, ChevronRight
+  ChevronDown, ChevronUp, ChevronRight, Wallet
 } from 'lucide-react';
 
 const menuGroups = [
@@ -96,7 +97,9 @@ const menuGroups = [
       { id: 'incomes', label: 'Ingresos', tab: 'incomes' },
       { id: 'expenses', label: 'Gastos', tab: 'expenses' },
       { id: 'taxes', label: 'Impuestos', tab: 'taxes' },
-      { id: 'currency_rates', label: 'Monedas al día', tab: 'currency_rates' }
+      { id: 'currency_rates', label: 'Monedas al día', tab: 'currency_rates' },
+      { id: 'staff', label: 'Personal', tab: 'staff' },
+      { id: 'reserve', label: 'Reserva operacional', tab: 'reserve' }
     ]
   },
   {
@@ -242,6 +245,10 @@ const getTabFromPath = (path) => {
     'monedas': 'currency_rates',
     'providers': 'providers',
     'proveedores': 'providers',
+    'personal': 'staff',
+    'staff': 'staff',
+    'reserva': 'reserve',
+    'reserve': 'reserve',
     'documents': 'documents',
     'documentos': 'documents',
     'replies': 'replies',
@@ -277,6 +284,8 @@ const getPathFromTab = (tab) => {
     'expenses': '/gastos',
     'currency_rates': '/currency_rates',
     'providers': '/proveedores',
+    'staff': '/personal',
+    'reserve': '/reserva',
     'documents': '/documentos',
     'replies': '/replies',
     'taxes': '/taxes',
@@ -883,7 +892,9 @@ export default function App() {
     { id: 'taxes', label: 'Impuestos', icon: <Percent className="w-4.5 h-4.5" /> },
     { id: 'reports', label: 'Reportes', icon: <BarChart3 className="w-4.5 h-4.5" /> },
     { id: 'configuration', label: 'Configuración', icon: <Settings2 className="w-4.5 h-4.5" /> },
-    { id: 'integrations', label: 'Integraciones', icon: <Settings2 className="w-4.5 h-4.5" /> }
+    { id: 'integrations', label: 'Integraciones', icon: <Settings2 className="w-4.5 h-4.5" /> },
+    { id: 'staff', label: 'Personal', icon: <Users className="w-4.5 h-4.5" /> },
+    { id: 'reserve', label: 'Reserva operacional', icon: <Wallet className="w-4.5 h-4.5" /> }
   ];
 
   // Render current tab content with dynamic roles and write access checks
@@ -905,6 +916,8 @@ export default function App() {
       case 'expenses': return <Expenses {...commonProps} />;
       case 'currency_rates': return <CurrencyRates {...commonProps} />;
       case 'providers': return <Providers {...commonProps} />;
+      case 'staff': return <Staff {...commonProps} defaultSubTab="members" />;
+      case 'reserve': return <Staff {...commonProps} defaultSubTab="reserve" />;
       case 'documents': return <Documents {...commonProps} />;
       case 'replies': return <QuickReplies {...commonProps} />;
       case 'taxes': return <Taxes {...commonProps} />;

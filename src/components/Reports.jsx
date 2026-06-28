@@ -70,14 +70,16 @@ export default function Reports() {
         { data: services },
         { data: incomes },
         { data: expenses },
-        { data: quotations }
+        { data: quotations },
+        { data: payroll }
       ] = await Promise.all([
         supabase.from('clients').select('*'),
         supabase.from('prospects').select('*'),
         supabase.from('services').select('*'),
         supabase.from('incomes').select('*'),
         supabase.from('expenses').select('*'),
-        supabase.from('quotations').select('*')
+        supabase.from('quotations').select('*'),
+        supabase.from('payroll_payments').select('*')
       ]);
 
       setDbData({
@@ -86,7 +88,8 @@ export default function Reports() {
         services: services || [],
         incomes: incomes || [],
         expenses: expenses || [],
-        quotations: quotations || []
+        quotations: quotations || [],
+        payroll: payroll || []
       });
     } catch (err) {
       console.error("Error loading db data for reports:", err);
@@ -100,7 +103,7 @@ export default function Reports() {
   }, [dbData, period]);
 
   const calculateReport = () => {
-    const { clients, prospects, services, incomes, expenses, quotations } = dbData;
+    const { clients, prospects, services, incomes, expenses, quotations, payroll } = dbData;
     if (loading && clients.length === 0) return;
 
     // Filter datasets by period
@@ -110,6 +113,7 @@ export default function Reports() {
     const filteredClients = filterByPeriod(clients, 'created_at', period);
     const filteredProspects = filterByPeriod(prospects, 'created_at', period);
     const filteredQuotations = filterByPeriod(quotations, 'created_at', period);
+    const filteredPayroll = filterByPeriod(payroll || [], 'date', period);
 
     // 1. Incomes Math (CLP Equivalent)
     let incomesTotal = 0;
@@ -143,7 +147,15 @@ export default function Reports() {
       }
     });
 
-    const utility = incomesNet - expensesNet;
+    // Payroll payments math
+    let payrollTotal = 0;
+    filteredPayroll.forEach(p => {
+      if (p.status === 'pagado') {
+        payrollTotal += Number(p.value_converted || p.amount || 0);
+      }
+    });
+
+    const utility = incomesNet - expensesNet - payrollTotal;
     const vatToPay = incomesVat - expensesVat;
 
     // 3. Active clients in period
