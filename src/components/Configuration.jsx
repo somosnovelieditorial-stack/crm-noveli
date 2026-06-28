@@ -464,7 +464,7 @@ export default function Configuration() {
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Monedas Secundarias Habilitadas</label>
                 <div className="flex gap-4 items-center pt-2">
                   {['USD', 'EUR', 'CLP'].filter(c => c !== settings.currency_primary).map(currency => {
-                    const isChecked = settings.currencies_secondary?.includes(currency);
+                    const isChecked = Array.isArray(settings.currencies_secondary) ? settings.currencies_secondary.includes(currency) : false;
                     return (
                       <label key={currency} className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer">
                         <input

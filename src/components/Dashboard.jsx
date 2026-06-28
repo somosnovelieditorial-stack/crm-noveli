@@ -91,11 +91,11 @@ export default function Dashboard() {
 
       // Filter services in process
       const servicesInProcess = (services || []).filter(s => 
-        !['entregado', 'cerrado'].includes(s.status)
+        !['entregado', 'cerrado'].includes(String(s.status || '').toLowerCase())
       ).length;
 
       // Pending payments
-      const pendingIncomes = (incomes || []).filter(i => ['pendiente', 'parcial'].includes(i.status));
+      const pendingIncomes = (incomes || []).filter(i => ['pendiente', 'parcial'].includes(String(i.status || '').toLowerCase()));
       const pendingPaymentsCount = pendingIncomes.length;
       const pendingPaymentsVal = pendingIncomes.reduce((sum, item) => {
         // If status is 'parcial', we count 50% as pending for simulation

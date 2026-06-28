@@ -415,11 +415,19 @@ export default function Documents() {
       quotationDetails: quotation ? `Cotización: ${formatDate(quotation.created_at)}` : null
     };
   }).filter(doc => {
-    const matchesSearch = doc.titleText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (doc.file_name && doc.file_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          (doc.notes && doc.notes.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          (doc.clientName && doc.clientName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          (doc.providerName && doc.providerName.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (!doc) return false;
+    const titleText = String(doc.titleText || '').toLowerCase();
+    const fileName = String(doc.file_name || '').toLowerCase();
+    const notes = String(doc.notes || '').toLowerCase();
+    const clientName = String(doc.clientName || '').toLowerCase();
+    const providerName = String(doc.providerName || '').toLowerCase();
+    const query = String(searchQuery || '').toLowerCase();
+
+    const matchesSearch = titleText.includes(query) ||
+                          fileName.includes(query) ||
+                          notes.includes(query) ||
+                          clientName.includes(query) ||
+                          providerName.includes(query);
     
     const matchesType = typeFilter === 'todos' || doc.docType === typeFilter;
     const matchesClient = clientFilter === 'todos' || doc.client_id === clientFilter;

@@ -191,9 +191,11 @@ export default function Catalog() {
 
   // Filters logic
   const filteredCatalog = catalog.filter(c => {
-    const matchesSearch = 
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.description && c.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (!c) return false;
+    const name = String(c.name || '').toLowerCase();
+    const description = String(c.description || '').toLowerCase();
+    const query = String(searchQuery || '').toLowerCase();
+    const matchesSearch = name.includes(query) || description.includes(query);
 
     const matchesCategory = categoryFilter === 'todos' || c.category === categoryFilter;
     

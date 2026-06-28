@@ -176,7 +176,7 @@ export default function Packs() {
 
   // Get price sum of currently selected services in form
   const getSelectedServicesPriceSum = () => {
-    const selected = catalog.filter(c => formData.selectedServiceIds.includes(c.id));
+    const selected = catalog.filter(c => Array.isArray(formData.selectedServiceIds) ? formData.selectedServiceIds.includes(c.id) : false);
     return selected.reduce((sum, item) => sum + Number(item.base_price), 0);
   };
 
@@ -186,7 +186,7 @@ export default function Packs() {
       setFormError('El nombre del pack es requerido.');
       return;
     }
-    if (formData.selectedServiceIds.length === 0) {
+    if (!Array.isArray(formData.selectedServiceIds) || formData.selectedServiceIds.length === 0) {
       setFormError('Debe seleccionar al menos un servicio del catálogo.');
       return;
     }
@@ -279,9 +279,14 @@ export default function Packs() {
 
   // Filter list
   const filteredPacks = packs.filter(p => {
+    if (!p) return false;
+    const name = String(p.name || '').toLowerCase();
+    const description = String(p.description || '').toLowerCase();
+    const query = String(searchQuery || '').toLowerCase();
+    
     const matchesSearch = 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
+      name.includes(query) ||
+      description.includes(query);
 
     let matchesActive = true;
     if (activeFilter === 'si') matchesActive = p.active;
@@ -559,11 +564,11 @@ export default function Packs() {
                     Servicios Incluidos (Selecciona al menos uno) *
                   </label>
                   <div className="border border-slate-100 dark:border-slate-850 p-4 rounded-xl space-y-2.5 max-h-48 overflow-y-auto bg-slate-50/20 dark:bg-slate-950/30">
-                    {catalog.filter(c => c.active || formData.selectedServiceIds.includes(c.id)).map(service => (
+                    {catalog.filter(c => c.active || (Array.isArray(formData.selectedServiceIds) && formData.selectedServiceIds.includes(c.id))).map(service => (
                       <label key={service.id} className="flex items-start gap-3 text-xs cursor-pointer select-none text-slate-700 dark:text-slate-350">
                         <input
                           type="checkbox"
-                          checked={formData.selectedServiceIds.includes(service.id)}
+                          checked={Array.isArray(formData.selectedServiceIds) && formData.selectedServiceIds.includes(service.id)}
                           onChange={() => handleServiceCheckboxToggle(service.id)}
                           className="mt-0.5 rounded text-brand-600 focus:ring-brand-500 border-slate-350"
                         />

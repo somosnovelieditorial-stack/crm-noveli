@@ -149,10 +149,16 @@ export default function Providers() {
 
   // Filters logic
   const filteredProviders = providers.filter(p => {
+    if (!p) return false;
+    const name = String(p.name || '').toLowerCase();
+    const email = String(p.email || '').toLowerCase();
+    const serviceProvided = String(p.service_provided || '').toLowerCase();
+    const query = String(searchQuery || '').toLowerCase();
+    
     const matchesSearch = 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.email && p.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (p.service_provided && p.service_provided.toLowerCase().includes(searchQuery.toLowerCase()));
+      name.includes(query) ||
+      email.includes(query) ||
+      serviceProvided.includes(query);
 
     const matchesType = typeFilter === 'todos' || p.type === typeFilter;
 

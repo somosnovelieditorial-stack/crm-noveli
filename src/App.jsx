@@ -623,8 +623,12 @@ export default function App() {
     // Clients
     if (db.clients) {
       db.clients.forEach(c => {
-        if (c.name.toLowerCase().includes(term) || (c.email && c.email.toLowerCase().includes(term)) || (c.instagram && c.instagram.toLowerCase().includes(term))) {
-          results.push({ tab: 'clients', type: 'Cliente', name: c.name, description: `${c.email || ''} • ${c.country || ''}`, id: c.id });
+        if (!c) return;
+        const name = String(c.name || '').toLowerCase();
+        const email = String(c.email || '').toLowerCase();
+        const instagram = String(c.instagram || '').toLowerCase();
+        if (name.includes(term) || email.includes(term) || instagram.includes(term)) {
+          results.push({ tab: 'clients', type: 'Cliente', name: c.name || 'Sin nombre', description: `${c.email || ''} • ${c.country || ''}`, id: c.id });
         }
       });
     }
@@ -632,8 +636,12 @@ export default function App() {
     // Prospects
     if (db.prospects) {
       db.prospects.forEach(p => {
-        if (p.name.toLowerCase().includes(term) || (p.contact && p.contact.toLowerCase().includes(term)) || (p.interest_service && p.interest_service.toLowerCase().includes(term))) {
-          results.push({ tab: 'prospects', type: 'Prospecto', name: p.name, description: `Interés: ${p.interest_service || ''} • Origen: ${p.origin || ''}`, id: p.id });
+        if (!p) return;
+        const name = String(p.name || '').toLowerCase();
+        const contact = String(p.contact || '').toLowerCase();
+        const interest = String(p.interest_service || '').toLowerCase();
+        if (name.includes(term) || contact.includes(term) || interest.includes(term)) {
+          results.push({ tab: 'prospects', type: 'Prospecto', name: p.name || 'Sin nombre', description: `Interés: ${p.interest_service || ''} • Origen: ${p.origin || ''}`, id: p.id });
         }
       });
     }
@@ -641,8 +649,11 @@ export default function App() {
     // Services
     if (db.services) {
       db.services.forEach(s => {
-        if (s.book_title.toLowerCase().includes(term) || s.type.toLowerCase().includes(term)) {
-          results.push({ tab: 'services', type: 'Servicio Contratado', name: s.book_title, description: `Tipo: ${s.type} • Etapa: ${s.current_stage || ''}`, id: s.id });
+        if (!s) return;
+        const title = String(s.book_title || '').toLowerCase();
+        const type = String(s.type || '').toLowerCase();
+        if (title.includes(term) || type.includes(term)) {
+          results.push({ tab: 'services', type: 'Servicio Contratado', name: s.book_title || 'Sin título', description: `Tipo: ${s.type || ''} • Etapa: ${s.current_stage || ''}`, id: s.id });
         }
       });
     }
@@ -650,9 +661,12 @@ export default function App() {
     // Incomes
     if (db.incomes) {
       db.incomes.forEach(i => {
-        const clientName = i.client_id ? db.clients?.find(c => c.id === i.client_id)?.name : '';
-        if ((clientName && clientName.toLowerCase().includes(term)) || (i.notes && i.notes.toLowerCase().includes(term)) || i.payment_method.toLowerCase().includes(term)) {
-          results.push({ tab: 'incomes', type: 'Ingreso', name: `Ingreso: ${clientName || i.payment_method}`, description: `Monto: ${formatCurrency(i.amount, i.currency)} • ${i.notes || ''}`, id: i.id });
+        if (!i) return;
+        const clientName = i.client_id ? String(db.clients?.find(c => c.id === i.client_id)?.name || '').toLowerCase() : '';
+        const notes = String(i.notes || '').toLowerCase();
+        const method = String(i.payment_method || '').toLowerCase();
+        if (clientName.includes(term) || notes.includes(term) || method.includes(term)) {
+          results.push({ tab: 'incomes', type: 'Ingreso', name: `Ingreso: ${db.clients?.find(c => c.id === i.client_id)?.name || i.payment_method || ''}`, description: `Monto: ${formatCurrency(i.amount, i.currency)} • ${i.notes || ''}`, id: i.id });
         }
       });
     }
@@ -660,8 +674,11 @@ export default function App() {
     // Expenses
     if (db.expenses) {
       db.expenses.forEach(e => {
-        if (e.category.toLowerCase().includes(term) || (e.notes && e.notes.toLowerCase().includes(term))) {
-          results.push({ tab: 'expenses', type: 'Gasto', name: `Gasto: ${e.category}`, description: `Monto: ${formatCurrency(e.amount, e.currency)} • ${e.notes || ''}`, id: e.id });
+        if (!e) return;
+        const category = String(e.category || '').toLowerCase();
+        const notes = String(e.notes || '').toLowerCase();
+        if (category.includes(term) || notes.includes(term)) {
+          results.push({ tab: 'expenses', type: 'Gasto', name: `Gasto: ${e.category || ''}`, description: `Monto: ${formatCurrency(e.amount, e.currency)} • ${e.notes || ''}`, id: e.id });
         }
       });
     }
@@ -669,8 +686,12 @@ export default function App() {
     // Providers
     if (db.providers) {
       db.providers.forEach(p => {
-        if (p.name.toLowerCase().includes(term) || p.type.toLowerCase().includes(term) || (p.service_provided && p.service_provided.toLowerCase().includes(term))) {
-          results.push({ tab: 'providers', type: 'Proveedor', name: p.name, description: `${p.type} • ${p.service_provided || ''}`, id: p.id });
+        if (!p) return;
+        const name = String(p.name || '').toLowerCase();
+        const type = String(p.type || '').toLowerCase();
+        const service = String(p.service_provided || '').toLowerCase();
+        if (name.includes(term) || type.includes(term) || service.includes(term)) {
+          results.push({ tab: 'providers', type: 'Proveedor', name: p.name || 'Sin nombre', description: `${p.type || ''} • ${p.service_provided || ''}`, id: p.id });
         }
       });
     }
@@ -678,8 +699,11 @@ export default function App() {
     // Documents
     if (db.documents) {
       db.documents.forEach(d => {
-        if (d.name.toLowerCase().includes(term) || d.file_type.toLowerCase().includes(term)) {
-          results.push({ tab: 'documents', type: 'Documento', name: d.name, description: `Tipo: ${d.file_type}`, id: d.id });
+        if (!d) return;
+        const name = String(d.name || d.title || '').toLowerCase();
+        const fileType = String(d.file_type || d.document_type || '').toLowerCase();
+        if (name.includes(term) || fileType.includes(term)) {
+          results.push({ tab: 'documents', type: 'Documento', name: d.name || d.title || 'Sin nombre', description: `Tipo: ${d.file_type || d.document_type || ''}`, id: d.id });
         }
       });
     }
@@ -698,7 +722,8 @@ export default function App() {
     // 1. Servicio atrasado
     if (db.services) {
       db.services.forEach(s => {
-        if (s.estimated_delivery && !['entregado', 'cerrado'].includes(s.status)) {
+        if (!s) return;
+        if (s.estimated_delivery && !['entregado', 'cerrado'].includes(String(s.status || '').toLowerCase())) {
           const estDate = new Date(s.estimated_delivery);
           if (estDate < today) {
             const client = db.clients?.find(c => c.id === s.client_id);
@@ -719,7 +744,8 @@ export default function App() {
     // 2. Servicio próximo a vencer (< 15 días)
     if (db.services) {
       db.services.forEach(s => {
-        if (s.estimated_delivery && !['entregado', 'cerrado'].includes(s.status)) {
+        if (!s) return;
+        if (s.estimated_delivery && !['entregado', 'cerrado'].includes(String(s.status || '').toLowerCase())) {
           const estDate = new Date(s.estimated_delivery);
           const diff = (estDate - today) / (1000 * 60 * 60 * 24);
           if (diff >= 0 && diff <= 15) {
@@ -741,7 +767,8 @@ export default function App() {
     // 3. Pago pendiente
     if (db.incomes) {
       db.incomes.forEach(i => {
-        if (['pendiente', 'parcial'].includes(i.status)) {
+        if (!i) return;
+        if (['pendiente', 'parcial'].includes(String(i.status || '').toLowerCase())) {
           const client = db.clients?.find(c => c.id === i.client_id);
           const clientName = client ? client.name : 'Autor';
           list.push({

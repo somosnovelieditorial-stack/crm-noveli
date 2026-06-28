@@ -418,11 +418,11 @@ export default function CurrencyRates() {
                           </td>
                           <td className="px-4 py-2.5">
                             <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold ${
-                              rate.source.includes('API') 
+                              String(rate.source || '').includes('API') 
                                 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-450' 
                                 : 'bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-450'
                             }`}>
-                              {rate.source}
+                              {rate.source || 'manual'}
                             </span>
                           </td>
                           <td className="px-4 py-2.5 text-[10px] text-slate-400 font-medium">

@@ -549,10 +549,16 @@ export default function Incomes() {
   const periodFilteredIncomes = filterByPeriod(mappedIncomes, 'date', period);
 
   const filteredIncomes = periodFilteredIncomes.filter(income => {
+    if (!income) return false;
+    const clientName = String(income.clientName || '').toLowerCase();
+    const serviceTitle = String(income.serviceTitle || '').toLowerCase();
+    const notes = String(income.notes || '').toLowerCase();
+    const query = String(searchQuery || '').toLowerCase();
+
     const matchesSearch = 
-      income.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      income.serviceTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (income.notes && income.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+      clientName.includes(query) ||
+      serviceTitle.includes(query) ||
+      notes.includes(query);
 
     const matchesStatus = statusFilter === 'todos' || income.status === statusFilter;
     const matchesClient = clientFilter === 'todos' || income.client_id === clientFilter;

@@ -488,12 +488,11 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
         next.agreement_period_type = pType;
       }
 
-      // Status automatons when converting:
-      if (next.payment_link_sent && ['prospecto', 'interesado', 'contrato enviado', 'acuerdo enviado'].includes(next.status)) {
+      if (next.payment_link_sent && ['prospecto', 'interesado', 'contrato enviado', 'acuerdo enviado'].includes(String(next.status || '').toLowerCase())) {
         next.status = 'link de pago enviado';
         updated = true;
       }
-      if (next.contract_sent && !next.payment_link_sent && ['prospecto', 'interesado'].includes(next.status)) {
+      if (next.contract_sent && !next.payment_link_sent && ['prospecto', 'interesado'].includes(String(next.status || '').toLowerCase())) {
         next.status = next.service_category === 'editorial' ? 'contrato enviado' : 'acuerdo enviado';
         updated = true;
       }
@@ -508,7 +507,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
         updated = true;
       }
 
-      if (isReady && ['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales'].includes(next.status)) {
+      if (isReady && ['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales'].includes(String(next.status || '').toLowerCase())) {
         next.status = 'listo para iniciar';
         updated = true;
       }
@@ -854,7 +853,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
     }
 
     // Commercial validation during convert
-    const isConfirmedClient = !['prospecto', 'interesado', 'perdido / rechazado'].includes(convertData.status);
+    const isConfirmedClient = !['prospecto', 'interesado', 'perdido / rechazado'].includes(String(convertData.status || '').toLowerCase());
     const agreedAmount = parseFloat(convertData.total_agreed_amount) || 0;
     if (isConfirmedClient && (convertData.total_agreed_amount === '' || agreedAmount <= 0)) {
       setFormError('El valor acordado es requerido para clientes confirmados.');
@@ -1064,10 +1063,16 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
   const uniqueCountries = Array.from(new Set(prospects.map(p => p.country).filter(Boolean)));
 
   const filteredProspects = prospects.filter(p => {
+    if (!p) return false;
+    const name = String(p.name || '').toLowerCase();
+    const contact = String(p.contact || '').toLowerCase();
+    const interest = String(p.interest_service || '').toLowerCase();
+    const query = String(searchQuery || '').toLowerCase();
+    
     const matchesSearch = 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.contact && p.contact.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (p.interest_service && p.interest_service.toLowerCase().includes(searchQuery.toLowerCase()));
+      name.includes(query) ||
+      contact.includes(query) ||
+      interest.includes(query);
       
     const matchesProb = probabilityFilter === 'todos' || p.probability === probabilityFilter;
     const matchesOrig = originFilter === 'todos' || p.origin === originFilter;

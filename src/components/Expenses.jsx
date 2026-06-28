@@ -439,10 +439,16 @@ export default function Expenses() {
   const periodFilteredExpenses = filterByPeriod(mappedExpenses, 'date', period);
 
   const filteredExpenses = periodFilteredExpenses.filter(expense => {
+    if (!expense) return false;
+    const providerName = String(expense.providerName || '').toLowerCase();
+    const category = String(expense.category || '').toLowerCase();
+    const notes = String(expense.notes || '').toLowerCase();
+    const query = String(searchQuery || '').toLowerCase();
+    
     const matchesSearch = 
-      expense.providerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      expense.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (expense.notes && expense.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+      providerName.includes(query) ||
+      category.includes(query) ||
+      notes.includes(query);
 
     const matchesCategory = categoryFilter === 'todos' || expense.category === categoryFilter;
     const matchesProvider = providerFilter === 'todos' || expense.provider_id === providerFilter;

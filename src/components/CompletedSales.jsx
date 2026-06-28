@@ -45,7 +45,7 @@ export default function CompletedSales() {
       const expenses = expensesRes.data || [];
 
       // A Completed Sale is defined as a service with status = 'cerrado' or 'entregado'
-      const completedServices = services.filter(s => ['entregado', 'cerrado'].includes(s.status));
+      const completedServices = services.filter(s => ['entregado', 'cerrado'].includes(String(s?.status || '').toLowerCase()));
 
       const processedSales = completedServices.map(service => {
         const client = clients.find(c => c.id === service.client_id);
@@ -57,7 +57,7 @@ export default function CompletedSales() {
           .reduce((sum, item) => sum + Number(item.amount), 0);
           
         const totalPending = serviceIncomes
-          .filter(inc => ['pendiente', 'parcial'].includes(inc.status))
+          .filter(inc => ['pendiente', 'parcial'].includes(String(inc?.status || '').toLowerCase()))
           .reduce((sum, item) => {
             const coef = item.status === 'parcial' ? 0.5 : 1.0;
             return sum + (Number(item.amount) * coef);
@@ -107,9 +107,14 @@ export default function CompletedSales() {
   const periodFilteredSales = filterByPeriod(completedSales, 'closingDate', period);
   
   const finalFilteredSales = periodFilteredSales.filter(sale => {
-    return sale.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           sale.bookTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           sale.serviceType.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!sale) return false;
+    const clientName = String(sale.clientName || '').toLowerCase();
+    const bookTitle = String(sale.bookTitle || '').toLowerCase();
+    const serviceType = String(sale.serviceType || '').toLowerCase();
+    const query = String(searchQuery || '').toLowerCase();
+    return clientName.includes(query) ||
+           bookTitle.includes(query) ||
+           serviceType.includes(query);
   });
 
   // Calculate metrics for the filtered period

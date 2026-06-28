@@ -28,6 +28,7 @@ const InstagramIcon = ({ className }) => (
 export default function Clients({ isReadOnly = false, userRole = 'administrador' }) {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
   const [countryFilter, setCountryFilter] = useState('todos');
@@ -51,6 +52,32 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
   const [editorialStages, setEditorialStages] = useState([]);
   const [clientServices, setClientServices] = useState([]);
   const [loadingServices, setLoadingServices] = useState(false);
+
+  const normalizeClient = (c) => {
+    if (!c) return null;
+    return {
+      ...c,
+      name: c.name || '',
+      email: c.email || '',
+      instagram: c.instagram || '',
+      phone: c.phone || '',
+      country: c.country || '',
+      city: c.city || '',
+      client_type: c.client_type || 'nacional',
+      preferred_currency: c.preferred_currency || 'CLP',
+      status: c.status || 'prospecto',
+      notes: c.notes || '',
+      agreement_notes: c.agreement_notes || '',
+      selected_services: Array.isArray(c.selected_services) ? c.selected_services : [],
+      services_summary: c.services_summary || '',
+      payment_status: c.payment_status || 'sin pago',
+      amount_paid: c.amount_paid !== undefined && c.amount_paid !== null ? c.amount_paid : '0',
+      balance_due: c.balance_due !== undefined && c.balance_due !== null ? c.balance_due : 0,
+      payment_method: c.payment_method || 'transferencia',
+      paid_at: c.paid_at || '',
+      ready_to_start_reason: c.ready_to_start_reason || ''
+    };
+  };
 
   // Form state
   const [catalog, setCatalog] = useState([]);
@@ -819,6 +846,7 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
   const fetchClients = async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const { data, error } = await supabase
         .from('clients')
@@ -826,9 +854,12 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
         .order('name', { ascending: true });
         
       if (error) throw error;
-      setClients(data || []);
+      
+      const normalized = (data || []).map(c => normalizeClient(c));
+      setClients(normalized);
     } catch (err) {
       console.error('Error fetching clients:', err);
+      setFetchError(err.message || 'Error al conectar con la base de datos de clientes.');
     } finally {
       setLoading(false);
     }
@@ -908,7 +939,8 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
       alert("Error: El cliente seleccionado no tiene un ID válido.");
       return;
     }
-    setSelectedClient(client);
+    const normalizedClient = normalizeClient(client);
+    setSelectedClient(normalizedClient);
     
     // Fetch client services to check if there is an initial service
     let existingService = null;
@@ -997,7 +1029,8 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
       alert("Error: El cliente seleccionado no tiene un ID válido.");
       return;
     }
-    setSelectedClient(client);
+    const normalizedClient = normalizeClient(client);
+    setSelectedClient(normalizedClient);
     setDetailTab('info');
     setIsDetailOpen(true);
     setLoadingServices(true);
@@ -1228,8 +1261,8 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
       await logActivity('requisito actualizado', `Requisito modificado desde checklist rápido del cliente: ${field} = ${newValue ? 'Sí' : 'No'}`, selectedClient.id);
 
-      setSelectedClient(updatedClient);
-      setClients(clients.map(c => c.id === selectedClient.id ? { ...c, ...updatedClient } : c));
+      setSelectedClient(normalizeClient(updatedClient));
+      setClients(clients.map(c => c.id === selectedClient.id ? normalizeClient({ ...c, ...updatedClient }) : c));
     } catch (err) {
       console.error("Error updating requirement quick checkbox:", err);
       alert("Error al actualizar el requisito.");
@@ -1821,7 +1854,20 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
       </div>
 
       {/* Clients Table */}
-      {loading ? (
+      {fetchError ? (
+        <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900 rounded-2xl p-8 text-center animate-fade-in">
+          <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-2" />
+          <h3 className="text-sm font-bold text-rose-700 dark:text-rose-455">Error al cargar clientes</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4">{fetchError}</p>
+          <button
+            type="button"
+            onClick={fetchClients}
+            className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold cursor-pointer"
+          >
+            Reintentar
+          </button>
+        </div>
+      ) : loading ? (
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
         </div>
