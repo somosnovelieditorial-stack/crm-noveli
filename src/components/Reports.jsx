@@ -113,7 +113,7 @@ export default function Reports() {
     const filteredClients = filterByPeriod(clients, 'created_at', period);
     const filteredProspects = filterByPeriod(prospects, 'created_at', period);
     const filteredQuotations = filterByPeriod(quotations, 'created_at', period);
-    const filteredPayroll = filterByPeriod(payroll || [], 'payment_date', period);
+    const filteredPayroll = filterByPeriod(payroll || [], 'date', period);
 
     // 1. Incomes Math (CLP Equivalent)
     let incomesTotal = 0;

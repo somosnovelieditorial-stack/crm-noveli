@@ -807,11 +807,11 @@ CREATE TABLE IF NOT EXISTS payroll_payments (
     staff_id UUID REFERENCES staff(id) ON DELETE CASCADE,
     amount NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     currency TEXT NOT NULL DEFAULT 'CLP' CHECK (currency IN ('CLP', 'USD')),
-    payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    payment_method TEXT NOT NULL,
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    method TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'pagado')),
     notes TEXT,
-    counts_as_operational_expense BOOLEAN NOT NULL DEFAULT TRUE,
+    operational_expense BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

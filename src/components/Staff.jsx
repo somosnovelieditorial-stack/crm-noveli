@@ -38,11 +38,11 @@ export default function Staff({ defaultSubTab = 'members' }) {
     staff_id: '',
     amount: 0,
     currency: 'CLP',
-    payment_date: new Date().toISOString().split('T')[0],
-    payment_method: 'transferencia',
+    date: new Date().toISOString().split('T')[0],
+    method: 'transferencia',
     status: 'pendiente',
     notes: '',
-    counts_as_operational_expense: true
+    operational_expense: true
   });
 
   // Reserve states
@@ -244,11 +244,11 @@ export default function Staff({ defaultSubTab = 'members' }) {
       staff_id: staffList[0]?.id || '',
       amount: staffList[0]?.agreed_payment || 0,
       currency: staffList[0]?.currency || 'CLP',
-      payment_date: new Date().toISOString().split('T')[0],
-      payment_method: 'transferencia',
+      date: new Date().toISOString().split('T')[0],
+      method: 'transferencia',
       status: 'pendiente',
       notes: '',
-      counts_as_operational_expense: true
+      operational_expense: true
     });
   };
 
@@ -266,7 +266,7 @@ export default function Staff({ defaultSubTab = 'members' }) {
 
   const syncExpenseFromPayroll = async (payment, memberName) => {
     try {
-      if (!payment.counts_as_operational_expense) {
+      if (!payment.operational_expense) {
         const { error } = await supabase.from('expenses').delete().eq('payroll_payment_id', payment.id);
         if (error) {
           console.error("Error deleting sync expense details:", error);
@@ -288,7 +288,7 @@ export default function Staff({ defaultSubTab = 'members' }) {
         user_id: payment.user_id,
         amount: Number(payment.amount) || 0,
         currency: payment.currency,
-        date: payment.payment_date,
+        date: payment.date,
         category: 'otros',
         includes_vat: false,
         deductible: true,
@@ -336,11 +336,11 @@ export default function Staff({ defaultSubTab = 'members' }) {
         staff_id: payrollForm.staff_id,
         amount: Number(payrollForm.amount) || 0,
         currency: payrollForm.currency,
-        payment_date: payrollForm.payment_date,
-        payment_method: payrollForm.payment_method,
+        date: payrollForm.date,
+        method: payrollForm.method,
         status: payrollForm.status,
         notes: payrollForm.notes || '',
-        counts_as_operational_expense: !!payrollForm.counts_as_operational_expense,
+        operational_expense: !!payrollForm.operational_expense,
         organization_id: orgId
       };
 
@@ -666,13 +666,13 @@ export default function Staff({ defaultSubTab = 'members' }) {
                       <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{pay.staff_name}</td>
                       <td className="p-4 text-slate-500">{pay.staff_role}</td>
                       <td className="p-4 font-bold">{formatCurrency(pay.amount, pay.currency)}</td>
-                      <td className="p-4">{pay.payment_date}</td>
-                      <td className="p-4 capitalize">{pay.payment_method}</td>
+                      <td className="p-4">{pay.date}</td>
+                      <td className="p-4 capitalize">{pay.method}</td>
                       <td className="p-4">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          pay.counts_as_operational_expense ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-slate-50 text-slate-655 border border-slate-200'
+                          pay.operational_expense ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-slate-50 text-slate-655 border border-slate-200'
                         }`}>
-                          {pay.counts_as_operational_expense ? 'Sí' : 'No'}
+                          {pay.operational_expense ? 'Sí' : 'No'}
                         </span>
                       </td>
                       <td className="p-4">
@@ -985,8 +985,8 @@ export default function Staff({ defaultSubTab = 'members' }) {
                   <input
                     type="date"
                     required
-                    value={payrollForm.payment_date}
-                    onChange={(e) => setPayrollForm({ ...payrollForm, payment_date: e.target.value })}
+                    value={payrollForm.date}
+                    onChange={(e) => setPayrollForm({ ...payrollForm, date: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-250 text-sm focus:outline-none"
                   />
                 </div>
@@ -994,8 +994,8 @@ export default function Staff({ defaultSubTab = 'members' }) {
                 <div>
                   <label className="block font-bold text-slate-400 mb-1">Método de Pago</label>
                   <select
-                    value={payrollForm.payment_method}
-                    onChange={(e) => setPayrollForm({ ...payrollForm, payment_method: e.target.value })}
+                    value={payrollForm.method}
+                    onChange={(e) => setPayrollForm({ ...payrollForm, method: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-250 text-sm focus:outline-none"
                   >
                     <option value="transferencia">Transferencia</option>
@@ -1024,8 +1024,8 @@ export default function Staff({ defaultSubTab = 'members' }) {
                   <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-600 dark:text-slate-400">
                     <input
                       type="checkbox"
-                      checked={payrollForm.counts_as_operational_expense}
-                      onChange={(e) => setPayrollForm({ ...payrollForm, counts_as_operational_expense: e.target.checked })}
+                      checked={payrollForm.operational_expense}
+                      onChange={(e) => setPayrollForm({ ...payrollForm, operational_expense: e.target.checked })}
                       className="rounded text-brand-500 focus:ring-brand-500"
                     />
                     <span>Gasto Operacional</span>
