@@ -384,6 +384,8 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
     if (!isMaterialsOk) reasons.push("Falta briefing/materiales");
     if (!isPeriodOk) reasons.push("Falta definir periodo");
     
+    const reasonText = reasons.join(', ');
+
     return { 
       isReady, 
       reasonText, 
@@ -3156,7 +3158,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
                         <strong>Faltas para iniciar:</strong>
                         <ul className="list-disc pl-4 mt-1 space-y-0.5">
                           {selectedClient.ready_to_start_reason ? (
-                            selectedClient.ready_to_start_reason.split(', ').map((reason, idx) => (
+                            String(selectedClient.ready_to_start_reason || '').split(', ').map((reason, idx) => (
                               <li key={idx}>{reason}</li>
                             ))
                           ) : (
