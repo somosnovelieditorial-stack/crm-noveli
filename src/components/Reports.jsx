@@ -208,7 +208,7 @@ export default function Reports() {
       const client = clients.find(c => c.id === s.client_id);
       const clientName = client ? client.name : 'Cliente no identificado';
 
-      if (s.estimated_delivery && !['entregado', 'cerrado'].includes(s.status)) {
+      if (s.estimated_delivery && !['entregado', 'cerrado'].includes(String(s.status || '').toLowerCase())) {
         const estDeliveryDate = new Date(s.estimated_delivery);
         const timeDiff = estDeliveryDate - today;
         const remainingDays = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
@@ -281,7 +281,7 @@ export default function Reports() {
     })).sort((a, b) => b.count - a.count);
 
     // E. Tiempo promedio de entrega (días de duración de servicios ya entregados/cerrados)
-    const completedServices = filteredServices.filter(s => ['entregado', 'cerrado'].includes(s.status) && s.start_date && s.estimated_delivery);
+    const completedServices = filteredServices.filter(s => ['entregado', 'cerrado'].includes(String(s?.status || '').toLowerCase()) && s.start_date && s.estimated_delivery);
     let totalDays = 0;
     completedServices.forEach(s => {
       const start = new Date(s.start_date);
@@ -372,7 +372,7 @@ export default function Reports() {
       prospectsCount,
       servicesCount: {
         total: filteredServices.length,
-        inProcess: filteredServices.filter(s => !['entregado', 'cerrado'].includes(s.status)).length
+        inProcess: filteredServices.filter(s => !['entregado', 'cerrado'].includes(String(s?.status || '').toLowerCase())).length
       },
       serviceSales,
       expenseCategories,
@@ -713,7 +713,7 @@ export default function Reports() {
                 </div>
                 <div>
                   <h4 className="text-lg font-bold text-slate-700 dark:text-slate-200">
-                    {dbData.services.filter(s => ['entregado', 'cerrado'].includes(s.status)).length}
+                    {Array.isArray(dbData?.services) ? dbData.services.filter(s => ['entregado', 'cerrado'].includes(String(s?.status || '').toLowerCase())).length : 0}
                   </h4>
                   <p className="text-xs text-slate-400 font-medium">Total de obras entregadas históricas</p>
                 </div>

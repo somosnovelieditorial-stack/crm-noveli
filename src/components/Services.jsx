@@ -751,9 +751,14 @@ export default function Services({ isReadOnly = false }) {
   const periodFilteredServices = filterByPeriod(allServicesMapped, 'start_date', period);
 
   const finalFilteredServices = periodFilteredServices.filter(s => {
+    if (!s) return false;
+    const bookTitle = String(s.book_title || '').toLowerCase();
+    const clientName = String(s.clientName || '').toLowerCase();
+    const query = String(searchQuery || '').toLowerCase();
+    
     const matchesSearch = 
-      s.book_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.clientName.toLowerCase().includes(searchQuery.toLowerCase());
+      bookTitle.includes(query) ||
+      clientName.includes(query);
 
     const matchesStatus = statusFilter === 'todos' || s.status === statusFilter;
     const matchesType = typeFilter === 'todos' || s.type === typeFilter;

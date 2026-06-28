@@ -984,7 +984,7 @@ class MockQueryBuilder {
       }
 
       // MULTICURRENCY DYNAMIC POPULATION FOR LEGACY ROWS
-      if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+      if (['services', 'incomes', 'expenses', 'quotations'].includes(String(this.table || ''))) {
         records = records.map(row => {
           if (row.exchange_rate === undefined) {
             row.exchange_rate = row.currency === 'USD' ? 940 : row.currency === 'EUR' ? 1010 : 1;
@@ -1104,7 +1104,7 @@ class MockQueryBuilder {
         ...item
       };
 
-      if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+      if (['services', 'incomes', 'expenses', 'quotations'].includes(String(this.table || ''))) {
         if (mergedItem.exchange_rate === undefined) {
           mergedItem.exchange_rate = mergedItem.currency === 'USD' ? 940 : mergedItem.currency === 'EUR' ? 1010 : 1;
         }
@@ -1142,7 +1142,7 @@ class MockQueryBuilder {
       };
 
       // Multicurrency calculations
-      if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+      if (['services', 'incomes', 'expenses', 'quotations'].includes(String(this.table || ''))) {
         if (newItem.exchange_rate === undefined) {
           newItem.exchange_rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
         }
@@ -1246,7 +1246,7 @@ class MockQueryBuilder {
         const updatedRow = { ...row, ...updateData };
         
         // Multicurrency calculations
-        if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+        if (['services', 'incomes', 'expenses', 'quotations'].includes(String(this.table || ''))) {
           if (updatedRow.exchange_rate === undefined) {
             updatedRow.exchange_rate = updatedRow.currency === 'USD' ? 940 : updatedRow.currency === 'EUR' ? 1010 : 1;
           }
@@ -1515,7 +1515,7 @@ class MutationQueryBuilder {
       const items = Array.isArray(this.data) ? this.data : [this.data];
       const updatedItems = await Promise.all(items.map(async item => {
         const newItem = { ...item };
-        if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+        if (['services', 'incomes', 'expenses', 'quotations'].includes(String(this.table || ''))) {
           if (newItem.exchange_rate === undefined) {
             let rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
             try {
@@ -1545,7 +1545,7 @@ class MutationQueryBuilder {
       const items = Array.isArray(this.data) ? this.data : [this.data];
       const updatedItems = await Promise.all(items.map(async item => {
         const newItem = { ...item };
-        if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+        if (['services', 'incomes', 'expenses', 'quotations'].includes(String(this.table || ''))) {
           if (newItem.exchange_rate === undefined) {
             let rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
             try {
@@ -1674,7 +1674,7 @@ class MutationQueryBuilder {
 
     // Post-update side effects
     if (this.method === 'update' && records.length > 0) {
-      if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table) && 
+      if (['services', 'incomes', 'expenses', 'quotations'].includes(String(this.table || '')) && 
           (this.data.value !== undefined || this.data.amount !== undefined || this.data.currency !== undefined || this.data.exchange_rate !== undefined)) {
         await Promise.all(records.map(async row => {
           let rate = row.exchange_rate || (row.currency === 'USD' ? 940 : row.currency === 'EUR' ? 1010 : 1);

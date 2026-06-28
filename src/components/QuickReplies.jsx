@@ -180,10 +180,16 @@ export default function QuickReplies() {
 
   // Filters logic
   const filteredReplies = replies.filter(r => {
+    if (!r) return false;
+    const title = String(r.title || '').toLowerCase();
+    const category = String(r.category || '').toLowerCase();
+    const msg = String(r.message_text || '').toLowerCase();
+    const query = String(searchQuery || '').toLowerCase();
+    
     const matchesSearch = 
-      r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (r.category && r.category.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      r.message_text.toLowerCase().includes(searchQuery.toLowerCase());
+      title.includes(query) ||
+      category.includes(query) ||
+      msg.includes(query);
 
     const matchesChannel = channelFilter === 'todos' || r.channel === channelFilter;
 

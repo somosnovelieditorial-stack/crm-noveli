@@ -649,7 +649,10 @@ export default function Quotations() {
   const periodFilteredQuotations = filterByPeriod(mappedQuotations, 'created_at', period);
 
   const filteredQuotations = periodFilteredQuotations.filter(q => {
-    const matchesSearch = q.contactName.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!q) return false;
+    const contactName = String(q.contactName || '').toLowerCase();
+    const query = String(searchQuery || '').toLowerCase();
+    const matchesSearch = contactName.includes(query);
     const matchesStatus = statusFilter === 'todos' || q.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
