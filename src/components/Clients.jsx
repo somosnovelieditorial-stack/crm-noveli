@@ -25,6 +25,10 @@ const InstagramIcon = ({ className }) => (
   </svg>
 );
 
+const safeText = (value) => String(value ?? '').toLowerCase()
+const safeIncludes = (value, search) => safeText(value).includes(safeText(search))
+const safeArrayIncludes = (value, item) => Array.isArray(value) ? value.includes(item) : false
+
 export default function Clients({ isReadOnly = false, userRole = 'administrador' }) {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -371,7 +375,7 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
       const fileExt = fileName.split('.').pop().toLowerCase();
       
       const allowedExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'png', 'webp'];
-      if (!allowedExts.includes(fileExt)) {
+      if (!safeArrayIncludes(allowedExts, fileExt)) {
         throw new Error('Formato no permitido. Solo se aceptan: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, WEBP.');
       }
 
@@ -710,13 +714,13 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
       // Status automatons:
       // When link sent, set status to "link de pago enviado" if in early states
-      if (next.payment_link_sent && ['prospecto', 'interesado', 'contrato enviado', 'acuerdo enviado'].includes(String(next.status || '').toLowerCase())) {
+      if (next.payment_link_sent && safeArrayIncludes(['prospecto', 'interesado', 'contrato enviado', 'acuerdo enviado'], next.status)) {
         next.status = 'link de pago enviado';
         updated = true;
       }
       
       // When contract sent, set status to "acuerdo enviado" or "contrato enviado" if in early states
-      if (next.contract_sent && !next.payment_link_sent && ['prospecto', 'interesado'].includes(String(next.status || '').toLowerCase())) {
+      if (next.contract_sent && !next.payment_link_sent && safeArrayIncludes(['prospecto', 'interesado'], next.status)) {
         next.status = next.service_category === 'editorial' ? 'contrato enviado' : 'acuerdo enviado';
         updated = true;
       }
@@ -745,12 +749,12 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
       // Auto status update when ready to start / requirements change
       if (isReady) {
-        if (['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales', 'listo para iniciar'].includes(String(next.status || '').toLowerCase())) {
+        if (safeArrayIncludes(['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales', 'listo para iniciar'], next.status)) {
           next.status = 'en proceso';
           updated = true;
         }
       } else {
-        if (['en proceso', 'trabajo iniciado', 'listo para iniciar'].includes(String(next.status || '').toLowerCase())) {
+        if (safeArrayIncludes(['en proceso', 'trabajo iniciado', 'listo para iniciar'], next.status)) {
           if (!isPaymentOk) {
             next.status = 'esperando pago';
           } else if (!isSignedContractOk && reqSignedContract) {
@@ -1193,11 +1197,11 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
     updatedClient.ready_to_start_reason = reasonText;
 
     if (isReady) {
-      if (['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales', 'listo para iniciar'].includes(String(updatedClient.status || '').toLowerCase())) {
+      if (safeArrayIncludes(['prospecto', 'interesado', 'acuerdo enviado', 'contrato enviado', 'link de pago enviado', 'esperando pago', 'pago recibido', 'esperando contrato firmado', 'esperando archivos/materiales', 'listo para iniciar'], updatedClient.status)) {
         updatedClient.status = 'en proceso';
       }
     } else {
-      if (['en proceso', 'trabajo iniciado', 'listo para iniciar'].includes(String(updatedClient.status || '').toLowerCase())) {
+      if (safeArrayIncludes(['en proceso', 'trabajo iniciado', 'listo para iniciar'], updatedClient.status)) {
         if (!isPaymentOk) {
           updatedClient.status = 'esperando pago';
         } else if (!isSignedContractOk && reqSignedContract) {
@@ -1282,7 +1286,7 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
 
     // Commercial validations:
     // If value agreed is empty, allow saving as prospect/interesado, but require it for confirmed client
-    const isConfirmedClient = !['prospecto', 'interesado', 'perdido', 'perdido / rechazado'].includes(String(formData.status || '').toLowerCase());
+    const isConfirmedClient = !safeArrayIncludes(['prospecto', 'interesado', 'perdido', 'perdido / rechazado'], formData.status);
     const agreedAmount = parseFloat(formData.total_agreed_amount) || 0;
     if (isConfirmedClient && (formData.total_agreed_amount === '' || agreedAmount <= 0)) {
       setFormError('El valor acordado es requerido para clientes confirmados.');
@@ -1628,30 +1632,39 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
     }
   };
 
+  const normalizedClients = (clients || []).map(c => ({
+    ...c,
+    name: c.name ?? '',
+    email: c.email ?? '',
+    instagram: c.instagram ?? '',
+    phone: c.phone ?? '',
+    country: c.country ?? '',
+    city: c.city ?? '',
+    status: c.status ?? '',
+    client_type: c.client_type ?? '',
+    preferred_currency: c.preferred_currency ?? 'CLP',
+    payment_status: c.payment_status ?? '',
+    services_summary: c.services_summary ?? '',
+    selected_services: Array.isArray(c.selected_services) ? c.selected_services : [],
+    notes: c.notes ?? '',
+    internal_notes: c.internal_notes ?? ''
+  }));
+
   // Get unique countries for filters
-  const uniqueCountries = Array.from(new Set(clients.map(c => c.country).filter(Boolean)));
+  const uniqueCountries = Array.from(new Set(normalizedClients.map(c => c.country).filter(Boolean)));
 
   // Filtering list
-  const filteredClients = clients.filter(c => {
+  const filteredClients = normalizedClients.filter(c => {
     if (!c) return false;
-    const name = String(c.name || '').toLowerCase();
-    const email = String(c.email || '').toLowerCase();
-    const instagram = String(c.instagram || '').toLowerCase();
-    const query = String(searchQuery || '').toLowerCase();
-
     const matchesSearch = 
-      name.includes(query) ||
-      email.includes(query) ||
-      instagram.includes(query);
+      safeIncludes(c.name, searchQuery) ||
+      safeIncludes(c.email, searchQuery) ||
+      safeIncludes(c.instagram, searchQuery) ||
+      safeIncludes(c.notes, searchQuery);
       
-    const status = String(c.status || '').toLowerCase();
-    const matchesStatus = statusFilter === 'todos' || status === String(statusFilter || '').toLowerCase();
-
-    const country = String(c.country || '').toLowerCase();
-    const matchesCountry = countryFilter === 'todos' || country === String(countryFilter || '').toLowerCase();
-
-    const clientType = String(c.client_type || '').toLowerCase();
-    const matchesType = clientTypeFilter === 'todos' || clientType === String(clientTypeFilter || '').toLowerCase();
+    const matchesStatus = statusFilter === 'todos' || safeIncludes(c.status, statusFilter);
+    const matchesCountry = countryFilter === 'todos' || safeIncludes(c.country, countryFilter);
+    const matchesType = clientTypeFilter === 'todos' || safeIncludes(c.client_type, clientTypeFilter);
     
     return matchesSearch && matchesStatus && matchesCountry && matchesType;
   });
