@@ -5,7 +5,7 @@ import PeriodFilter from './PeriodFilter';
 import { 
   BarChart3, PieChart, Users, DollarSign, ArrowUpRight, 
   TrendingUp, Award, Layers, CreditCard, AlertTriangle, 
-  Clock, Download, CheckCircle2, Percent, UserCheck, Globe2, Coins
+  Clock, Download, CheckCircle2, Percent, UserCheck, Globe2, Coins, Briefcase
 } from 'lucide-react';
 
 export default function Reports() {
@@ -23,7 +23,9 @@ export default function Reports() {
     services: [],
     incomes: [],
     expenses: [],
-    quotations: []
+    quotations: [],
+    payroll: [],
+    allocations: []
   });
 
   const [report, setReport] = useState({
@@ -71,7 +73,8 @@ export default function Reports() {
         { data: incomes },
         { data: expenses },
         { data: quotations },
-        { data: payroll }
+        { data: payroll },
+        { data: allocations }
       ] = await Promise.all([
         supabase.from('clients').select('*'),
         supabase.from('prospects').select('*'),
@@ -79,7 +82,8 @@ export default function Reports() {
         supabase.from('incomes').select('*'),
         supabase.from('expenses').select('*'),
         supabase.from('quotations').select('*'),
-        supabase.from('payroll_payments').select('*')
+        supabase.from('payroll_payments').select('*'),
+        supabase.from('income_allocations').select('*')
       ]);
 
       setDbData({
@@ -89,7 +93,8 @@ export default function Reports() {
         incomes: incomes || [],
         expenses: expenses || [],
         quotations: quotations || [],
-        payroll: payroll || []
+        payroll: payroll || [],
+        allocations: allocations || []
       });
     } catch (err) {
       console.error("Error loading db data for reports:", err);
@@ -336,7 +341,25 @@ export default function Reports() {
       utility: monthlyFinancials[key].incomes - monthlyFinancials[key].expenses
     })).sort((a, b) => a.month.localeCompare(b.month));
 
+    // --- Treasury allocations math ---
+    const filteredIncomeIds = new Set(filteredIncomes.map(i => i.id));
+    const periodAllocations = (dbData.allocations || []).filter(alloc => filteredIncomeIds.has(alloc.income_id));
+    
+    const treasurySummary = {};
+    const areas = ['sueldos', 'reserva operacional', 'gastos del autor', 'publicidad', 'proveedores', 'impuestos', 'utilidad Noveli', 'otro'];
+    areas.forEach(a => {
+      treasurySummary[a] = 0;
+    });
+
+    periodAllocations.forEach(alloc => {
+      const inc = filteredIncomes.find(i => i.id === alloc.income_id);
+      const rate = inc ? Number(inc.exchange_rate || 1) : 1;
+      const clpAllocAmount = Number(alloc.calculated_amount) * rate;
+      treasurySummary[alloc.area] = (treasurySummary[alloc.area] || 0) + clpAllocAmount;
+    });
+
     setReport({
+      treasurySummary,
       incomesTotal,
       incomesNet,
       incomesVat,
@@ -528,6 +551,17 @@ export default function Reports() {
         >
           <Users className="w-4 h-4" />
           Demografía de Autores y Conversión
+        </button>
+        <button
+          onClick={() => setActiveSubTab('tesoreria')}
+          className={`px-4 py-2.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeSubTab === 'tesoreria' 
+              ? 'border-brand-500 text-brand-600 dark:text-brand-400' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-355'
+          }`}
+        >
+          <Briefcase className="w-4 h-4" />
+          Tesorería y Distribución
         </button>
       </div>
 
@@ -939,6 +973,52 @@ export default function Reports() {
           </div>
         </div>
       </div>
+
+      {activeSubTab === 'tesoreria' && (
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
+            <Briefcase className="w-5 h-5 text-brand-500" />
+            Distribución de Fondos de Tesorería (Periodo Consultado)
+          </h3>
+          <p className="text-slate-500 dark:text-slate-400 text-xs">
+            Resumen acumulado del reparto de los ingresos netos ingresados durante el periodo seleccionado.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+            <div className="space-y-3">
+              <div className="divide-y divide-slate-150 dark:divide-slate-800 text-xs">
+                {Object.keys(report.treasurySummary || {}).map((area) => (
+                  <div key={area} className="py-3 flex justify-between items-center border-b border-slate-100 dark:border-slate-850">
+                    <span className="font-bold capitalize text-slate-700 dark:text-slate-300">{area}</span>
+                    <span className="font-mono font-bold text-slate-850 dark:text-slate-100">
+                      {formatCurrency(report.treasurySummary[area], 'CLP')}
+                    </span>
+                  </div>
+                ))}
+                <div className="py-3 flex justify-between items-center font-black border-t border-slate-205 dark:border-slate-800 text-slate-850 dark:text-slate-100 text-sm mt-2 pt-2">
+                  <span>Total Asignado:</span>
+                  <span>
+                    {formatCurrency(
+                      Object.values(report.treasurySummary || {}).reduce((acc, v) => acc + v, 0),
+                      'CLP'
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 flex flex-col justify-center space-y-4 text-xs text-slate-600 dark:text-slate-400">
+              <h4 className="font-bold text-slate-800 dark:text-slate-200">¿Cómo funciona la distribución de ingresos?</h4>
+              <p>
+                En Somos Noveli, cada pago u honorario registrado en la sección de <strong>Ingresos</strong> puede dividirse en diferentes cuentas de destino (ej. Sueldos, Publicidad, Impuestos, Utilidad Noveli, Proveedores o Reserva Operacional).
+              </p>
+              <p>
+                Este panel consolida la suma total de dinero CLP equivalente repartido a cada área correspondiente para todos los cobros recibidos que coinciden con los filtros del periodo activo.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

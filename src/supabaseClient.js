@@ -883,7 +883,8 @@ const INITIAL_MOCK_DATA = {
     { id: "staff-2", user_id: "mock-user-123", organization_id: "11111111-1111-1111-1111-111111111111", name: "Javier Román", role: "Director Comercial", type: "fundador", agreed_payment: 2500000, currency: "CLP", payment_frequency: "mensual", status: "activo", notes: "Fundador", created_at: new Date().toISOString() }
   ],
   payroll_payments: [],
-  operational_reserve_movements: []
+  operational_reserve_movements: [],
+  income_allocations: []
 };
 
 // LocalStorage database engine helper

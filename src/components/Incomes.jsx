@@ -5,7 +5,7 @@ import PeriodFilter from './PeriodFilter';
 import { 
   Plus, Search, Edit2, Trash2, X, DollarSign, 
   User, BookOpen, Calendar, HelpCircle, FileText, CheckCircle, AlertCircle, Download,
-  UploadCloud, FileSpreadsheet, Image, File, Eye, Trash
+  UploadCloud, FileSpreadsheet, Image, File, Eye, Trash, Briefcase
 } from 'lucide-react';
 
 export default function Incomes() {
@@ -42,6 +42,17 @@ export default function Incomes() {
     status: 'pagado',
     notes: ''
   });
+
+  const [allocationsList, setAllocationsList] = useState([]);
+  const [newAlloc, setNewAlloc] = useState({
+    area: 'sueldos',
+    allocation_type: 'porcentaje',
+    value: 0,
+    notes: ''
+  });
+  const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
+  const [viewingIncome, setViewingIncome] = useState(null);
+  const [viewingAllocations, setViewingAllocations] = useState([]);
 
   // Services list filtered for current selected client in form
   const [formServices, setFormServices] = useState([]);
@@ -129,6 +140,7 @@ export default function Incomes() {
       status: 'pagado',
       notes: ''
     });
+    setAllocationsList([]);
     setFormError('');
     setIsModalOpen(true);
     setNewDocFile(null);
@@ -138,7 +150,7 @@ export default function Incomes() {
     setIncomeDocuments([]);
   };
 
-  const handleOpenEditModal = (income) => {
+  const handleOpenEditModal = async (income) => {
     setSelectedIncome(income);
     setFormData({
       client_id: income.client_id || '',
@@ -152,6 +164,18 @@ export default function Incomes() {
       status: income.status || 'pagado',
       notes: income.notes || ''
     });
+    setAllocationsList([]);
+    try {
+      const { data, error } = await supabase
+        .from('income_allocations')
+        .select('*')
+        .eq('income_id', income.id);
+      if (!error && data) {
+        setAllocationsList(data);
+      }
+    } catch (err) {
+      console.error("Error loading income allocations:", err);
+    }
     setFormError('');
     setIsModalOpen(true);
     setNewDocFile(null);
@@ -175,6 +199,23 @@ export default function Incomes() {
         console.error('Error deleting income:', err);
         alert('Error al eliminar el ingreso');
       }
+    }
+  };
+
+  const handleViewDistribution = async (income) => {
+    setViewingIncome(income);
+    setIsDistributionModalOpen(true);
+    setViewingAllocations([]);
+    try {
+      const { data, error } = await supabase
+        .from('income_allocations')
+        .select('*')
+        .eq('income_id', income.id);
+      if (!error && data) {
+        setViewingAllocations(data);
+      }
+    } catch (err) {
+      console.error("Error fetching viewing allocations:", err);
     }
   };
 
@@ -418,12 +459,14 @@ export default function Incomes() {
     };
 
     try {
+      let incomeId = '';
       if (selectedIncome) {
         // Edit Mode
+        incomeId = selectedIncome.id;
         const { error } = await supabase
           .from('incomes')
           .update(payload)
-          .eq('id', selectedIncome.id);
+          .eq('id', incomeId);
 
         if (error) throw error;
       } else {
@@ -436,8 +479,49 @@ export default function Incomes() {
         if (error) throw error;
         
         const createdIncome = data?.[0];
+        incomeId = createdIncome?.id;
         if (createdIncome && newDocFile) {
           await handleUploadIncomeDocument(newDocFile, newDocType, newDocNotes, newDocTitle, createdIncome.id, createdIncome.client_id);
+        }
+      }
+
+      // Sync allocations list
+      if (incomeId) {
+        const { error: delErr } = await supabase
+          .from('income_allocations')
+          .delete()
+          .eq('income_id', incomeId);
+        if (delErr) throw delErr;
+
+        if (allocationsList.length > 0) {
+          const orgId = await getValidOrgId();
+          const { data: { user } } = await supabase.auth.getUser();
+          
+          const maxPool = formData.includes_vat ? formData.amount / 1.19 : formData.amount;
+          const allocationsPayload = allocationsList.map(alloc => {
+            let calculatedAmt = 0;
+            if (alloc.allocation_type === 'porcentaje') {
+              calculatedAmt = maxPool * (Number(alloc.value) / 100);
+            } else {
+              calculatedAmt = Number(alloc.value);
+            }
+
+            return {
+              income_id: incomeId,
+              organization_id: orgId,
+              user_id: user?.id || 'mock-user-123',
+              area: alloc.area,
+              allocation_type: alloc.allocation_type,
+              value: Number(alloc.value) || 0,
+              calculated_amount: Math.round(calculatedAmt * 100) / 100,
+              notes: alloc.notes || ''
+            };
+          });
+
+          const { error: insErr } = await supabase
+            .from('income_allocations')
+            .insert(allocationsPayload);
+          if (insErr) throw insErr;
         }
       }
 
@@ -497,6 +581,24 @@ export default function Incomes() {
     acc.totalVat += clpVat;
     return acc;
   }, { totalAmount: 0, totalPaid: 0, totalPending: 0, totalNet: 0, totalVat: 0 });
+
+  const maxPool = formData.includes_vat ? formData.amount / 1.19 : formData.amount;
+  
+  const calculatedAllocations = allocationsList.map(alloc => {
+    let amt = 0;
+    if (alloc.allocation_type === 'porcentaje') {
+      amt = maxPool * (Number(alloc.value) / 100);
+    } else {
+      amt = Number(alloc.value);
+    }
+    return {
+      ...alloc,
+      calculated_amount: Math.round(amt * 100) / 100
+    };
+  });
+
+  const totalAllocated = calculatedAllocations.reduce((acc, a) => acc + a.calculated_amount, 0);
+  const remainingAlloc = maxPool - totalAllocated;
 
   const handleExportCSV = () => {
     const csvData = filteredIncomes.map(inc => {
@@ -733,6 +835,14 @@ export default function Incomes() {
                       </td>
                       <td className="px-6 py-4 text-right space-x-1.5 whitespace-nowrap">
                         <button
+                          onClick={() => handleViewDistribution(income)}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                          title="Ver distribución de tesorería"
+                        >
+                          <Briefcase className="w-3 h-3" />
+                          <span className="hidden sm:inline">Distribución</span>
+                        </button>
+                        <button
                           onClick={() => handleOpenEditModal(income)}
                           className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                         >
@@ -920,6 +1030,120 @@ export default function Incomes() {
                       <option value="parcial">Parcial</option>
                       <option value="pendiente">Pendiente</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Distribución del ingreso */}
+                <div className="border-t border-slate-100 dark:border-slate-800/80 pt-4 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider text-left">Distribución del Ingreso</h4>
+                  
+                  <div className="bg-slate-50 dark:bg-slate-950/30 p-4 rounded-xl border border-slate-100 dark:border-slate-850 space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:justify-between text-[11px] font-semibold text-slate-500 gap-1">
+                      <span>Neto: {formatCurrency(maxPool, formData.currency)}</span>
+                      <span>Asignado: {formatCurrency(totalAllocated, formData.currency)}</span>
+                      <span className={remainingAlloc < 0 ? "text-rose-500 font-bold" : remainingAlloc === 0 ? "text-emerald-500 font-bold" : "text-slate-400"}>
+                        Saldo: {formatCurrency(remainingAlloc, formData.currency)}
+                      </span>
+                    </div>
+
+                    {remainingAlloc < 0 && (
+                      <div className="p-2 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900 rounded-lg text-[10px] text-rose-600 dark:text-rose-455 font-bold">
+                        ⚠️ Advertencia: El total distribuido supera el monto disponible.
+                      </div>
+                    )}
+
+                    {/* Inline allocations list */}
+                    {calculatedAllocations.length > 0 && (
+                      <div className="overflow-x-auto pt-2">
+                        <table className="w-full text-left text-[10px] border-collapse">
+                          <thead>
+                            <tr className="text-slate-400 font-bold border-b border-slate-100 dark:border-slate-850">
+                              <th className="pb-1">Área</th>
+                              <th className="pb-1 text-right">Valor</th>
+                              <th className="pb-1 text-right">Monto</th>
+                              <th className="pb-1 text-center">Acción</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-850/50">
+                            {calculatedAllocations.map((alloc, idx) => (
+                              <tr key={idx} className="hover:bg-slate-100/50 dark:hover:bg-slate-800/10">
+                                <td className="py-1 font-bold capitalize text-slate-700 dark:text-slate-350">{alloc.area}</td>
+                                <td className="py-1 text-right font-mono text-slate-500">{alloc.allocation_type === 'porcentaje' ? `${alloc.value}%` : formatCurrency(alloc.value, formData.currency)}</td>
+                                <td className="py-1 text-right font-mono font-bold text-slate-800 dark:text-slate-200">{formatCurrency(alloc.calculated_amount, formData.currency)}</td>
+                                <td className="py-1 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => setAllocationsList(prev => prev.filter((_, i) => i !== idx))}
+                                    className="p-0.5 hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-500 rounded cursor-pointer"
+                                  >
+                                    <Trash className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Form inputs to add allocation */}
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                      <div className="sm:col-span-2">
+                        <select
+                          value={newAlloc.area}
+                          onChange={(e) => setNewAlloc({ ...newAlloc, area: e.target.value })}
+                          className="w-full px-2 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-lg text-xs"
+                        >
+                          <option value="sueldos">Sueldos</option>
+                          <option value="reserva operacional">Reserva Operacional</option>
+                          <option value="gastos del autor">Gastos del Autor</option>
+                          <option value="publicidad">Publicidad</option>
+                          <option value="proveedores">Proveedores</option>
+                          <option value="impuestos">Impuestos</option>
+                          <option value="utilidad Noveli">Utilidad Noveli</option>
+                          <option value="otro">Otro</option>
+                        </select>
+                      </div>
+                      <div>
+                        <select
+                          value={newAlloc.allocation_type}
+                          onChange={(e) => setNewAlloc({ ...newAlloc, allocation_type: e.target.value })}
+                          className="w-full px-2 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-lg text-xs"
+                        >
+                          <option value="porcentaje">Porc. (%)</option>
+                          <option value="monto fijo">Monto Fijo</option>
+                        </select>
+                      </div>
+                      <div>
+                        <input
+                          type="number"
+                          placeholder="Valor"
+                          value={newAlloc.value === 0 ? '' : newAlloc.value}
+                          onChange={(e) => setNewAlloc({ ...newAlloc, value: Number(e.target.value) })}
+                          className="w-full px-2 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-lg text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <input
+                        type="text"
+                        placeholder="Notas/Detalles..."
+                        value={newAlloc.notes}
+                        onChange={(e) => setNewAlloc({ ...newAlloc, notes: e.target.value })}
+                        className="flex-1 px-2 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-lg text-[11px]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (newAlloc.value <= 0) return;
+                          setAllocationsList(prev => [...prev, { ...newAlloc }]);
+                          setNewAlloc({ area: 'sueldos', allocation_type: 'porcentaje', value: 0, notes: '' });
+                        }}
+                        className="px-4 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-bold cursor-pointer"
+                      >
+                        Agregar
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1146,6 +1370,78 @@ export default function Incomes() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Distribution Viewer Modal */}
+      {isDistributionModalOpen && viewingIncome && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl max-w-md w-full shadow-2xl p-6 space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-brand-500" />
+                Distribución de Ingreso
+              </h3>
+              <button 
+                onClick={() => setIsDistributionModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-655 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="text-xs space-y-1.5 text-slate-600 dark:text-slate-400">
+              <div><strong>Cliente:</strong> {viewingIncome.clientName}</div>
+              <div><strong>Servicio:</strong> {viewingIncome.serviceTitle}</div>
+              <div><strong>Monto Total:</strong> {formatCurrency(viewingIncome.amount, viewingIncome.currency)}</div>
+              <div><strong>Monto Neto (Base):</strong> {formatCurrency(viewingIncome.includes_vat ? viewingIncome.amount / 1.19 : viewingIncome.amount, viewingIncome.currency)}</div>
+            </div>
+
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Desglose de Reparto</h4>
+              {viewingAllocations.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-4 text-center">No se ha definido distribución para este ingreso.</p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="text-slate-400 font-bold border-b border-slate-100 dark:border-slate-850">
+                          <th className="pb-1.5">Área</th>
+                          <th className="pb-1.5">Tipo</th>
+                          <th className="pb-1.5 text-right">Valor</th>
+                          <th className="pb-1.5 text-right">Monto</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-855/50">
+                        {viewingAllocations.map((alloc) => (
+                          <tr key={alloc.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10">
+                            <td className="py-2 font-bold capitalize text-slate-700 dark:text-slate-350">{alloc.area}</td>
+                            <td className="py-2 text-slate-500 capitalize">{alloc.allocation_type}</td>
+                            <td className="py-2 text-right font-mono text-slate-500">
+                              {alloc.allocation_type === 'porcentaje' ? `${alloc.value}%` : formatCurrency(alloc.value, viewingIncome.currency)}
+                            </td>
+                            <td className="py-2 text-right font-mono font-bold text-slate-850 dark:text-slate-100">
+                              {formatCurrency(alloc.calculated_amount, viewingIncome.currency)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-850 dark:text-slate-100">
+                    <span>Total Distribuido:</span>
+                    <span>
+                      {formatCurrency(
+                        viewingAllocations.reduce((acc, a) => acc + Number(a.calculated_amount), 0),
+                        viewingIncome.currency
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
