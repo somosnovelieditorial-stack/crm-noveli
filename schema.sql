@@ -280,6 +280,8 @@ CREATE TABLE IF NOT EXISTS expenses (
     includes_vat BOOLEAN NOT NULL DEFAULT FALSE,
     deductible BOOLEAN NOT NULL DEFAULT TRUE,
     notes TEXT,
+    payroll_payment_id UUID,
+    status TEXT NOT NULL DEFAULT 'pagado' CHECK (status IN ('pagado', 'pendiente', 'parcial')),
     exchange_rate NUMERIC(12,4) NOT NULL DEFAULT 1.0000,
     value_converted NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     rate_date DATE,
@@ -805,11 +807,11 @@ CREATE TABLE IF NOT EXISTS payroll_payments (
     staff_id UUID REFERENCES staff(id) ON DELETE CASCADE,
     amount NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     currency TEXT NOT NULL DEFAULT 'CLP' CHECK (currency IN ('CLP', 'USD')),
-    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
     payment_method TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'pagado')),
     notes TEXT,
-    is_operational_expense BOOLEAN NOT NULL DEFAULT TRUE,
+    counts_as_operational_expense BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

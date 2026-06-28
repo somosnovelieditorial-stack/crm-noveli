@@ -106,7 +106,7 @@ export default function Dashboard() {
       // Financials: Period Filter
       const monthIncomes = filterByPeriod(incomes || [], 'date', period);
       const monthExpenses = filterByPeriod(expenses || [], 'date', period);
-      const monthPayroll = filterByPeriod(payroll || [], 'date', period);
+      const monthPayroll = filterByPeriod(payroll || [], 'payment_date', period);
 
       const mPayroll = (monthPayroll || [])
         .filter(p => p.status === 'pagado')

@@ -38,11 +38,11 @@ export default function Staff({ defaultSubTab = 'members' }) {
     staff_id: '',
     amount: 0,
     currency: 'CLP',
-    date: new Date().toISOString().split('T')[0],
+    payment_date: new Date().toISOString().split('T')[0],
     payment_method: 'transferencia',
     status: 'pendiente',
     notes: '',
-    is_operational_expense: true
+    counts_as_operational_expense: true
   });
 
   // Reserve states
@@ -244,11 +244,11 @@ export default function Staff({ defaultSubTab = 'members' }) {
       staff_id: staffList[0]?.id || '',
       amount: staffList[0]?.agreed_payment || 0,
       currency: staffList[0]?.currency || 'CLP',
-      date: new Date().toISOString().split('T')[0],
+      payment_date: new Date().toISOString().split('T')[0],
       payment_method: 'transferencia',
       status: 'pendiente',
       notes: '',
-      is_operational_expense: true
+      counts_as_operational_expense: true
     });
   };
 
@@ -261,6 +261,62 @@ export default function Staff({ defaultSubTab = 'members' }) {
         amount: selected.agreed_payment,
         currency: selected.currency
       }));
+    }
+  };
+
+  const syncExpenseFromPayroll = async (payment, memberName) => {
+    try {
+      if (!payment.counts_as_operational_expense) {
+        const { error } = await supabase.from('expenses').delete().eq('payroll_payment_id', payment.id);
+        if (error) {
+          console.error("Error deleting sync expense details:", error);
+        }
+        return;
+      }
+
+      const { data: existingExps, error: getErr } = await supabase
+        .from('expenses')
+        .select('id')
+        .eq('payroll_payment_id', payment.id);
+
+      if (getErr) {
+        console.error("Error checking existing sync expense:", getErr);
+      }
+
+      const expensePayload = {
+        organization_id: payment.organization_id,
+        user_id: payment.user_id,
+        amount: Number(payment.amount) || 0,
+        currency: payment.currency,
+        date: payment.payment_date,
+        category: 'otros',
+        includes_vat: false,
+        deductible: true,
+        notes: `Sueldo/Pago a personal (${memberName || 'Colaborador'}): ${payment.notes || ''}`.trim(),
+        payroll_payment_id: payment.id,
+        status: payment.status
+      };
+
+      if (existingExps && existingExps.length > 0) {
+        const { error: updateErr } = await supabase
+          .from('expenses')
+          .update(expensePayload)
+          .eq('payroll_payment_id', payment.id);
+        if (updateErr) {
+          console.error("Error updating sync expense details:", updateErr);
+          throw updateErr;
+        }
+      } else {
+        const { error: insertErr } = await supabase
+          .from('expenses')
+          .insert([expensePayload]);
+        if (insertErr) {
+          console.error("Error inserting sync expense details:", insertErr);
+          throw insertErr;
+        }
+      }
+    } catch (err) {
+      console.error("Error synchronizing expense from payroll payment:", err);
     }
   };
 
@@ -280,11 +336,11 @@ export default function Staff({ defaultSubTab = 'members' }) {
         staff_id: payrollForm.staff_id,
         amount: Number(payrollForm.amount) || 0,
         currency: payrollForm.currency,
-        date: payrollForm.date,
+        payment_date: payrollForm.payment_date,
         payment_method: payrollForm.payment_method,
         status: payrollForm.status,
         notes: payrollForm.notes || '',
-        is_operational_expense: !!payrollForm.is_operational_expense,
+        counts_as_operational_expense: !!payrollForm.counts_as_operational_expense,
         organization_id: orgId
       };
 
@@ -292,11 +348,18 @@ export default function Staff({ defaultSubTab = 'members' }) {
         payload.user_id = user.id;
       }
 
-      const { error } = await supabase.from('payroll_payments').insert([payload]);
+      const { data: insertedList, error } = await supabase.from('payroll_payments').insert([payload]).select();
       if (error) {
         console.error("Supabase payroll insert error details:", error);
         throw error;
       }
+      
+      const insertedPayroll = Array.isArray(insertedList) ? insertedList[0] : insertedList;
+      if (insertedPayroll) {
+        const member = staffList.find(s => s.id === insertedPayroll.staff_id);
+        await syncExpenseFromPayroll(insertedPayroll, member ? member.name : '');
+      }
+
       showMessage('Pago a personal registrado exitosamente.');
       setIsPayrollModalOpen(false);
       fetchData();
@@ -316,6 +379,11 @@ export default function Staff({ defaultSubTab = 'members' }) {
         .update({ status: nextStatus })
         .eq('id', payment.id);
       if (error) throw error;
+      
+      const updatedPayment = { ...payment, status: nextStatus };
+      const member = staffList.find(s => s.id === updatedPayment.staff_id);
+      await syncExpenseFromPayroll(updatedPayment, member ? member.name : '');
+
       showMessage(`Pago marcado como ${nextStatus}.`);
       fetchData();
     } catch (err) {
@@ -326,6 +394,9 @@ export default function Staff({ defaultSubTab = 'members' }) {
   const handleDeletePayroll = async (id) => {
     if (window.confirm("¿Eliminar este registro de pago?")) {
       try {
+        const { error: delExpErr } = await supabase.from('expenses').delete().eq('payroll_payment_id', id);
+        if (delExpErr) console.error("Error deleting linked expense:", delExpErr);
+
         const { error } = await supabase.from('payroll_payments').delete().eq('id', id);
         if (error) throw error;
         showMessage('Registro de pago eliminado.');
@@ -595,13 +666,13 @@ export default function Staff({ defaultSubTab = 'members' }) {
                       <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{pay.staff_name}</td>
                       <td className="p-4 text-slate-500">{pay.staff_role}</td>
                       <td className="p-4 font-bold">{formatCurrency(pay.amount, pay.currency)}</td>
-                      <td className="p-4">{pay.date}</td>
+                      <td className="p-4">{pay.payment_date}</td>
                       <td className="p-4 capitalize">{pay.payment_method}</td>
                       <td className="p-4">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          pay.is_operational_expense ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-slate-50 text-slate-655 border border-slate-200'
+                          pay.counts_as_operational_expense ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-slate-50 text-slate-655 border border-slate-200'
                         }`}>
-                          {pay.is_operational_expense ? 'Sí' : 'No'}
+                          {pay.counts_as_operational_expense ? 'Sí' : 'No'}
                         </span>
                       </td>
                       <td className="p-4">
@@ -914,8 +985,8 @@ export default function Staff({ defaultSubTab = 'members' }) {
                   <input
                     type="date"
                     required
-                    value={payrollForm.date}
-                    onChange={(e) => setPayrollForm({ ...payrollForm, date: e.target.value })}
+                    value={payrollForm.payment_date}
+                    onChange={(e) => setPayrollForm({ ...payrollForm, payment_date: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-250 text-sm focus:outline-none"
                   />
                 </div>
@@ -953,8 +1024,8 @@ export default function Staff({ defaultSubTab = 'members' }) {
                   <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-600 dark:text-slate-400">
                     <input
                       type="checkbox"
-                      checked={payrollForm.is_operational_expense}
-                      onChange={(e) => setPayrollForm({ ...payrollForm, is_operational_expense: e.target.checked })}
+                      checked={payrollForm.counts_as_operational_expense}
+                      onChange={(e) => setPayrollForm({ ...payrollForm, counts_as_operational_expense: e.target.checked })}
                       className="rounded text-brand-500 focus:ring-brand-500"
                     />
                     <span>Gasto Operacional</span>
