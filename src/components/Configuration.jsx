@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { 
   Settings2, Building2, Landmark, ShieldAlert,
   Save, Plus, Trash2, Edit2, CheckCircle2, AlertTriangle, ArrowUpDown
@@ -10,8 +10,11 @@ export default function Configuration() {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState({
     id: "settings-1",
+    organization_id: "11111111-1111-1111-1111-111111111111",
     editorial_name: "",
     logo: "",
+    logo_url: "",
+    favicon_url: "",
     email: "",
     address: "",
     base_country: "",
@@ -26,6 +29,9 @@ export default function Configuration() {
   const [stages, setStages] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState({ text: '', type: 'success' });
+
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
 
   // Stage edit states
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
@@ -42,16 +48,86 @@ export default function Configuration() {
     fetchData();
   }, []);
 
+  const uploadBrandAsset = async (file, assetType) => {
+    const orgId = await getValidOrgId();
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'svg', 'ico'];
+    if (!allowedExts.includes(fileExt)) {
+      throw new Error('Formato no permitido. Solo se aceptan: JPG, PNG, WEBP, SVG, ICO.');
+    }
+
+    const storagePath = `${orgId}/${assetType}_${Date.now()}.${fileExt}`;
+
+    if (isMock) {
+      return `mock://brand-assets/${storagePath}`;
+    } else {
+      const { error: uploadErr } = await supabase.storage
+        .from('brand-assets')
+        .upload(storagePath, file, { upsert: true });
+
+      if (uploadErr) {
+        console.error("Supabase storage upload error complete:", uploadErr);
+        throw uploadErr;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('brand-assets')
+        .getPublicUrl(storagePath);
+      
+      return publicUrlData?.publicUrl || '';
+    }
+  };
+
+  const handleLogoChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    setMessage({ text: '', type: 'success' });
+    try {
+      const url = await uploadBrandAsset(file, 'logo');
+      setSettings(prev => ({ ...prev, logo_url: url }));
+      setMessage({ text: 'Logo subido temporalmente. Guarda los cambios para aplicar.', type: 'success' });
+    } catch (err) {
+      console.error("Error uploading logo:", err);
+      alert(err.message || 'Error al subir el logo');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleFaviconChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingFavicon(true);
+    setMessage({ text: '', type: 'success' });
+    try {
+      const url = await uploadBrandAsset(file, 'favicon');
+      setSettings(prev => ({ ...prev, favicon_url: url }));
+      setMessage({ text: 'Favicon subido temporalmente. Guarda los cambios para aplicar.', type: 'success' });
+    } catch (err) {
+      console.error("Error uploading favicon:", err);
+      alert(err.message || 'Error al subir el favicon');
+    } finally {
+      setUploadingFavicon(false);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
+      const orgId = await getValidOrgId();
       const [settingsRes, stagesRes] = await Promise.all([
-        supabase.from('settings').select('*'),
+        supabase.from('settings').select('*').eq('organization_id', orgId),
         supabase.from('editorial_stages').select('*').order('order', { ascending: true })
       ]);
 
       if (settingsRes.data && settingsRes.data.length > 0) {
         setSettings(settingsRes.data[0]);
+      } else {
+        setSettings(prev => ({
+          ...prev,
+          organization_id: orgId
+        }));
       }
       setStages(stagesRes.data || []);
     } catch (err) {
@@ -66,16 +142,65 @@ export default function Configuration() {
     setIsSubmitting(true);
     setMessage({ text: '', type: 'success' });
     try {
-      const { error } = await supabase
-        .from('settings')
-        .update(settings)
-        .eq('id', settings.id);
+      const orgId = await getValidOrgId();
+      
+      const payload = {
+        editorial_name: settings.editorial_name,
+        logo: settings.logo || '',
+        logo_url: settings.logo_url || '',
+        favicon_url: settings.favicon_url || '',
+        email: settings.email || '',
+        address: settings.address || '',
+        base_country: settings.base_country || '',
+        currency_primary: settings.currency_primary || 'CLP',
+        currencies_secondary: settings.currencies_secondary || [],
+        vat_rate: Number(settings.vat_rate) || 19,
+        bank_details: settings.bank_details || '',
+        quotation_notes: settings.quotation_notes || '',
+        quotation_legal: settings.quotation_legal || '',
+        organization_id: orgId
+      };
 
-      if (error) throw error;
+      if (settings.id && !settings.id.startsWith('settings-')) {
+        payload.id = settings.id;
+      }
+
+      const { data, error } = await supabase
+        .from('settings')
+        .upsert(payload, { onConflict: 'organization_id' })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Supabase settings upsert error complete:", error);
+        throw error;
+      }
+
+      if (data) {
+        setSettings(data);
+        
+        if (data.editorial_name) {
+          document.title = data.editorial_name;
+        }
+        
+        const logoOrFavicon = data.favicon_url || data.logo_url;
+        if (logoOrFavicon) {
+          let faviconLink = document.querySelector("link[rel~='icon']");
+          if (!faviconLink) {
+            faviconLink = document.createElement('link');
+            faviconLink.rel = 'icon';
+            document.head.appendChild(faviconLink);
+          }
+          faviconLink.href = logoOrFavicon;
+        }
+
+        window.dispatchEvent(new CustomEvent('editorial-settings-updated', { detail: data }));
+      }
+
       setMessage({ text: 'Configuración general guardada exitosamente.', type: 'success' });
     } catch (err) {
       console.error("Error updating settings:", err);
-      setMessage({ text: 'Error al guardar la configuración.', type: 'error' });
+      setMessage({ text: `Error al guardar la configuración: ${err.message || 'Error desconocido'}`, type: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -271,6 +396,45 @@ export default function Configuration() {
                   onChange={(e) => setSettings({...settings, base_country: e.target.value})}
                   className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
                 />
+              </div>
+
+              {/* Logo Upload & Preview */}
+              <div className="border border-slate-100 dark:border-slate-800 p-4 rounded-xl space-y-3 col-span-1 md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Logo de la Editorial (SVG, PNG, JPG, WEBP)</label>
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,.svg"
+                    onChange={handleLogoChange}
+                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-slate-800 dark:file:text-slate-350"
+                  />
+                  {uploadingLogo && <p className="text-[10px] text-brand-500 font-bold mt-1 animate-pulse">Subiendo logo...</p>}
+                  
+                  {settings.logo_url && (
+                    <div className="mt-2.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-100 dark:border-slate-850 inline-block">
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">Vista Previa del Logo:</p>
+                      <img src={settings.logo_url} alt="Logo de la Editorial" className="max-h-16 max-w-full object-contain rounded" />
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Favicon del Navegador (ICO, PNG, SVG)</label>
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,.svg,.ico"
+                    onChange={handleFaviconChange}
+                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-slate-800 dark:file:text-slate-350"
+                  />
+                  {uploadingFavicon && <p className="text-[10px] text-brand-500 font-bold mt-1 animate-pulse">Subiendo favicon...</p>}
+
+                  {settings.favicon_url && (
+                    <div className="mt-2.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-100 dark:border-slate-850 inline-block">
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">Vista Previa del Favicon:</p>
+                      <img src={settings.favicon_url} alt="Favicon" className="w-8 h-8 object-contain rounded" />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

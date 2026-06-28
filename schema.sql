@@ -419,6 +419,9 @@ CREATE TABLE IF NOT EXISTS settings (
     bank_details TEXT,
     quotation_notes TEXT,
     quotation_legal TEXT,
+    logo_url TEXT,
+    favicon_url TEXT,
+    UNIQUE(organization_id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

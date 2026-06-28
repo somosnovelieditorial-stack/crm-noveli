@@ -827,8 +827,11 @@ const INITIAL_MOCK_DATA = {
   settings: [
     {
       id: "settings-1",
+      organization_id: "11111111-1111-1111-1111-111111111111",
       editorial_name: "Somos Noveli Editorial",
       logo: "",
+      logo_url: "",
+      favicon_url: "",
       email: "contacto@somosnoveli.cl",
       address: "Av. Providencia 1234, Santiago",
       base_country: "Chile",
@@ -1068,6 +1071,54 @@ class MockQueryBuilder {
 
   delete() {
     return new MockMutationBuilder(this, 'delete');
+  }
+
+  upsert(newData, options) {
+    return new MockMutationBuilder(this, 'upsert', newData, options);
+  }
+
+  async _executeUpsert(newData, options) {
+    const db = getMockDb();
+    const records = db[this.table] || [];
+    const onConflict = options?.onConflict || 'id';
+
+    const itemsToUpsert = Array.isArray(newData) ? newData : [newData];
+    const upsertedItems = [];
+
+    for (const item of itemsToUpsert) {
+      const existingIdx = records.findIndex(r => r[onConflict] === item[onConflict]);
+      const current = existingIdx >= 0 ? records[existingIdx] : {};
+      
+      const mergedItem = {
+        id: item.id || current.id || genId(this.table),
+        user_id: item.user_id || current.user_id || getMockUser().id,
+        created_at: current.created_at || new Date().toISOString(),
+        ...current,
+        ...item
+      };
+
+      if (['services', 'incomes', 'expenses', 'quotations'].includes(this.table)) {
+        if (mergedItem.exchange_rate === undefined) {
+          mergedItem.exchange_rate = mergedItem.currency === 'USD' ? 940 : mergedItem.currency === 'EUR' ? 1010 : 1;
+        }
+        const amt = Number(mergedItem.value || mergedItem.amount || 0);
+        mergedItem.value_converted = amt * mergedItem.exchange_rate;
+        mergedItem.rate_date = mergedItem.start_date || mergedItem.date || new Date().toISOString().split('T')[0];
+      }
+
+      if (existingIdx >= 0) {
+        records[existingIdx] = mergedItem;
+      } else {
+        records.push(mergedItem);
+      }
+      upsertedItems.push(mergedItem);
+    }
+
+    db[this.table] = records;
+    saveMockDb(db);
+
+    const returnData = Array.isArray(newData) ? upsertedItems : upsertedItems[0];
+    return { data: JSON.parse(JSON.stringify(returnData)), error: null };
   }
 
   async _executeInsert(newData) {
@@ -1332,10 +1383,11 @@ const getMockUser = () => {
 
 // Mock Mutation Builder to wrap MockQueryBuilder mutations and support standard postgrest chaining
 class MockMutationBuilder {
-  constructor(builder, method, data) {
+  constructor(builder, method, data, options) {
     this.builder = builder;
     this.method = method;
     this.data = data;
+    this.options = options;
     this.selectColumns = null;
     this.isSingle = false;
 
@@ -1387,6 +1439,8 @@ class MockMutationBuilder {
       result = await this.builder._executeUpdate(this.data);
     } else if (this.method === 'delete') {
       result = await this.builder._executeDelete();
+    } else if (this.method === 'upsert') {
+      result = await this.builder._executeUpsert(this.data, this.options);
     }
     if (result && result.data && this.isSingle) {
       if (Array.isArray(result.data)) {

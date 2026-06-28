@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { supabase, isMock } from './supabaseClient';
+import { supabase, isMock, getValidOrgId } from './supabaseClient';
 
 // Original Components
 import Login from './components/Login';
@@ -296,6 +296,80 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(() => getTabFromPath(window.location.pathname));
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  const [editorialSettings, setEditorialSettings] = useState({
+    editorial_name: 'Somos Noveli',
+    logo_url: '',
+    favicon_url: ''
+  });
+
+  const fetchEditorialSettings = async () => {
+    try {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      const { data, error } = await supabase
+        .from('settings')
+        .select('editorial_name, logo_url, favicon_url')
+        .eq('organization_id', orgId);
+        
+      if (!error && data && data.length > 0) {
+        const item = data[0];
+        setEditorialSettings({
+          editorial_name: item.editorial_name || 'Somos Noveli',
+          logo_url: item.logo_url || '',
+          favicon_url: item.favicon_url || ''
+        });
+
+        if (item.editorial_name) {
+          document.title = item.editorial_name;
+        }
+        const faviconSrc = item.favicon_url || item.logo_url;
+        if (faviconSrc) {
+          let faviconLink = document.querySelector("link[rel~='icon']");
+          if (!faviconLink) {
+            faviconLink = document.createElement('link');
+            faviconLink.rel = 'icon';
+            document.head.appendChild(faviconLink);
+          }
+          faviconLink.href = faviconSrc;
+        }
+      }
+    } catch (e) {
+      console.error("Error fetching editorial settings:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchEditorialSettings();
+
+    const handleSettingsUpdate = (e) => {
+      if (e.detail) {
+        const item = e.detail;
+        setEditorialSettings({
+          editorial_name: item.editorial_name || 'Somos Noveli',
+          logo_url: item.logo_url || '',
+          favicon_url: item.favicon_url || ''
+        });
+        if (item.editorial_name) {
+          document.title = item.editorial_name;
+        }
+        const faviconSrc = item.favicon_url || item.logo_url;
+        if (faviconSrc) {
+          let faviconLink = document.querySelector("link[rel~='icon']");
+          if (!faviconLink) {
+            faviconLink = document.createElement('link');
+            faviconLink.rel = 'icon';
+            document.head.appendChild(faviconLink);
+          }
+          faviconLink.href = faviconSrc;
+        }
+      }
+    };
+
+    window.addEventListener('editorial-settings-updated', handleSettingsUpdate);
+    return () => {
+      window.removeEventListener('editorial-settings-updated', handleSettingsUpdate);
+    };
+  }, [user]);
 
   // Sync activeTab to window.location.pathname on popstate (back/forward browser buttons)
   useEffect(() => {
@@ -907,11 +981,17 @@ export default function App() {
           {/* Logo & Branding */}
           <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800 shrink-0">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-brand-500/10 text-brand-600 rounded-lg">
-                <BookOpen className="w-4.5 h-4.5" />
+              <div className="p-1.5 bg-brand-500/10 text-brand-600 rounded-lg flex items-center justify-center min-w-8 min-h-8">
+                {editorialSettings.logo_url ? (
+                  <img src={editorialSettings.logo_url} alt="Logo" className="w-5 h-5 object-contain" />
+                ) : (
+                  <BookOpen className="w-4.5 h-4.5" />
+                )}
               </div>
               <div>
-                <h2 className="text-sm font-extrabold text-slate-800 dark:text-slate-150 font-sans tracking-tight">Somos Noveli</h2>
+                <h2 className="text-sm font-extrabold text-slate-800 dark:text-slate-150 font-sans tracking-tight">
+                  {editorialSettings.editorial_name}
+                </h2>
                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Editorial CRM</p>
               </div>
             </div>
