@@ -180,26 +180,45 @@ export default function Staff({ defaultSubTab = 'members' }) {
     setIsSubmitting(true);
     try {
       const orgId = await getValidOrgId();
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+
       const payload = {
-        ...staffForm,
-        organization_id: orgId,
-        agreed_payment: Number(staffForm.agreed_payment)
+        name: staffForm.name,
+        role: staffForm.role,
+        type: staffForm.type,
+        agreed_payment: Number(staffForm.agreed_payment) || 0,
+        currency: staffForm.currency,
+        frequency: staffForm.frequency,
+        status: staffForm.status,
+        notes: staffForm.notes || '',
+        organization_id: orgId
       };
+
+      if (user) {
+        payload.user_id = user.id;
+      }
 
       if (editingStaff) {
         const { error } = await supabase.from('staff').update(payload).eq('id', editingStaff.id);
-        if (error) throw error;
+        if (error) {
+          console.error("Supabase staff update error details:", error);
+          throw error;
+        }
         showMessage('Miembro del personal actualizado exitosamente.');
       } else {
         const { error } = await supabase.from('staff').insert([payload]);
-        if (error) throw error;
+        if (error) {
+          console.error("Supabase staff insert error details:", error);
+          throw error;
+        }
         showMessage('Nuevo miembro del personal registrado exitosamente.');
       }
       setIsStaffModalOpen(false);
       fetchData();
     } catch (err) {
       console.error("Error saving staff:", err);
-      showMessage('Error al guardar personal.', 'error');
+      showMessage(`Error al guardar personal: ${err.message || 'Error desconocido'}`, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -254,20 +273,36 @@ export default function Staff({ defaultSubTab = 'members' }) {
     setIsSubmitting(true);
     try {
       const orgId = await getValidOrgId();
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+
       const payload = {
-        ...payrollForm,
-        organization_id: orgId,
-        amount: Number(payrollForm.amount)
+        staff_id: payrollForm.staff_id,
+        amount: Number(payrollForm.amount) || 0,
+        currency: payrollForm.currency,
+        date: payrollForm.date,
+        payment_method: payrollForm.payment_method,
+        status: payrollForm.status,
+        notes: payrollForm.notes || '',
+        is_operational_expense: !!payrollForm.is_operational_expense,
+        organization_id: orgId
       };
 
+      if (user) {
+        payload.user_id = user.id;
+      }
+
       const { error } = await supabase.from('payroll_payments').insert([payload]);
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase payroll insert error details:", error);
+        throw error;
+      }
       showMessage('Pago a personal registrado exitosamente.');
       setIsPayrollModalOpen(false);
       fetchData();
     } catch (err) {
       console.error("Error saving payroll payment:", err);
-      showMessage('Error al registrar pago.', 'error');
+      showMessage(`Error al registrar pago: ${err.message || 'Error desconocido'}`, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -318,20 +353,33 @@ export default function Staff({ defaultSubTab = 'members' }) {
     setIsSubmitting(true);
     try {
       const orgId = await getValidOrgId();
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+
       const payload = {
-        ...reserveForm,
-        organization_id: orgId,
-        amount: Number(reserveForm.amount)
+        type: reserveForm.type,
+        amount: Number(reserveForm.amount) || 0,
+        currency: reserveForm.currency,
+        date: reserveForm.date,
+        notes: reserveForm.notes || '',
+        organization_id: orgId
       };
 
+      if (user) {
+        payload.user_id = user.id;
+      }
+
       const { error } = await supabase.from('operational_reserve_movements').insert([payload]);
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase reserve movement insert error details:", error);
+        throw error;
+      }
       showMessage('Movimiento de reserva operacional registrado.');
       setIsReserveModalOpen(false);
       fetchData();
     } catch (err) {
       console.error("Error saving reserve movement:", err);
-      showMessage('Error al registrar movimiento.', 'error');
+      showMessage(`Error al registrar movimiento: ${err.message || 'Error desconocido'}`, 'error');
     } finally {
       setIsSubmitting(false);
     }
