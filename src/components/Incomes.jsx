@@ -480,6 +480,24 @@ export default function Incomes() {
     return matchesSearch && matchesStatus && matchesClient && matchesVat;
   });
 
+  const totals = filteredIncomes.reduce((acc, inc) => {
+    const rate = Number(inc.exchange_rate || 1);
+    const clpAmount = Number(inc.amount) * rate;
+    const vatSplit = calculateVatSplit(inc.amount, inc.includes_vat);
+    const clpNet = Number(vatSplit.net) * rate;
+    const clpVat = Number(vatSplit.vat) * rate;
+
+    acc.totalAmount += clpAmount;
+    if (inc.status === 'pagado') {
+      acc.totalPaid += clpAmount;
+    } else if (inc.status === 'pendiente') {
+      acc.totalPending += clpAmount;
+    }
+    acc.totalNet += clpNet;
+    acc.totalVat += clpVat;
+    return acc;
+  }, { totalAmount: 0, totalPaid: 0, totalPending: 0, totalNet: 0, totalVat: 0 });
+
   const handleExportCSV = () => {
     const csvData = filteredIncomes.map(inc => {
       const vatSplit = calculateVatSplit(inc.amount, inc.includes_vat);
@@ -621,6 +639,30 @@ export default function Incomes() {
               <option value="no">No</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* Totals Summary */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 animate-fade-in">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Ingresado (CLP Equivalent)</span>
+          <p className="text-lg font-black mt-1.5 text-slate-850 dark:text-slate-100">{formatCurrency(totals.totalAmount)}</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Pagado</span>
+          <p className="text-lg font-black mt-1.5 text-emerald-600 dark:text-emerald-500">{formatCurrency(totals.totalPaid)}</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Pendiente</span>
+          <p className="text-lg font-black mt-1.5 text-amber-600 dark:text-amber-500">{formatCurrency(totals.totalPending)}</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Neto</span>
+          <p className="text-lg font-black mt-1.5 text-blue-600 dark:text-blue-500">{formatCurrency(totals.totalNet)}</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">IVA Estimado</span>
+          <p className="text-lg font-black mt-1.5 text-purple-600 dark:text-purple-500">{formatCurrency(totals.totalVat)}</p>
         </div>
       </div>
 

@@ -454,6 +454,10 @@ export default function Expenses() {
     return matchesSearch && matchesCategory && matchesProvider && matchesDeductible;
   });
 
+  const totalAmount = filteredExpenses.reduce((acc, exp) => acc + (Number(exp.amount) * Number(exp.exchange_rate || 1)), 0);
+  const totalDeductible = filteredExpenses.filter(e => e.deductible).reduce((acc, exp) => acc + (Number(exp.amount) * Number(exp.exchange_rate || 1)), 0);
+  const totalNonDeductible = filteredExpenses.filter(e => !e.deductible).reduce((acc, exp) => acc + (Number(exp.amount) * Number(exp.exchange_rate || 1)), 0);
+
   const handleExportCSV = () => {
     const csvData = filteredExpenses.map(exp => {
       const vatSplit = calculateVatSplit(exp.amount, exp.includes_vat);
@@ -572,6 +576,22 @@ export default function Expenses() {
               <option value="no">No (No Deducible)</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* Totals Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white dark:bg-slate-900 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Gastos del Periodo (CLP Equivalent)</span>
+          <p className="text-xl font-black mt-1.5 text-slate-850 dark:text-slate-100">{formatCurrency(totalAmount)}</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Deducible</span>
+          <p className="text-xl font-black mt-1.5 text-emerald-600 dark:text-emerald-500">{formatCurrency(totalDeductible)}</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total No Deducible</span>
+          <p className="text-xl font-black mt-1.5 text-rose-600 dark:text-rose-500">{formatCurrency(totalNonDeductible)}</p>
         </div>
       </div>
 
