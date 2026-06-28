@@ -16,5 +16,20 @@ BEGIN
     END IF;
 END $$;
 
+-- Create the storage bucket if it doesn't exist
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('brand-assets', 'brand-assets', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- Drop existing storage policies if they exist to avoid duplication errors
+DROP POLICY IF EXISTS "Public Access Brand Assets" ON storage.objects;
+DROP POLICY IF EXISTS "Auth Insert Brand Assets" ON storage.objects;
+DROP POLICY IF EXISTS "Auth Update Brand Assets" ON storage.objects;
+
+-- Create policies for brand-assets bucket
+CREATE POLICY "Public Access Brand Assets" ON storage.objects FOR SELECT USING (bucket_id = 'brand-assets');
+CREATE POLICY "Auth Insert Brand Assets" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'brand-assets' AND auth.role() = 'authenticated');
+CREATE POLICY "Auth Update Brand Assets" ON storage.objects FOR UPDATE USING (bucket_id = 'brand-assets' AND auth.role() = 'authenticated');
+
 -- Reload PostgREST schema cache
 NOTIFY pgrst, 'reload schema';
