@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, Component } from 'react';
 import { supabase, isMock } from '../supabaseClient';
 import { formatDate, exportToCSV } from '../utils';
 import { 
@@ -29,7 +29,51 @@ const safeText = (value) => String(value ?? '').toLowerCase()
 const safeIncludes = (value, search) => safeText(value).includes(safeText(search))
 const safeArrayIncludes = (value, item) => Array.isArray(value) ? value.includes(item) : false
 
-export default function Clients({ isReadOnly = false, userRole = 'administrador' }) {
+class ClientsErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 text-center bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 rounded-2xl max-w-2xl mx-auto my-12 shadow-sm animate-fade-in">
+          <div className="p-3 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-2xl w-fit mx-auto mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Ha ocurrido un error en la vista de Clientes</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">La sección falló al renderizar. Por favor, reporta este error al equipo técnico.</p>
+          <div className="text-left bg-slate-100 dark:bg-slate-950 p-4 rounded-xl font-mono text-xs text-rose-600 dark:text-rose-400 overflow-x-auto max-h-48 mb-6 border border-slate-200 dark:border-slate-800">
+            {this.state.error?.toString()}<br />
+            {this.state.error?.stack}
+          </div>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-bold shadow-md shadow-brand-600/10 cursor-pointer"
+          >
+            Recargar Página
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
@@ -3409,5 +3453,13 @@ export default function Clients({ isReadOnly = false, userRole = 'administrador'
         </div>
       )}
     </div>
+  );
+}
+
+export default function Clients(props) {
+  return (
+    <ClientsErrorBoundary>
+      <ClientsContent {...props} />
+    </ClientsErrorBoundary>
   );
 }
