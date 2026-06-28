@@ -568,7 +568,7 @@ export default function Catalog() {
                 <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/30 rounded-xl border border-slate-100 dark:border-slate-850">
                   <div>
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-350 block">Servicio Activo</span>
-                    <span className="text-[10px] text-slate-400 leading-normal">Los servicios activos pueden combinarse en Packs y cargarse en Cotizaciones.</span>
+                    <span className="text-[10px] text-slate-400 leading-normal">Los servicios activos definen las ofertas individuales y pueden combinarse en Packs.</span>
                   </div>
                   <button 
                     type="button"

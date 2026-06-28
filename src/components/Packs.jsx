@@ -694,7 +694,7 @@ export default function Packs() {
                 <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/30 rounded-xl border border-slate-100 dark:border-slate-850">
                   <div>
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-350 block">Pack Activo</span>
-                    <span className="text-[10px] text-slate-400 leading-normal">Los packs activos se pueden cargar de forma rápida en Cotizaciones.</span>
+                    <span className="text-[10px] text-slate-400 leading-normal">Los packs activos definen las ofertas predeterminadas de servicios de la editorial.</span>
                   </div>
                   <button 
                     type="button"

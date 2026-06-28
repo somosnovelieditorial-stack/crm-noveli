@@ -321,7 +321,7 @@ export default function Configuration() {
               : 'border-transparent text-slate-400 hover:text-slate-655'
           }`}
         >
-          Perfil y Cotizaciones
+          Perfil de Editorial
         </button>
         <button
           onClick={() => setActiveTab('workflow')}

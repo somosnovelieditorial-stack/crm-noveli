@@ -15,8 +15,6 @@ import Taxes from './components/Taxes';
 // Advanced Components
 import Catalog from './components/Catalog';
 import Packs from './components/Packs';
-import Quotations from './components/Quotations';
-import QuickReplies from './components/QuickReplies';
 import Documents from './components/Documents';
 import Reports from './components/Reports';
 import Integrations from './components/Integrations';
@@ -80,13 +78,11 @@ const menuGroups = [
   },
   {
     id: 'sales_quotes',
-    label: 'Ventas y Cotizaciones',
+    label: 'Catálogo y Packs',
     icon: <Receipt className="w-4 h-4" />,
     items: [
       { id: 'catalog', label: 'Catálogo', tab: 'catalog' },
-      { id: 'packs', label: 'Packs Editoriales', tab: 'packs' },
-      { id: 'quotations', label: 'Cotizaciones', tab: 'quotations' },
-      { id: 'replies', label: 'Respuestas Rápidas', tab: 'replies' }
+      { id: 'packs', label: 'Packs Editoriales', tab: 'packs' }
     ]
   },
   {
@@ -235,8 +231,6 @@ const getTabFromPath = (path) => {
     'catalogo': 'catalog',
     'catalog': 'catalog',
     'packs': 'packs',
-    'cotizaciones': 'quotations',
-    'quotations': 'quotations',
     'incomes': 'incomes',
     'ingresos': 'incomes',
     'expenses': 'expenses',
@@ -251,8 +245,6 @@ const getTabFromPath = (path) => {
     'reserve': 'reserve',
     'documents': 'documents',
     'documentos': 'documents',
-    'replies': 'replies',
-    'respuestas': 'replies',
     'taxes': 'taxes',
     'impuestos': 'taxes',
     'reports': 'reports',
@@ -279,7 +271,6 @@ const getPathFromTab = (tab) => {
     'completed_sales': '/completed_sales',
     'catalog': '/catalogo',
     'packs': '/packs',
-    'quotations': '/cotizaciones',
     'incomes': '/ingresos',
     'expenses': '/gastos',
     'currency_rates': '/currency_rates',
@@ -287,7 +278,6 @@ const getPathFromTab = (tab) => {
     'staff': '/personal',
     'reserve': '/reserva',
     'documents': '/documentos',
-    'replies': '/replies',
     'taxes': '/taxes',
     'reports': '/reportes',
     'configuration': '/configuration',
@@ -657,16 +647,6 @@ export default function App() {
       });
     }
     
-    // Quotations
-    if (db.quotations) {
-      db.quotations.forEach(q => {
-        const clientName = q.client_id ? db.clients?.find(c => c.id === q.client_id)?.name : q.prospect_id ? db.prospects?.find(p => p.id === q.prospect_id)?.name : null;
-        if ((clientName && clientName.toLowerCase().includes(term)) || q.id.toLowerCase().includes(term) || (q.notes && q.notes.toLowerCase().includes(term))) {
-          results.push({ tab: 'quotations', type: 'Cotización', name: `Cotización: ${clientName || q.id}`, description: `Estado: ${q.status} • Total: ${formatCurrency(q.value_converted || 0, q.currency)}`, id: q.id });
-        }
-      });
-    }
-    
     // Incomes
     if (db.incomes) {
       db.incomes.forEach(i => {
@@ -816,26 +796,6 @@ export default function App() {
       });
     }
     
-    // 6. Cotización vencida (> 15 días desde creación, status borrador/enviada)
-    if (db.quotations) {
-      db.quotations.forEach(q => {
-        if (['borrador', 'enviada'].includes(q.status)) {
-          const created = new Date(q.created_at);
-          const diff = (today - created) / (1000 * 60 * 60 * 24);
-          if (diff > 15) {
-            list.push({
-              id: `notif-quot-expired-${q.id}`,
-              type: 'cotizacion_vencida',
-              title: `Cotización Vencida: ${q.id.substring(0, 8)}...`,
-              desc: `Emitida hace ${Math.floor(diff)} días sin aceptación.`,
-              tab: 'quotations',
-              severity: 'low'
-            });
-          }
-        }
-      });
-    }
-    
     // 7. Tipo de cambio no actualizado hoy
     if (db.exchange_rates) {
       const todayStr = today.toISOString().split('T')[0];
@@ -882,13 +842,11 @@ export default function App() {
     { id: 'completed_sales', label: 'Ventas Finalizadas', icon: <CheckCircle className="w-4.5 h-4.5" /> },
     { id: 'catalog', label: 'Catálogo', icon: <Tag className="w-4.5 h-4.5" /> },
     { id: 'packs', label: 'Packs Editoriales', icon: <Package className="w-4.5 h-4.5" /> },
-    { id: 'quotations', label: 'Cotizaciones', icon: <Receipt className="w-4.5 h-4.5" /> },
     { id: 'incomes', label: 'Ingresos', icon: <DollarSign className="w-4.5 h-4.5" /> },
     { id: 'expenses', label: 'Gastos', icon: <Briefcase className="w-4.5 h-4.5" /> },
     { id: 'currency_rates', label: 'Monedas al día', icon: <Coins className="w-4.5 h-4.5" /> },
     { id: 'providers', label: 'Proveedores', icon: <Contact className="w-4.5 h-4.5" /> },
     { id: 'documents', label: 'Documentos', icon: <FileText className="w-4.5 h-4.5" /> },
-    { id: 'replies', label: 'Respuestas Rápidas', icon: <MessageSquare className="w-4.5 h-4.5" /> },
     { id: 'taxes', label: 'Impuestos', icon: <Percent className="w-4.5 h-4.5" /> },
     { id: 'reports', label: 'Reportes', icon: <BarChart3 className="w-4.5 h-4.5" /> },
     { id: 'configuration', label: 'Configuración', icon: <Settings2 className="w-4.5 h-4.5" /> },
@@ -911,7 +869,6 @@ export default function App() {
       case 'completed_sales': return <CompletedSales {...commonProps} />;
       case 'catalog': return <Catalog {...commonProps} />;
       case 'packs': return <Packs {...commonProps} />;
-      case 'quotations': return <Quotations {...commonProps} />;
       case 'incomes': return <Incomes {...commonProps} />;
       case 'expenses': return <Expenses {...commonProps} />;
       case 'currency_rates': return <CurrencyRates {...commonProps} />;
@@ -919,7 +876,6 @@ export default function App() {
       case 'staff': return <Staff {...commonProps} defaultSubTab="members" />;
       case 'reserve': return <Staff {...commonProps} defaultSubTab="reserve" />;
       case 'documents': return <Documents {...commonProps} />;
-      case 'replies': return <QuickReplies {...commonProps} />;
       case 'taxes': return <Taxes {...commonProps} />;
       case 'reports': return <Reports {...commonProps} />;
       case 'configuration': return <Configuration {...commonProps} />;
