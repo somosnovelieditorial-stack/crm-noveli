@@ -133,22 +133,28 @@ export default function Agenda() {
 
       // 5. Manual events
       manualEventsList.forEach(evt => {
+        const isStageEvent = evt.type === 'etapa_servicio';
+        const isCompleted = evt.status === 'completada' || evt.completed === true;
+
         items.push({
           id: `manual-evt-${evt.id}`,
           title: evt.title,
-          description: evt.description || 'Sin descripción',
+          description: evt.notes || evt.description || 'Sin descripción',
           date: evt.date,
           time: evt.time || '12:00',
-          type: evt.type || 'reunión',
+          type: isStageEvent ? 'entrega' : (evt.type || 'reunión'),
           entity_id: evt.id,
-          completed: false,
-          isManual: true
+          completed: isCompleted,
+          isManual: !isStageEvent
         });
       });
 
       // Filter items according to active tab
       const filteredItems = items.filter(item => {
-        const itemDate = new Date(item.date + 'T' + item.time);
+        if (item.completed) {
+          return false;
+        }
+
         const itemDateOnly = new Date(item.date + 'T00:00:00');
 
         if (filter === 'hoy') {

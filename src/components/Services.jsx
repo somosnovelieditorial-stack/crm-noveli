@@ -29,7 +29,6 @@ export default function Services({ isReadOnly = false }) {
 
   // Expandable sections
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
-  const [expandedChecklistId, setExpandedChecklistId] = useState(null);
   const [expandedDocsId, setExpandedDocsId] = useState(null);
   const [serviceDocuments, setServiceDocuments] = useState([]);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
@@ -52,8 +51,6 @@ export default function Services({ isReadOnly = false }) {
   const [selectedTemplate, setSelectedTemplate] = useState('editorial');
   const [editingStageId, setEditingStageId] = useState(null);
   const [stageEditForm, setStageEditForm] = useState({ name: '', status: '', started_at: '', completed_at: '', notes: '' });
-  const [editingTaskId, setEditingTaskId] = useState(null);
-  const [taskEditForm, setTaskEditForm] = useState({ task: '', status: '', due_date: '', notes: '', responsible: '' });
 
   // Form State
   const [formData, setFormData] = useState({
@@ -79,13 +76,7 @@ export default function Services({ isReadOnly = false }) {
     contract_notes: ''
   });
 
-  // Checklist form inline state
-  const [checklistForm, setChecklistForm] = useState({
-    task: '',
-    responsible: '',
-    due_date: new Date().toISOString().split('T')[0],
-    notes: ''
-  });
+
 
   // Services list filtered for current selected client in form
   const [formServices, setFormServices] = useState([]);
@@ -215,6 +206,120 @@ export default function Services({ isReadOnly = false }) {
     return badges;
   };
 
+  const syncStageEventsToAgenda = async (serviceId) => {
+    try {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      const userRes = await supabase.auth.getUser();
+      const userId = userRes.data?.user?.id || (typeof getMockUser === 'function' ? getMockUser().id : 'mock-user-123');
+
+      // 1. Fetch current service details (we need client_id and book_title)
+      const { data: service, error: serviceErr } = await supabase
+        .from('services')
+        .select('*')
+        .eq('id', serviceId)
+        .single();
+
+      if (serviceErr || !service) {
+        console.error("Error fetching service for agenda sync:", serviceErr);
+        return;
+      }
+
+      // 2. Fetch current stages of the service
+      const { data: stages, error: stagesErr } = await supabase
+        .from('service_stages')
+        .select('*')
+        .eq('service_id', serviceId);
+
+      if (stagesErr) {
+        console.error("Error fetching stages for agenda sync:", stagesErr);
+        return;
+      }
+
+      // 3. Fetch existing agenda events for this service (type = 'etapa_servicio')
+      const { data: existingEvents, error: eventsErr } = await supabase
+        .from('agenda_events')
+        .select('*')
+        .eq('service_id', serviceId)
+        .eq('type', 'etapa_servicio');
+
+      if (eventsErr) {
+        console.error("Error fetching agenda events:", eventsErr);
+        return;
+      }
+
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      // 4. For each stage:
+      for (const stage of (stages || [])) {
+        const eventDate = stage.completed_at || stage.end_date || stage.started_at || stage.start_date;
+        const stageName = stage.name || stage.stage_name;
+        
+        // If there is no date, delete any existing event for this stage
+        if (!eventDate) {
+          const matchingEvent = (existingEvents || []).find(evt => evt.stage_id === stage.id);
+          if (matchingEvent) {
+            await supabase
+              .from('agenda_events')
+              .delete()
+              .eq('id', matchingEvent.id);
+          }
+          continue;
+        }
+
+        // Determine event status:
+        let eventStatus = stage.status || 'pendiente';
+        if (eventStatus !== 'completada' && eventDate < todayStr) {
+          eventStatus = 'vencida';
+        }
+
+        const title = `${stageName} - ${service.book_title}`;
+        const notes = stage.notes || '';
+
+        const eventPayload = {
+          user_id: userId,
+          organization_id: orgId,
+          service_id: serviceId,
+          client_id: service.client_id || null,
+          stage_id: stage.id,
+          title: title,
+          type: 'etapa_servicio',
+          date: eventDate,
+          status: eventStatus,
+          notes: notes,
+          description: notes,
+          category: 'entrega'
+        };
+
+        const matchingEvent = (existingEvents || []).find(evt => evt.stage_id === stage.id);
+
+        if (matchingEvent) {
+          await supabase
+            .from('agenda_events')
+            .update(eventPayload)
+            .eq('id', matchingEvent.id);
+        } else {
+          await supabase
+            .from('agenda_events')
+            .insert([eventPayload]);
+        }
+      }
+
+      // 5. Delete events for stages that no longer exist
+      for (const evt of (existingEvents || [])) {
+        const stillExists = (stages || []).some(st => st.id === evt.stage_id);
+        if (!stillExists) {
+          await supabase
+            .from('agenda_events')
+            .delete()
+            .eq('id', evt.id);
+        }
+      }
+
+    } catch (err) {
+      console.error("Error in syncStageEventsToAgenda:", err);
+    }
+  };
+
   const recalculateServiceProgress = async (serviceId) => {
     try {
       // Fetch service stages
@@ -225,33 +330,11 @@ export default function Services({ isReadOnly = false }) {
 
       if (err1) throw err1;
 
-      // Fetch service checklists
-      const { data: checklists, error: err2 } = await supabase
-        .from('service_checklists')
-        .select('*')
-        .eq('service_id', serviceId);
-
-      if (err2) throw err2;
-
-      // Calculate stages progress
+      // Calculate stages progress (only based on stages now!)
       const totalStages = (stages || []).length;
       const completedStages = (stages || []).filter(st => st.status === 'completada').length;
       const stage_progress = totalStages > 0 ? Math.round((completedStages / totalStages) * 100) : 0;
-
-      // Calculate checklist progress
-      const totalChecklists = (checklists || []).length;
-      const completedChecklists = (checklists || []).filter(chk => chk.status === 'completada' || chk.completed).length;
-      const checklist_progress = totalChecklists > 0 ? Math.round((completedChecklists / totalChecklists) * 100) : 0;
-
-      // Calculate overall progress
-      let progress = 0;
-      if (totalStages > 0 && totalChecklists > 0) {
-        progress = Math.round((stage_progress + checklist_progress) / 2);
-      } else if (totalStages > 0) {
-        progress = stage_progress;
-      } else if (totalChecklists > 0) {
-        progress = checklist_progress;
-      }
+      const progress = stage_progress;
 
       // Determine current stage name
       const sortedStages = [...(stages || [])].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0) || a.id.localeCompare(b.id));
@@ -265,12 +348,14 @@ export default function Services({ isReadOnly = false }) {
         .from('services')
         .update({
           progress,
-          advance_percent: progress, // Update advance_percent too to keep compatibility
+          advance_percent: progress,
           stage_progress,
-          checklist_progress,
           current_stage
         })
         .eq('id', serviceId);
+
+      // Sync calendar events
+      await syncStageEventsToAgenda(serviceId);
 
     } catch (err) {
       console.error("Error recalculating service progress:", err);
@@ -418,36 +503,7 @@ export default function Services({ isReadOnly = false }) {
     }
   };
 
-  const handleSaveChecklistTask = async (serviceId, taskId) => {
-    try {
-      const isCompleted = taskEditForm.status === 'completada';
-      const today = new Date().toISOString().split('T')[0];
 
-      const payload = {
-        task: taskEditForm.task,
-        status: taskEditForm.status,
-        completed: isCompleted,
-        completed_at: isCompleted ? today : null,
-        due_date: taskEditForm.due_date || null,
-        notes: taskEditForm.notes,
-        responsible: taskEditForm.responsible
-      };
-
-      const { error } = await supabase
-        .from('service_checklists')
-        .update(payload)
-        .eq('id', taskId);
-
-      if (error) throw error;
-
-      setEditingTaskId(null);
-      await recalculateServiceProgress(serviceId);
-      await fetchData();
-    } catch (err) {
-      console.error("Error saving checklist task:", err);
-      alert("Error al guardar la tarea.");
-    }
-  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -693,89 +749,7 @@ export default function Services({ isReadOnly = false }) {
     }
   };
 
-  // Checklist Action Handlers
-  const handleAddChecklistTask = async (e, serviceId) => {
-    e.preventDefault();
-    if (isReadOnly) {
-      alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
-      return;
-    }
-    if (!checklistForm.task.trim()) return;
 
-    try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
-      const userRes = await supabase.auth.getUser();
-      const userId = userRes.data?.user?.id || getMockUser().id;
-
-      const { error } = await supabase
-        .from('service_checklists')
-        .insert([{
-          service_id: serviceId,
-          organization_id: orgId,
-          user_id: userId,
-          task: checklistForm.task,
-          status: 'pendiente',
-          completed: false,
-          completed_at: null,
-          responsible: checklistForm.responsible || null,
-          due_date: checklistForm.due_date || null,
-          notes: checklistForm.notes || ''
-        }]);
-
-      if (error) throw error;
-
-      setChecklistForm({
-        task: '',
-        responsible: '',
-        due_date: new Date().toISOString().split('T')[0],
-        notes: ''
-      });
-      await recalculateServiceProgress(serviceId);
-      await fetchData();
-    } catch (err) {
-      console.error('Error adding checklist task:', err);
-      alert('Error al agregar tarea del checklist.');
-    }
-  };
-
-  const handleUpdateChecklistTaskStatus = async (serviceId, taskId, newStatus) => {
-    if (isReadOnly) return;
-    try {
-      const isCompleted = newStatus === 'completada';
-      const today = new Date().toISOString().split('T')[0];
-
-      const { error } = await supabase
-        .from('service_checklists')
-        .update({ 
-          status: newStatus,
-          completed: isCompleted,
-          completed_at: isCompleted ? today : null
-        })
-        .eq('id', taskId);
-
-      if (error) throw error;
-      await recalculateServiceProgress(serviceId);
-      await fetchData();
-    } catch (err) {
-      console.error('Error updating checklist status:', err);
-    }
-  };
-
-  const handleDeleteChecklistTask = async (serviceId, taskId) => {
-    if (window.confirm('¿Deseas eliminar esta tarea del checklist?')) {
-      try {
-        const { error } = await supabase
-          .from('service_checklists')
-          .delete()
-          .eq('id', taskId);
-        if (error) throw error;
-        await recalculateServiceProgress(serviceId);
-        await fetchData();
-      } catch (err) {
-        console.error('Error deleting checklist task:', err);
-      }
-    }
-  };
 
   // Document integration handlers and helper functions
   const getDocTypeColor = (type) => {
@@ -1284,27 +1258,11 @@ export default function Services({ isReadOnly = false }) {
             const duration = getDurationStats(service.start_date, service.estimated_delivery, service.contract_duration_value, service.contract_duration_unit);
             const showConverted = service.currency !== 'CLP';
 
-            // Calculate checklist progress
-            const checklistTasks = service.checklists || [];
-            const totalTasks = checklistTasks.length;
-            const completedTasks = checklistTasks.filter(t => t.status === 'completada' || t.completed).length;
-            const checklistProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-            // Calculate stages progress
+            // Calculate stages progress (overall progress is only based on stages now)
             const stagesList = service.stages || [];
             const totalStages = stagesList.length;
             const completedStages = stagesList.filter(st => st.status === 'completada').length;
-            const stageProgress = totalStages > 0 ? Math.round((completedStages / totalStages) * 100) : 0;
-
-            // Calculate overall progress
-            let overallProgress = 0;
-            if (totalStages > 0 && totalTasks > 0) {
-              overallProgress = Math.round((stageProgress + checklistProgress) / 2);
-            } else if (totalStages > 0) {
-              overallProgress = stageProgress;
-            } else if (totalTasks > 0) {
-              overallProgress = checklistProgress;
-            }
+            const overallProgress = totalStages > 0 ? Math.round((completedStages / totalStages) * 100) : 0;
 
             return (
               <div key={service.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5 space-y-4 relative flex flex-col justify-between hover:shadow-md transition-shadow">
@@ -1395,8 +1353,8 @@ export default function Services({ isReadOnly = false }) {
                     ></div>
                   </div>
                   <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium pt-1">
-                    <span>Etapas: {completedStages}/{totalStages} ({stageProgress}%)</span>
-                    <span>Tareas: {completedTasks}/{totalTasks} ({checklistProgress}%)</span>
+                    <span>Etapas completadas: {completedStages} de {totalStages}</span>
+                    <span>Etapa actual: <strong className="capitalize text-slate-700 dark:text-slate-200">{service.current_stage || 'Sin etapas'}</strong></span>
                   </div>
                 </div>
 
@@ -1417,12 +1375,11 @@ export default function Services({ isReadOnly = false }) {
                   </button>
                 </div>
 
-                {/* TIMELINE & CHECKLIST TRIGGERS */}
+                {/* TIMELINE & DOCUMENTS TRIGGERS */}
                 <div className="flex gap-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex-col sm:flex-row">
                   <button
                     onClick={() => {
                       setExpandedTimelineId(expandedTimelineId === service.id ? null : service.id);
-                      setExpandedChecklistId(null);
                       setExpandedDocsId(null);
                     }}
                     className="flex-1 flex items-center justify-center gap-2 py-1.5 bg-slate-50 dark:bg-slate-955/40 hover:bg-slate-100 dark:hover:bg-slate-950 border border-slate-100 dark:border-slate-850 rounded-xl text-xs font-semibold text-slate-550 dark:text-slate-350 cursor-pointer"
@@ -1433,22 +1390,9 @@ export default function Services({ isReadOnly = false }) {
 
                   <button
                     onClick={() => {
-                      setExpandedChecklistId(expandedChecklistId === service.id ? null : service.id);
-                      setExpandedTimelineId(null);
-                      setExpandedDocsId(null);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 py-1.5 bg-slate-50 dark:bg-slate-955/40 hover:bg-slate-100 dark:hover:bg-slate-950 border border-slate-100 dark:border-slate-850 rounded-xl text-xs font-semibold text-slate-550 dark:text-slate-350 cursor-pointer"
-                  >
-                    <span>Checklist</span>
-                    {expandedChecklistId === service.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </button>
-
-                  <button
-                    onClick={() => {
                       const willExpand = expandedDocsId !== service.id;
                       setExpandedDocsId(willExpand ? service.id : null);
                       setExpandedTimelineId(null);
-                      setExpandedChecklistId(null);
                       if (willExpand) {
                         handleFetchServiceDocuments(service.id);
                       }
@@ -1611,203 +1555,6 @@ export default function Services({ isReadOnly = false }) {
                         );
                       })}
                     </div>
-                  </div>
-                )}
-
-                {/* CHECKLIST DRAWER */}
-                {expandedChecklistId === service.id && (
-                  <div className="mt-2 p-4 border border-slate-100 dark:border-slate-850 rounded-xl bg-slate-50/30 dark:bg-slate-950/20 animate-slide-down space-y-4">
-                    <h4 className="font-bold text-xs text-slate-500 uppercase tracking-wider">Tareas Checklist</h4>
-                    
-                    {checklistTasks.length === 0 ? (
-                      <p className="text-xs text-slate-400 py-3 text-center">No hay tareas creadas para este servicio. Agrega una abajo.</p>
-                    ) : (
-                      <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                        {checklistTasks.map(task => {
-                          const isTaskEditing = editingTaskId === task.id;
-                          const isTaskCompleted = task.status === 'completada' || task.completed;
-
-                          return (
-                            <div key={task.id} className="p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl flex flex-col gap-3 text-xs">
-                              {isTaskEditing ? (
-                                <div className="space-y-3">
-                                  <div>
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 text-left">Descripción</label>
-                                    <input
-                                      type="text"
-                                      value={taskEditForm.task}
-                                      onChange={(e) => setTaskEditForm({ ...taskEditForm, task: e.target.value })}
-                                      className="w-full px-2.5 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded text-xs focus:outline-none"
-                                    />
-                                  </div>
-                                  <div className="grid grid-cols-3 gap-2">
-                                    <div>
-                                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 text-left">Estado</label>
-                                      <select
-                                        value={taskEditForm.status}
-                                        onChange={(e) => setTaskEditForm({ ...taskEditForm, status: e.target.value })}
-                                        className="w-full px-2 py-1.5 border border-slate-200 dark:border-slate-800 rounded text-[11px] font-medium bg-slate-50 dark:bg-slate-950 focus:outline-none"
-                                      >
-                                        <option value="pendiente">Pendiente</option>
-                                        <option value="en proceso">En Proceso</option>
-                                        <option value="completada">Completada</option>
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 text-left">Responsable</label>
-                                      <input
-                                        type="text"
-                                        value={taskEditForm.responsible}
-                                        onChange={(e) => setTaskEditForm({ ...taskEditForm, responsible: e.target.value })}
-                                        className="w-full px-2.5 py-1 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded text-xs focus:outline-none"
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 text-left">F. Límite</label>
-                                      <input
-                                        type="date"
-                                        value={taskEditForm.due_date}
-                                        onChange={(e) => setTaskEditForm({ ...taskEditForm, due_date: e.target.value })}
-                                        className="w-full px-2 py-0.5 border border-slate-200 dark:border-slate-800 rounded text-[10px] focus:outline-none"
-                                      />
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 text-left">Notas</label>
-                                    <input
-                                      type="text"
-                                      value={taskEditForm.notes}
-                                      onChange={(e) => setTaskEditForm({ ...taskEditForm, notes: e.target.value })}
-                                      className="w-full px-2.5 py-1 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded text-xs focus:outline-none"
-                                      placeholder="Comentarios o notas de la tarea..."
-                                    />
-                                  </div>
-                                  <div className="flex gap-2 justify-end">
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingTaskId(null)}
-                                      className="px-2.5 py-1 border border-slate-200 dark:border-slate-800 rounded text-[10px] font-bold hover:bg-slate-50 cursor-pointer"
-                                    >
-                                      Cancelar
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSaveChecklistTask(service.id, task.id)}
-                                      className="px-2.5 py-1 bg-brand-600 hover:bg-brand-500 text-white rounded text-[10px] font-bold cursor-pointer"
-                                    >
-                                      Guardar
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="flex items-start justify-between gap-3 w-full">
-                                  <div className="space-y-1.5 flex-1 text-left">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <input
-                                        type="checkbox"
-                                        checked={isTaskCompleted}
-                                        onChange={(e) => handleUpdateChecklistTaskStatus(service.id, task.id, e.target.checked ? 'completada' : 'pendiente')}
-                                        className="w-3.5 h-3.5 text-brand-600 rounded cursor-pointer"
-                                      />
-                                      <span className={`font-semibold ${isTaskCompleted ? 'line-through text-slate-400' : 'text-slate-805 dark:text-slate-100'}`}>
-                                        {task.task}
-                                      </span>
-                                      <span className={`inline-block px-1.5 py-0.2 rounded text-[8px] font-bold border uppercase tracking-wider ${
-                                        isTaskCompleted 
-                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-450 dark:border-emerald-900' 
-                                          : task.status === 'en proceso'
-                                          ? 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-955/20 dark:text-amber-400 dark:border-amber-900'
-                                          : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-850 dark:text-slate-400 dark:border-slate-800'
-                                      }`}>
-                                        {task.status}
-                                      </span>
-                                    </div>
-                                    <div className="flex gap-3 text-[10px] text-slate-400 font-semibold pl-5">
-                                      {task.responsible && <span>Resp: <strong>{task.responsible}</strong></span>}
-                                      {task.due_date && <span>Límite: <strong>{formatDate(task.due_date)}</strong></span>}
-                                    </div>
-                                    {task.notes && <p className="text-[10px] text-slate-450 italic pl-5">Nota: {task.notes}</p>}
-                                  </div>
-
-                                  <div className="flex gap-1.5 items-center shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditingTaskId(task.id);
-                                        setTaskEditForm({
-                                          task: task.task || '',
-                                          status: task.status || 'pendiente',
-                                          due_date: task.due_date || '',
-                                          notes: task.notes || '',
-                                          responsible: task.responsible || ''
-                                        });
-                                      }}
-                                      className="px-2 py-1 text-[10px] font-bold text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-955/30 rounded border border-transparent hover:border-brand-200/50 cursor-pointer"
-                                    >
-                                      Editar
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteChecklistTask(service.id, task.id)}
-                                      className="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/25 border border-transparent cursor-pointer"
-                                      title="Eliminar tarea"
-                                    >
-                                      <Trash className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Add checklist task inline form */}
-                    <form onSubmit={(e) => handleAddChecklistTask(e, service.id)} className="border-t border-slate-100 dark:border-slate-850 pt-3 space-y-3">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase block">Nueva Tarea</span>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <input
-                          type="text"
-                          required
-                          placeholder="Descripción de la tarea *..."
-                          value={checklistForm.task}
-                          onChange={(e) => setChecklistForm({ ...checklistForm, task: e.target.value })}
-                          className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-xs focus:outline-none"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Responsable (e.g. Diseñador)..."
-                          value={checklistForm.responsible}
-                          onChange={(e) => setChecklistForm({ ...checklistForm, responsible: e.target.value })}
-                          className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-xs focus:outline-none"
-                        />
-                      </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <input
-                          type="date"
-                          required
-                          value={checklistForm.due_date}
-                          onChange={(e) => setChecklistForm({ ...checklistForm, due_date: e.target.value })}
-                          className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-xs focus:outline-none"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Notas opcionales..."
-                          value={checklistForm.notes}
-                          onChange={(e) => setChecklistForm({ ...checklistForm, notes: e.target.value })}
-                          className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-xs focus:outline-none"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl text-[10px] cursor-pointer"
-                      >
-                        + Agregar Tarea
-                      </button>
-                    </form>
                   </div>
                 )}
 

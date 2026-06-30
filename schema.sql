@@ -535,6 +535,9 @@ CREATE TABLE IF NOT EXISTS agenda_events (
     date TEXT,
     time TEXT,
     type TEXT,
+    status TEXT DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'en proceso', 'completada', 'vencida')),
+    notes TEXT,
+    stage_id UUID REFERENCES service_stages(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
