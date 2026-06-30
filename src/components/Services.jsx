@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
-import { formatCurrency, formatDate, filterByPeriod, exportToCSV } from '../utils';
+import { formatCurrency, formatDate, filterByPeriod, exportToCSV, syncPaymentStatus } from '../utils';
 import PeriodFilter from './PeriodFilter';
 import { 
   Plus, Search, Edit2, Trash2, X, BookOpen, User, 
@@ -705,6 +705,9 @@ export default function Services({ isReadOnly = false }) {
           await recalculateServiceProgress(newService.id);
         }
       }
+
+      // Synchronize client payment status, services, and incomes!
+      await syncPaymentStatus(formData.client_id);
 
       await fetchData();
       setIsModalOpen(false);

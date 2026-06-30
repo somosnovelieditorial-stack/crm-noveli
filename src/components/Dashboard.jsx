@@ -184,56 +184,56 @@ export default function Dashboard() {
 
       periodClients.forEach(c => {
         const payStatus = String(c.payment_status || '').toLowerCase().trim();
-        const balDue = parseFloat(c.balance_due) || 0;
-        const totalAgreed = parseFloat(c.total_agreed_amount) || 0;
-        const amtPaid = parseFloat(c.amount_paid) || 0;
+        if (payStatus === 'pagado') return;
+        if (c.balance_due !== null && c.balance_due !== undefined && parseFloat(c.balance_due) <= 0) return;
 
-        const matchesPayment = ['sin pago', 'pendiente', 'pago parcial'].includes(payStatus) || balDue > 0;
         const notLost = !['perdido', 'perdido / rechazado'].includes(String(c.status || '').toLowerCase().trim());
+        if (!notLost) return;
 
-        if (matchesPayment && notLost) {
-          let pendingAmt = 0;
-          if (balDue > 0) {
-            pendingAmt = balDue;
-          } else if (totalAgreed > 0) {
-            pendingAmt = Math.max(0, totalAgreed - amtPaid);
+        let pendingAmt = 0;
+        if (c.balance_due !== null && c.balance_due !== undefined) {
+          pendingAmt = parseFloat(c.balance_due);
+        } else {
+          const totalAgreed = parseFloat(c.total_agreed_amount) || 0;
+          if (totalAgreed > 0) {
+            pendingAmt = totalAgreed - (parseFloat(c.amount_paid) || 0);
           } else {
             const fallbackAmount = parseFloat(c.amount || c.agreed_amount || 0);
-            pendingAmt = Math.max(0, fallbackAmount - amtPaid);
-          }
-
-          if (pendingAmt > 0) {
-            periodPendingCount++;
-            periodPendingVal += convertToClp(pendingAmt, c.currency || c.preferred_currency || 'CLP');
+            pendingAmt = fallbackAmount - (parseFloat(c.amount_paid) || 0);
           }
         }
+
+        if (pendingAmt <= 0) return;
+
+        periodPendingCount++;
+        periodPendingVal += convertToClp(pendingAmt, c.currency || c.preferred_currency || 'CLP');
       });
 
       periodServices.forEach(s => {
         const payStatus = String(s.payment_status || '').toLowerCase().trim();
-        const balDue = parseFloat(s.balance_due) || 0;
-        const totalAgreed = parseFloat(s.total_agreed_amount) || 0;
-        const amtPaid = parseFloat(s.amount_paid) || 0;
+        if (payStatus === 'pagado') return;
+        if (s.balance_due !== null && s.balance_due !== undefined && parseFloat(s.balance_due) <= 0) return;
 
-        const matchesPayment = ['sin pago', 'pendiente', 'pago parcial'].includes(payStatus) || balDue > 0;
         const notClosed = !['cerrado', 'entregado', 'finalizado'].includes(String(s.status || '').toLowerCase().trim());
+        if (!notClosed) return;
 
-        if (matchesPayment && notClosed) {
-          let pendingAmt = 0;
-          if (balDue > 0) {
-            pendingAmt = balDue;
-          } else if (totalAgreed > 0) {
-            pendingAmt = Math.max(0, totalAgreed - amtPaid);
+        let pendingAmt = 0;
+        if (s.balance_due !== null && s.balance_due !== undefined) {
+          pendingAmt = parseFloat(s.balance_due);
+        } else {
+          const totalAgreed = parseFloat(s.total_agreed_amount) || 0;
+          if (totalAgreed > 0) {
+            pendingAmt = totalAgreed - (parseFloat(s.amount_paid) || 0);
           } else {
             const fallbackAmount = parseFloat(s.value || s.amount || 0);
-            pendingAmt = Math.max(0, fallbackAmount - amtPaid);
-          }
-
-          if (pendingAmt > 0) {
-            periodPendingCount++;
-            periodPendingVal += convertToClp(pendingAmt, s.currency || 'CLP');
+            pendingAmt = fallbackAmount - (parseFloat(s.amount_paid) || 0);
           }
         }
+
+        if (pendingAmt <= 0) return;
+
+        periodPendingCount++;
+        periodPendingVal += convertToClp(pendingAmt, s.currency || 'CLP');
       });
 
       // Period Total Available
@@ -310,56 +310,56 @@ export default function Dashboard() {
 
       (clients || []).forEach(c => {
         const payStatus = String(c.payment_status || '').toLowerCase().trim();
-        const balDue = parseFloat(c.balance_due) || 0;
-        const totalAgreed = parseFloat(c.total_agreed_amount) || 0;
-        const amtPaid = parseFloat(c.amount_paid) || 0;
+        if (payStatus === 'pagado') return;
+        if (c.balance_due !== null && c.balance_due !== undefined && parseFloat(c.balance_due) <= 0) return;
 
-        const matchesPayment = ['sin pago', 'pendiente', 'pago parcial'].includes(payStatus) || balDue > 0;
         const notLost = !['perdido', 'perdido / rechazado'].includes(String(c.status || '').toLowerCase().trim());
+        if (!notLost) return;
 
-        if (matchesPayment && notLost) {
-          let pendingAmt = 0;
-          if (balDue > 0) {
-            pendingAmt = balDue;
-          } else if (totalAgreed > 0) {
-            pendingAmt = Math.max(0, totalAgreed - amtPaid);
+        let pendingAmt = 0;
+        if (c.balance_due !== null && c.balance_due !== undefined) {
+          pendingAmt = parseFloat(c.balance_due);
+        } else {
+          const totalAgreed = parseFloat(c.total_agreed_amount) || 0;
+          if (totalAgreed > 0) {
+            pendingAmt = totalAgreed - (parseFloat(c.amount_paid) || 0);
           } else {
             const fallbackAmount = parseFloat(c.amount || c.agreed_amount || 0);
-            pendingAmt = Math.max(0, fallbackAmount - amtPaid);
-          }
-
-          if (pendingAmt > 0) {
-            pendingPaymentsCount++;
-            pendingPaymentsValue += convertToClp(pendingAmt, c.currency || c.preferred_currency || 'CLP');
+            pendingAmt = fallbackAmount - (parseFloat(c.amount_paid) || 0);
           }
         }
+
+        if (pendingAmt <= 0) return;
+
+        pendingPaymentsCount++;
+        pendingPaymentsValue += convertToClp(pendingAmt, c.currency || c.preferred_currency || 'CLP');
       });
 
       (services || []).forEach(s => {
         const payStatus = String(s.payment_status || '').toLowerCase().trim();
-        const balDue = parseFloat(s.balance_due) || 0;
-        const totalAgreed = parseFloat(s.total_agreed_amount) || 0;
-        const amtPaid = parseFloat(s.amount_paid) || 0;
+        if (payStatus === 'pagado') return;
+        if (s.balance_due !== null && s.balance_due !== undefined && parseFloat(s.balance_due) <= 0) return;
 
-        const matchesPayment = ['sin pago', 'pendiente', 'pago parcial'].includes(payStatus) || balDue > 0;
         const notClosed = !['cerrado', 'entregado', 'finalizado'].includes(String(s.status || '').toLowerCase().trim());
+        if (!notClosed) return;
 
-        if (matchesPayment && notClosed) {
-          let pendingAmt = 0;
-          if (balDue > 0) {
-            pendingAmt = balDue;
-          } else if (totalAgreed > 0) {
-            pendingAmt = Math.max(0, totalAgreed - amtPaid);
+        let pendingAmt = 0;
+        if (s.balance_due !== null && s.balance_due !== undefined) {
+          pendingAmt = parseFloat(s.balance_due);
+        } else {
+          const totalAgreed = parseFloat(s.total_agreed_amount) || 0;
+          if (totalAgreed > 0) {
+            pendingAmt = totalAgreed - (parseFloat(s.amount_paid) || 0);
           } else {
             const fallbackAmount = parseFloat(s.value || s.amount || 0);
-            pendingAmt = Math.max(0, fallbackAmount - amtPaid);
-          }
-
-          if (pendingAmt > 0) {
-            pendingPaymentsCount++;
-            pendingPaymentsValue += convertToClp(pendingAmt, s.currency || 'CLP');
+            pendingAmt = fallbackAmount - (parseFloat(s.amount_paid) || 0);
           }
         }
+
+        if (pendingAmt <= 0) return;
+
+        pendingPaymentsCount++;
+        pendingPaymentsValue += convertToClp(pendingAmt, s.currency || 'CLP');
       });
 
       // 8. Contratos Pendientes (overall)

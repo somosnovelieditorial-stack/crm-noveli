@@ -1,6 +1,6 @@
 import React, { useEffect, useState, Component } from 'react';
 import { supabase, isMock } from '../supabaseClient';
-import { formatDate, exportToCSV } from '../utils';
+import { formatDate, exportToCSV, syncPaymentStatus } from '../utils';
 import { 
   Plus, Search, Edit2, Trash2, Eye, X, 
   User, Mail, Phone, Globe, FileText, Download, DollarSign, MapPin, Clock,
@@ -1247,42 +1247,8 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
 
       if (updateError) throw updateError;
 
-      // 2. Sync to incomes table (Crear o actualizar ingreso en incomes)
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id || null;
-
-      const incomePayload = {
-        client_id: client.id,
-        service_id: null,
-        amount: clientCopy.amount_paid,
-        currency: client.preferred_currency || client.currency || 'CLP',
-        date: todayStr,
-        payment_method: client.payment_method || 'transferencia',
-        includes_vat: client.includes_vat || false,
-        status: 'pagado',
-        notes: 'Ingreso generado al marcar cliente como pagado',
-        source: 'cliente',
-        user_id: userId,
-        organization_id: orgId
-      };
-
-      if (existingIncomes && existingIncomes.length > 0) {
-        // Update existing income
-        const { error: updateIncomeErr } = await supabase
-          .from('incomes')
-          .update(incomePayload)
-          .eq('id', existingIncomes[0].id);
-
-        if (updateIncomeErr) throw updateIncomeErr;
-      } else {
-        // Create new income
-        const { error: insertIncomeErr } = await supabase
-          .from('incomes')
-          .insert([incomePayload]);
-
-        if (insertIncomeErr) throw insertIncomeErr;
-      }
+      // 2. Synchronize all services and incomes automatically using the new reusable function
+      await syncPaymentStatus(client.id, true);
 
       // Log activity
       await logActivity('pago recibido', `Cliente marcado como pagado: ${client.name}`, client.id);
