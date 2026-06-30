@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS prospects (
     probability TEXT NOT NULL DEFAULT 'media' CHECK (probability IN ('baja', 'media', 'alta')),
     next_action TEXT,
     followup_date DATE,
+    follow_up_date DATE,
     notes TEXT,
     country TEXT,
     city TEXT,
@@ -150,12 +151,16 @@ CREATE TABLE IF NOT EXISTS prospects (
 
     -- Commercial & billing fields
     total_agreed_amount NUMERIC(12,2) DEFAULT 0.00,
+    agreed_amount NUMERIC(12,2) DEFAULT 0.00,
+    amount NUMERIC(12,2) DEFAULT 0.00,
     includes_vat BOOLEAN DEFAULT FALSE,
-    payment_status TEXT DEFAULT 'sin pago',
+    includes_iva BOOLEAN DEFAULT FALSE,
+    payment_status TEXT DEFAULT 'sin pago' CHECK (payment_status IN ('sin pago', 'pendiente', 'pago parcial', 'pagado')),
     amount_paid NUMERIC(12,2) DEFAULT 0.00,
     balance_due NUMERIC(12,2) DEFAULT 0.00,
     payment_method TEXT,
     paid_at DATE,
+    payment_date DATE,
     payment_link_sent BOOLEAN DEFAULT FALSE,
     payment_link_sent_at DATE,
     contract_sent BOOLEAN DEFAULT FALSE,
@@ -166,17 +171,29 @@ CREATE TABLE IF NOT EXISTS prospects (
     files_received_at DATE,
     ready_to_start BOOLEAN DEFAULT FALSE,
     agreement_notes TEXT,
-    currency TEXT DEFAULT 'CLP',
+    currency TEXT DEFAULT 'CLP' CHECK (currency IN ('CLP', 'USD', 'EUR')),
 
     -- Dynamic requirements & services fields
     selected_services JSONB DEFAULT '[]'::jsonb,
-    service_category TEXT DEFAULT 'editorial',
+    service_category TEXT DEFAULT 'editorial' CHECK (service_category IN ('editorial', 'publicidad', 'diseño', 'asesoría', 'otro')),
     agreement_period_type TEXT,
+    agreement_start_date DATE,
+    agreement_duration_value TEXT,
+    agreement_duration_unit TEXT CHECK (agreement_duration_unit IN ('meses', 'semanas', 'días', 'años')),
+    agreement_end_date DATE,
     materials_received BOOLEAN DEFAULT FALSE,
     materials_received_at DATE,
     partial_payment_authorized BOOLEAN DEFAULT FALSE,
     ready_to_start_reason TEXT,
     services_summary TEXT,
+    status TEXT DEFAULT 'prospecto' CHECK (status IN (
+      'prospecto', 'interesado', 'contrato enviado', 'acuerdo enviado',
+      'link de pago enviado', 'esperando pago', 'pago recibido',
+      'contrato firmado recibido', 'esperando contrato firmado',
+      'esperando manuscrito/archivos', 'esperando archivos/materiales',
+      'listo para iniciar', 'en proceso editorial', 'en proceso',
+      'finalizado', 'perdido / rechazado', 'perdido'
+    )),
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
