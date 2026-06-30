@@ -2076,79 +2076,87 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
       ) : (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+            <table className="w-full text-left border-collapse text-xs table-auto">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 text-slate-400 font-semibold">
-                  <th className="px-6 py-4">Nombre</th>
-                  <th className="px-6 py-4">Contacto</th>
-                  <th className="px-6 py-4">País / Tipo</th>
-                  <th className="px-6 py-4">Divisa Preferida</th>
-                  <th className="px-6 py-4">Estado</th>
-                  <th className="px-6 py-4">F. Creación</th>
-                  <th className="px-6 py-4 text-right">Acciones</th>
+                  <th className="px-3 py-3">Nombre</th>
+                  <th className="px-3 py-3">Contacto</th>
+                  <th className="px-3 py-3">País / Tipo</th>
+                  <th className="px-3 py-3">Divisa</th>
+                  <th className="px-3 py-3">Estado</th>
+                  <th className="px-3 py-3">Creado</th>
+                  <th className="px-3 py-3 text-right sticky right-0 bg-slate-50 dark:bg-slate-950 z-10 shadow-[-4px_0_8px_rgba(0,0,0,0.05)] dark:shadow-[-4px_0_8px_rgba(0,0,0,0.2)]">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
                 {filteredClients.map((client) => (
-                  <tr key={client.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all">
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-800 dark:text-slate-100">{client.name}</div>
-                      {client.city && <span className="text-[10px] text-slate-400">{client.city}</span>}
-                    </td>
-                    <td className="px-6 py-4 space-y-1">
-                      {client.email && (
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                          <Mail className="w-3.5 h-3.5" />
-                          <span>{client.email}</span>
-                        </div>
+                  <tr key={client.id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all">
+                    <td className="px-3 py-3">
+                      <div className="font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[140px]" title={client.name}>
+                        {client.name}
+                      </div>
+                      {client.city && (
+                        <span className="text-[10px] text-slate-400 block truncate max-w-[140px]" title={client.city}>
+                          {client.city}
+                        </span>
                       )}
-                      {client.instagram && (
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                          <InstagramIcon className="w-3.5 h-3.5" />
-                          <span>{client.instagram}</span>
+                    </td>
+                    <td className="px-3 py-3 space-y-0.5">
+                      {client.email && (
+                        <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 max-w-[150px] truncate" title={client.email}>
+                          <Mail className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{client.email}</span>
                         </div>
                       )}
                       {client.phone && (
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                          <Phone className="w-3.5 h-3.5" />
+                        <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+                          <Phone className="w-3 h-3 shrink-0" />
                           <span>{client.phone}</span>
                         </div>
                       )}
+                      {client.instagram && !client.email && !client.phone && (
+                        <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 max-w-[120px] truncate" title={client.instagram}>
+                          <InstagramIcon className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{client.instagram}</span>
+                        </div>
+                      )}
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-slate-700 dark:text-slate-200">{client.country || '-'}</div>
-                      <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wider ${
-                        client.client_type === 'internacional' 
+                    <td className="px-3 py-3">
+                      <div className="font-medium text-slate-700 dark:text-slate-200 text-xs truncate max-w-[90px]" title={client.country || '-'}>
+                        {client.country || '-'}
+                      </div>
+                      <span className={`inline-block text-[8px] font-extrabold px-1 py-0.2 rounded mt-0.5 uppercase tracking-wider ${
+                        String(client.client_type).toLowerCase() === 'internacional' 
                           ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400 border border-purple-200' 
                           : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-350'
                       }`}>
                         {client.client_type || 'nacional'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-mono font-semibold text-xs">
+                    <td className="px-3 py-3 font-mono font-semibold text-xs">
                       {client.preferred_currency || 'CLP'}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border uppercase tracking-wider ${getStatusColor(client.status)}`}>
+                    <td className="px-3 py-3">
+                      <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold border uppercase tracking-wider ${getStatusColor(client.status)}`}>
                         {client.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-xs text-slate-400">
+                    <td className="px-3 py-3 text-[11px] text-slate-400 whitespace-nowrap">
                       {formatDate(client.created_at)}
                     </td>
-                    <td className="px-6 py-4 text-right space-x-1.5 whitespace-nowrap">
+                    <td className="px-3 py-3 text-right space-x-1 whitespace-nowrap sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors z-10 shadow-[-4px_0_8px_rgba(0,0,0,0.05)] dark:shadow-[-4px_0_8px_rgba(0,0,0,0.2)]">
                       <button
                         onClick={() => handleOpenDetailModal(client)}
-                        className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                        className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle"
                         title="Ver detalles"
                       >
-                        <Eye className="w-4 h-4" />
+                        <Eye className="w-3.5 h-3.5" />
                       </button>
                       {!isReadOnly && (
                         <>
                           {client.payment_status === 'pagado' ? (
                             <span 
-                              className="inline-flex p-1.5 rounded-lg border border-emerald-100 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 text-[10px] font-bold tracking-wide select-none cursor-default align-middle"
+                              className="inline-flex items-center px-1.5 py-0.5 rounded border border-emerald-100 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 text-[9px] font-bold tracking-wide select-none cursor-default align-middle"
                               title="Pagado"
                             >
                               Pagado
@@ -2156,25 +2164,25 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
                           ) : (
                             <button
                               onClick={() => handleMarkAsPaid(client)}
-                              className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-450 hover:bg-slate-55 dark:hover:bg-slate-800 cursor-pointer align-middle"
+                              className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-emerald-600 dark:text-emerald-450 hover:bg-slate-55 dark:hover:bg-slate-800 cursor-pointer align-middle"
                               title="Marcar como pagado"
                             >
-                              <DollarSign className="w-4 h-4" />
+                              <DollarSign className="w-3.5 h-3.5" />
                             </button>
                           )}
                           <button
                             onClick={() => handleOpenEditModal(client)}
-                            className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle"
+                            className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle"
                             title="Editar"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleDeleteClient(client.id)}
-                            className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer align-middle"
+                            className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer align-middle"
                             title="Eliminar"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </>
                       )}
