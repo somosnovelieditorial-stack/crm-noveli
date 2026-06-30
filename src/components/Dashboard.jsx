@@ -83,25 +83,99 @@ export default function Dashboard() {
 
       const now = new Date();
       
-      // Filter clients
-      const activeClients = (clients || []).filter(c => c.status === 'activo').length;
+      // 1. Filter active clients
+      const activeClients = (clients || []).filter(c => {
+        const status = String(c.status || '').toLowerCase().trim();
+        const activeStatuses = [
+          'cliente', 'activo', 'en proceso', 'en proceso editorial',
+          'listo para iniciar', 'esperando manuscrito/archivos',
+          'esperando archivos/materiales', 'pago recibido', 'contrato firmado recibido'
+        ];
+        return activeStatuses.includes(status);
+      }).length;
 
-      // Filter prospects
-      const activeProspects = (prospects || []).filter(p => !p.converted_to_client_id).length;
+      // 2. Filter active prospects
+      const activeProspects = (prospects || []).filter(p => {
+        const status = String(p.status || '').toLowerCase().trim();
+        const activeStatuses = [
+          'prospecto', 'interesado', 'acuerdo enviado', 'link de pago enviado',
+          'esperando pago', 'esperando contrato firmado', 'esperando manuscrito/archivos',
+          'esperando archivos/materiales'
+        ];
+        return activeStatuses.includes(status) && !p.converted_to_client_id;
+      }).length;
 
-      // Filter services in process
-      const servicesInProcess = (services || []).filter(s => 
-        !['entregado', 'cerrado'].includes(String(s.status || '').toLowerCase())
-      ).length;
+      // 3. Filter services in process
+      const servicesInProcess = (services || []).filter(s => {
+        const status = String(s.status || '').toLowerCase().trim();
+        const stage = String(s.stage || s.current_stage || '').toLowerCase().trim();
+        const processValues = [
+          'recibido', 'contrato pendiente', 'pago pendiente', 'en revisión',
+          'en corrección', 'en diseño', 'en maquetación', 'en proceso',
+          'en proceso editorial'
+        ];
+        return processValues.includes(status) || processValues.includes(stage);
+      }).length;
 
-      // Pending payments
-      const pendingIncomes = (incomes || []).filter(i => ['pendiente', 'parcial'].includes(String(i.status || '').toLowerCase()));
-      const pendingPaymentsCount = pendingIncomes.length;
-      const pendingPaymentsVal = pendingIncomes.reduce((sum, item) => {
-        // If status is 'parcial', we count 50% as pending for simulation
-        const coef = item.status === 'parcial' ? 0.5 : 1.0;
-        return sum + convertToClp(item.amount * coef, item.currency);
-      }, 0);
+      // 4. Pending payments
+      let pendingPaymentsCount = 0;
+      let pendingPaymentsVal = 0;
+
+      // Sum clients with pending payments
+      (clients || []).forEach(c => {
+        const payStatus = String(c.payment_status || '').toLowerCase().trim();
+        const balDue = parseFloat(c.balance_due) || 0;
+        const totalAgreed = parseFloat(c.total_agreed_amount) || 0;
+        const amtPaid = parseFloat(c.amount_paid) || 0;
+
+        const matchesPayment = ['sin pago', 'pendiente', 'pago parcial'].includes(payStatus) || balDue > 0;
+        const notLost = !['perdido', 'perdido / rechazado'].includes(String(c.status || '').toLowerCase().trim());
+
+        if (matchesPayment && notLost) {
+          let pendingAmt = 0;
+          if (balDue > 0) {
+            pendingAmt = balDue;
+          } else if (totalAgreed > 0) {
+            pendingAmt = Math.max(0, totalAgreed - amtPaid);
+          } else {
+            const fallbackAmount = parseFloat(c.amount || c.agreed_amount || 0);
+            pendingAmt = Math.max(0, fallbackAmount - amtPaid);
+          }
+
+          if (pendingAmt > 0) {
+            pendingPaymentsCount++;
+            pendingPaymentsVal += convertToClp(pendingAmt, c.currency || c.preferred_currency || 'CLP');
+          }
+        }
+      });
+
+      // Sum services with pending payments
+      (services || []).forEach(s => {
+        const payStatus = String(s.payment_status || '').toLowerCase().trim();
+        const balDue = parseFloat(s.balance_due) || 0;
+        const totalAgreed = parseFloat(s.total_agreed_amount) || 0;
+        const amtPaid = parseFloat(s.amount_paid) || 0;
+
+        const matchesPayment = ['sin pago', 'pendiente', 'pago parcial'].includes(payStatus) || balDue > 0;
+        const notClosed = !['cerrado', 'entregado', 'finalizado'].includes(String(s.status || '').toLowerCase().trim());
+
+        if (matchesPayment && notClosed) {
+          let pendingAmt = 0;
+          if (balDue > 0) {
+            pendingAmt = balDue;
+          } else if (totalAgreed > 0) {
+            pendingAmt = Math.max(0, totalAgreed - amtPaid);
+          } else {
+            const fallbackAmount = parseFloat(s.value || s.amount || 0);
+            pendingAmt = Math.max(0, fallbackAmount - amtPaid);
+          }
+
+          if (pendingAmt > 0) {
+            pendingPaymentsCount++;
+            pendingPaymentsVal += convertToClp(pendingAmt, s.currency || 'CLP');
+          }
+        }
+      });
 
       // Financials: Period Filter
       const monthIncomes = filterByPeriod(incomes || [], 'date', period);
