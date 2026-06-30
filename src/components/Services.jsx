@@ -657,6 +657,21 @@ export default function Services({ isReadOnly = false }) {
     });
 
     try {
+      // Rule: If client is already paid, the service must be marked as paid automatically
+      const { data: clientObj } = await supabase
+        .from('clients')
+        .select('payment_status')
+        .eq('id', formData.client_id)
+        .single();
+      
+      const clientIsPaid = clientObj && clientObj.payment_status === 'pagado';
+      if (clientIsPaid) {
+        payload.payment_status = 'pagado';
+        payload.balance_due = 0;
+        payload.amount_paid = parseFloat(formData.total_agreed_amount || formData.value || 0);
+        payload.paid_at = payload.paid_at || new Date().toISOString().split('T')[0];
+      }
+
       if (selectedService) {
         // Edit Mode
         const { error } = await supabase

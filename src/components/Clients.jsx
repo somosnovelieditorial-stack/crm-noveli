@@ -1792,6 +1792,10 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
         }
       }
 
+      // Synchronize client payment status, services, and incomes!
+      const syncTargetId = selectedClient ? selectedClient.id : createdClient.id;
+      await syncPaymentStatus(syncTargetId, formData.payment_status === 'pagado');
+
       await fetchClients();
       setIsModalOpen(false);
     } catch (err) {
