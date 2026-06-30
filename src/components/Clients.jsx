@@ -1140,6 +1140,145 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
     }
   };
 
+  const handleMarkAsPaid = async (client) => {
+    if (isReadOnly) {
+      alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
+      return;
+    }
+
+    if (!window.confirm('¿Marcar este cliente como pagado?')) {
+      return;
+    }
+
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      
+      // Determine amount to mark as paid
+      const amountPaidEmpty = !client.amount_paid || parseFloat(client.amount_paid) === 0;
+      const finalAmountPaid = amountPaidEmpty 
+        ? parseFloat(client.total_agreed_amount || client.agreed_amount || client.amount || 0) 
+        : parseFloat(client.amount_paid);
+
+      // Determine client status: "pago recibido" or maintain if more advanced
+      const lessAdvancedStatuses = [
+        'prospecto', 'interesado', 'contrato enviado', 'acuerdo enviado',
+        'link de pago enviado', 'esperando pago'
+      ];
+      let nextStatus = client.status || 'pago recibido';
+      if (lessAdvancedStatuses.includes(String(client.status).toLowerCase())) {
+        nextStatus = 'pago recibido';
+      }
+
+      // Create a temporary client object to run calculations
+      const clientCopy = {
+        ...client,
+        payment_status: 'pagado',
+        amount_paid: finalAmountPaid,
+        balance_due: 0,
+        paid_at: todayStr,
+        status: nextStatus
+      };
+
+      // Recalculate ready_to_start & ready_to_start_reason
+      const { isReady, reasonText } = calculateIsReadyToStart(clientCopy);
+      clientCopy.ready_to_start = isReady;
+      clientCopy.ready_to_start_reason = reasonText;
+
+      // Auto status update when ready to start / core requirements are met
+      const services = Array.isArray(clientCopy.selected_services) ? clientCopy.selected_services : [];
+      const reqSignedContract = services.length > 0 ? services.some(s => s && s.requires_signed_contract) : true;
+      const reqManuscript = services.length > 0 ? services.some(s => s && s.requires_manuscript) : true;
+      const reqMaterials = services.length > 0 ? services.some(s => s && s.requires_materials) : false;
+
+      const isSignedOk = !reqSignedContract || !!clientCopy.contract_signed_received;
+      const isFilesOk = !reqManuscript || !!clientCopy.files_received;
+      const isMaterialsOk = !reqMaterials || !!clientCopy.materials_received;
+
+      if (isSignedOk && isFilesOk && isMaterialsOk) {
+        if (clientCopy.ready_to_start) {
+          clientCopy.status = 'en proceso';
+        } else {
+          clientCopy.status = 'listo para iniciar';
+        }
+      }
+
+      // 1. Update in clients table in Supabase
+      const { error: updateError } = await supabase
+        .from('clients')
+        .update({
+          payment_status: 'pagado',
+          amount_paid: clientCopy.amount_paid,
+          balance_due: 0,
+          paid_at: clientCopy.paid_at,
+          status: clientCopy.status,
+          ready_to_start: clientCopy.ready_to_start,
+          ready_to_start_reason: clientCopy.ready_to_start_reason
+        })
+        .eq('id', client.id);
+
+      if (updateError) throw updateError;
+
+      // 2. Sync to incomes table (Crear o actualizar ingreso en incomes)
+      const { data: existingIncomes, error: searchError } = await supabase
+        .from('incomes')
+        .select('*')
+        .eq('client_id', client.id)
+        .eq('source', 'cliente');
+
+      if (searchError) {
+        console.error("Error searching existing income:", searchError);
+      }
+
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || null;
+
+      const incomePayload = {
+        client_id: client.id,
+        service_id: null,
+        amount: clientCopy.amount_paid,
+        currency: client.preferred_currency || client.currency || 'CLP',
+        date: todayStr,
+        payment_method: client.payment_method || 'transferencia',
+        includes_vat: client.includes_vat || false,
+        status: 'pagado',
+        notes: 'Ingreso generado al marcar cliente como pagado',
+        source: 'cliente',
+        user_id: userId,
+        organization_id: orgId
+      };
+
+      if (existingIncomes && existingIncomes.length > 0) {
+        // Update existing income
+        const { error: updateIncomeErr } = await supabase
+          .from('incomes')
+          .update(incomePayload)
+          .eq('id', existingIncomes[0].id);
+
+        if (updateIncomeErr) throw updateIncomeErr;
+      } else {
+        // Create new income
+        const { error: insertIncomeErr } = await supabase
+          .from('incomes')
+          .insert([incomePayload]);
+
+        if (insertIncomeErr) throw insertIncomeErr;
+      }
+
+      // Log activity
+      await logActivity('pago recibido', `Cliente marcado como pagado: ${client.name}`, client.id);
+
+      // 3. Refresh list of clients
+      await fetchClients();
+      
+      alert('Cliente marcado como pagado e ingreso registrado correctamente.');
+
+    } catch (err) {
+      console.error('Error marking client as paid:', err);
+      alert('Error al marcar cliente como pagado: ' + err.message);
+    }
+  };
+
   const syncClientIncome = async (clientId, serviceId, data) => {
     const amount = parseFloat(data.amount_paid) || 0;
     const todayStr = new Date().toISOString().split('T')[0];
@@ -2007,16 +2146,32 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
                       </button>
                       {!isReadOnly && (
                         <>
+                          {client.payment_status === 'pagado' ? (
+                            <span 
+                              className="inline-flex p-1.5 rounded-lg border border-emerald-100 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 text-[10px] font-bold tracking-wide select-none cursor-default align-middle"
+                              title="Pagado"
+                            >
+                              Pagado
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleMarkAsPaid(client)}
+                              className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-450 hover:bg-slate-55 dark:hover:bg-slate-800 cursor-pointer align-middle"
+                              title="Marcar como pagado"
+                            >
+                              <DollarSign className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
                             onClick={() => handleOpenEditModal(client)}
-                            className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                            className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle"
                             title="Editar"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteClient(client.id)}
-                            className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
+                            className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer align-middle"
                             title="Eliminar"
                           >
                             <Trash2 className="w-4 h-4" />
