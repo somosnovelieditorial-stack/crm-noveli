@@ -242,12 +242,36 @@ export default function Services({ isReadOnly = false }) {
     setIsSubmitting(true);
     setFormError('');
 
+    const normalizeDate = (value) => value && String(value).trim() !== '' ? value : null;
+
     const payload = {
       ...formData,
       exchange_rate: Number(formData.exchange_rate) || 1,
       value_converted: Number(formData.value) * (Number(formData.exchange_rate) || 1),
       rate_date: formData.start_date
     };
+
+    const dateFields = [
+      'start_date',
+      'estimated_delivery',
+      'estimated_delivery_date',
+      'contract_start_date',
+      'contract_end_date',
+      'paid_at',
+      'payment_date',
+      'payment_link_sent_at',
+      'contract_sent_at',
+      'contract_signed_received_at',
+      'files_received_at',
+      'materials_received_at',
+      'rate_date'
+    ];
+
+    dateFields.forEach(field => {
+      if (payload[field] !== undefined) {
+        payload[field] = normalizeDate(payload[field]);
+      }
+    });
 
     try {
       if (selectedService) {
