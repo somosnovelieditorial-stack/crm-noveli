@@ -6,7 +6,7 @@ import {
   Plus, Search, Edit2, Trash2, X, BookOpen, User, 
   Calendar, ClipboardList, CheckCircle2, PlayCircle, Circle,
   Download, AlertTriangle, Clock, ChevronDown, ChevronUp, Check, Info, Trash,
-  UploadCloud, FileSpreadsheet, Image, File, Eye, FileText
+  UploadCloud, FileSpreadsheet, Image, File, Eye, FileText, Settings, ArrowUp, ArrowDown
 } from 'lucide-react';
 
 export default function Services({ isReadOnly = false }) {
@@ -43,6 +43,17 @@ export default function Services({ isReadOnly = false }) {
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
+
+  // Advanced progress, template and config states
+  const [autoApplyTemplate, setAutoApplyTemplate] = useState(true);
+  const [isStageConfigOpen, setIsStageConfigOpen] = useState(false);
+  const [activeServiceForConfig, setActiveServiceForConfig] = useState(null);
+  const [configStages, setConfigStages] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState('editorial');
+  const [editingStageId, setEditingStageId] = useState(null);
+  const [stageEditForm, setStageEditForm] = useState({ name: '', status: '', started_at: '', completed_at: '', notes: '' });
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [taskEditForm, setTaskEditForm] = useState({ task: '', status: '', due_date: '', notes: '', responsible: '' });
 
   // Form State
   const [formData, setFormData] = useState({
@@ -121,6 +132,322 @@ export default function Services({ isReadOnly = false }) {
       }
     }
   }, [formData.start_date, formData.contract_duration_value, formData.contract_duration_unit]);
+
+  const STAGE_TEMPLATES = {
+    editorial: [
+      { name: 'Recepción de material', description: '', order_index: 0, status: 'pendiente' },
+      { name: 'Revisión inicial', description: '', order_index: 1, status: 'pendiente' },
+      { name: 'Corrección', description: '', order_index: 2, status: 'pendiente' },
+      { name: 'Diseño de portada', description: '', order_index: 3, status: 'pendiente' },
+      { name: 'Maquetación', description: '', order_index: 4, status: 'pendiente' },
+      { name: 'Revisión del autor', description: '', order_index: 5, status: 'pendiente' },
+      { name: 'Ajustes finales', description: '', order_index: 6, status: 'pendiente' },
+      { name: 'Entrega final', description: '', order_index: 7, status: 'pendiente' },
+      { name: 'Cerrado', description: '', order_index: 8, status: 'pendiente' }
+    ],
+    publicidad: [
+      { name: 'Acuerdo confirmado', description: '', order_index: 0, status: 'pendiente' },
+      { name: 'Pago confirmado', description: '', order_index: 1, status: 'pendiente' },
+      { name: 'Material recibido', description: '', order_index: 2, status: 'pendiente' },
+      { name: 'Diseño o preparación de publicación', description: '', order_index: 3, status: 'pendiente' },
+      { name: 'Programación de campaña', description: '', order_index: 4, status: 'pendiente' },
+      { name: 'Publicación realizada', description: '', order_index: 5, status: 'pendiente' },
+      { name: 'Historias / reposts activos', description: '', order_index: 6, status: 'pendiente' },
+      { name: 'Cierre de campaña', description: '', order_index: 7, status: 'pendiente' },
+      { name: 'Informe o seguimiento final', description: '', order_index: 8, status: 'pendiente' }
+    ],
+    diseño: [
+      { name: 'Briefing recibido', description: '', order_index: 0, status: 'pendiente' },
+      { name: 'Referencias recibidas', description: '', order_index: 1, status: 'pendiente' },
+      { name: 'Primera propuesta', description: '', order_index: 2, status: 'pendiente' },
+      { name: 'Revisión del autor', description: '', order_index: 3, status: 'pendiente' },
+      { name: 'Ajustes', description: '', order_index: 4, status: 'pendiente' },
+      { name: 'Aprobación final', description: '', order_index: 5, status: 'pendiente' },
+      { name: 'Entrega de archivos finales', description: '', order_index: 6, status: 'pendiente' }
+    ],
+    asesoría: [
+      { name: 'Pago confirmado', description: '', order_index: 0, status: 'pendiente' },
+      { name: 'Fecha definida', description: '', order_index: 1, status: 'pendiente' },
+      { name: 'Sesión realizada', description: '', order_index: 2, status: 'pendiente' },
+      { name: 'Material complementario enviado', description: '', order_index: 3, status: 'pendiente' },
+      { name: 'Cerrado', description: '', order_index: 4, status: 'pendiente' }
+    ]
+  };
+
+  const getRecommendedCategory = (type) => {
+    const t = String(type || '').toLowerCase();
+    if (['corrección', 'maquetación', 'ebook', 'libro físico', 'derechos de autor'].includes(t)) {
+      return 'editorial';
+    }
+    if (['portada', 'diseño'].includes(t)) {
+      return 'diseño';
+    }
+    if (['difusión', 'publicidad'].includes(t)) {
+      return 'publicidad';
+    }
+    if (['asesoría de publicación', 'asesoría'].includes(t)) {
+      return 'asesoría';
+    }
+    return 'editorial';
+  };
+
+  const getServiceBadges = (service, duration) => {
+    const badges = [];
+    const isFinalizado = service.status === 'cerrado' || service.status === 'entregado' || service.advance_percent === 100;
+    
+    if (isFinalizado) {
+      badges.push({ text: 'Finalizado', classes: 'bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-800 dark:text-slate-205' });
+    } else {
+      if (service.status === 'recibido' || service.advance_percent === 0) {
+        badges.push({ text: 'Pendiente', classes: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-955/20 dark:text-blue-400 dark:border-blue-900' });
+      } else {
+        badges.push({ text: 'En proceso', classes: 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-955/20 dark:text-amber-400 dark:border-amber-900' });
+      }
+
+      if (duration.alertLate) {
+        badges.push({ text: 'Atrasado', classes: 'bg-rose-50 text-rose-700 border-rose-100 dark:bg-rose-955/20 dark:text-rose-455 dark:border-rose-900' });
+      } else if (duration.alertNear) {
+        badges.push({ text: 'Próximo a vencer', classes: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800' });
+      } else {
+        badges.push({ text: 'En plazo', classes: 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-955/20 dark:text-emerald-450 dark:border-emerald-900' });
+      }
+    }
+    return badges;
+  };
+
+  const recalculateServiceProgress = async (serviceId) => {
+    try {
+      // Fetch service stages
+      const { data: stages, error: err1 } = await supabase
+        .from('service_stages')
+        .select('*')
+        .eq('service_id', serviceId);
+
+      if (err1) throw err1;
+
+      // Fetch service checklists
+      const { data: checklists, error: err2 } = await supabase
+        .from('service_checklists')
+        .select('*')
+        .eq('service_id', serviceId);
+
+      if (err2) throw err2;
+
+      // Calculate stages progress
+      const totalStages = (stages || []).length;
+      const completedStages = (stages || []).filter(st => st.status === 'completada').length;
+      const stage_progress = totalStages > 0 ? Math.round((completedStages / totalStages) * 100) : 0;
+
+      // Calculate checklist progress
+      const totalChecklists = (checklists || []).length;
+      const completedChecklists = (checklists || []).filter(chk => chk.status === 'completada' || chk.completed).length;
+      const checklist_progress = totalChecklists > 0 ? Math.round((completedChecklists / totalChecklists) * 100) : 0;
+
+      // Calculate overall progress
+      let progress = 0;
+      if (totalStages > 0 && totalChecklists > 0) {
+        progress = Math.round((stage_progress + checklist_progress) / 2);
+      } else if (totalStages > 0) {
+        progress = stage_progress;
+      } else if (totalChecklists > 0) {
+        progress = checklist_progress;
+      }
+
+      // Determine current stage name
+      const sortedStages = [...(stages || [])].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0) || a.id.localeCompare(b.id));
+      const firstActiveStage = sortedStages.find(st => st.status !== 'completada');
+      const current_stage = firstActiveStage 
+        ? (firstActiveStage.name || firstActiveStage.stage_name) 
+        : (sortedStages[sortedStages.length - 1]?.name || sortedStages[sortedStages.length - 1]?.stage_name || 'cerrado');
+
+      // Update service row
+      await supabase
+        .from('services')
+        .update({
+          progress,
+          advance_percent: progress, // Update advance_percent too to keep compatibility
+          stage_progress,
+          checklist_progress,
+          current_stage
+        })
+        .eq('id', serviceId);
+
+    } catch (err) {
+      console.error("Error recalculating service progress:", err);
+    }
+  };
+
+  const handleToggleStageCompleted = async (service, stageId, isCompleted) => {
+    try {
+      const newStatus = isCompleted ? 'completada' : 'pendiente';
+      const today = new Date().toISOString().split('T')[0];
+      
+      const currentStage = (service.stages || []).find(st => st.id === stageId);
+      if (!currentStage) return;
+
+      const completed_at_val = isCompleted 
+        ? (currentStage.completed_at || currentStage.end_date || today) 
+        : null;
+
+      const { error: err1 } = await supabase
+        .from('service_stages')
+        .update({
+          status: newStatus,
+          completed_at: completed_at_val,
+          end_date: completed_at_val
+        })
+        .eq('id', stageId);
+
+      if (err1) throw err1;
+
+      // If completed, set next stage to "en proceso"
+      if (isCompleted) {
+        const sortedStages = [...(service.stages || [])].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0) || a.id.localeCompare(b.id));
+        const currentIndex = sortedStages.findIndex(st => st.id === stageId);
+        if (currentIndex !== -1 && currentIndex < sortedStages.length - 1) {
+          const nextStage = sortedStages[currentIndex + 1];
+          if (nextStage.status === 'pendiente') {
+            await supabase
+              .from('service_stages')
+              .update({
+                status: 'en proceso',
+                started_at: today,
+                start_date: today
+              })
+              .eq('id', nextStage.id);
+          }
+        }
+      }
+
+      await recalculateServiceProgress(service.id);
+      await fetchData();
+    } catch (err) {
+      console.error("Error toggling stage completion:", err);
+      alert("Error al actualizar estado de la etapa.");
+    }
+  };
+
+  const handleSaveStage = async (serviceId, stageId) => {
+    try {
+      const payload = {
+        name: stageEditForm.name,
+        stage_name: stageEditForm.name,
+        status: stageEditForm.status,
+        started_at: stageEditForm.started_at || null,
+        start_date: stageEditForm.started_at || null,
+        completed_at: stageEditForm.completed_at || null,
+        end_date: stageEditForm.completed_at || null,
+        notes: stageEditForm.notes
+      };
+
+      const { error } = await supabase
+        .from('service_stages')
+        .update(payload)
+        .eq('id', stageId);
+
+      if (error) throw error;
+
+      setEditingStageId(null);
+      await recalculateServiceProgress(serviceId);
+      await fetchData();
+    } catch (err) {
+      console.error("Error saving stage:", err);
+      alert("Error al guardar la etapa.");
+    }
+  };
+
+  const handleOpenStageConfig = (service) => {
+    setActiveServiceForConfig(service);
+    setConfigStages(service.stages || []);
+    setSelectedTemplate(getRecommendedCategory(service.type));
+    setIsStageConfigOpen(true);
+  };
+
+  const handleApplyTemplateToConfig = () => {
+    const templateStages = STAGE_TEMPLATES[selectedTemplate] || STAGE_TEMPLATES.editorial;
+    const newStages = templateStages.map((st, idx) => ({
+      ...st,
+      order_index: idx
+    }));
+    setConfigStages(newStages);
+  };
+
+  const handleSaveConfigStages = async () => {
+    try {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      const userRes = await supabase.auth.getUser();
+      const userId = userRes.data?.user?.id || getMockUser().id;
+
+      // 1. Delete old stages
+      const { error: deleteErr } = await supabase
+        .from('service_stages')
+        .delete()
+        .eq('service_id', activeServiceForConfig.id);
+
+      if (deleteErr) throw deleteErr;
+
+      // 2. Insert new stages
+      const stagesToInsert = configStages.map((stage, idx) => ({
+        service_id: activeServiceForConfig.id,
+        organization_id: orgId,
+        user_id: userId,
+        name: stage.name || stage.stage_name || 'Sin nombre',
+        stage_name: stage.name || stage.stage_name || 'Sin nombre',
+        status: stage.status || 'pendiente',
+        order_index: idx,
+        started_at: stage.started_at || stage.start_date || null,
+        completed_at: stage.completed_at || stage.end_date || null,
+        notes: stage.notes || '',
+        active: stage.active !== undefined ? stage.active : true
+      }));
+
+      if (stagesToInsert.length > 0) {
+        const { error: insertErr } = await supabase
+          .from('service_stages')
+          .insert(stagesToInsert);
+
+        if (insertErr) throw insertErr;
+      }
+
+      setIsStageConfigOpen(false);
+      await recalculateServiceProgress(activeServiceForConfig.id);
+      await fetchData();
+    } catch (err) {
+      console.error("Error saving config stages:", err);
+      alert("Error al guardar la configuración de etapas.");
+    }
+  };
+
+  const handleSaveChecklistTask = async (serviceId, taskId) => {
+    try {
+      const isCompleted = taskEditForm.status === 'completada';
+      const today = new Date().toISOString().split('T')[0];
+
+      const payload = {
+        task: taskEditForm.task,
+        status: taskEditForm.status,
+        completed: isCompleted,
+        completed_at: isCompleted ? today : null,
+        due_date: taskEditForm.due_date || null,
+        notes: taskEditForm.notes,
+        responsible: taskEditForm.responsible
+      };
+
+      const { error } = await supabase
+        .from('service_checklists')
+        .update(payload)
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      setEditingTaskId(null);
+      await recalculateServiceProgress(serviceId);
+      await fetchData();
+    } catch (err) {
+      console.error("Error saving checklist task:", err);
+      alert("Error al guardar la tarea.");
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -284,11 +611,43 @@ export default function Services({ isReadOnly = false }) {
         if (error) throw error;
       } else {
         // Add Mode
-        const { error } = await supabase
+        const res = await supabase
           .from('services')
           .insert([payload]);
 
-        if (error) throw error;
+        if (res.error) throw res.error;
+
+        const newService = Array.isArray(res.data) ? res.data[0] : res.data;
+
+        if (autoApplyTemplate && newService && newService.id) {
+          const recCat = getRecommendedCategory(newService.type);
+          const defaultStages = STAGE_TEMPLATES[recCat] || STAGE_TEMPLATES.editorial;
+          const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+          const userRes = await supabase.auth.getUser();
+          const userId = userRes.data?.user?.id || getMockUser().id;
+
+          const stagesToInsert = defaultStages.map((stage, idx) => ({
+            service_id: newService.id,
+            organization_id: orgId,
+            user_id: userId,
+            name: stage.name,
+            stage_name: stage.name,
+            status: idx === 0 ? 'en proceso' : 'pendiente',
+            order_index: idx,
+            started_at: idx === 0 ? new Date().toISOString().split('T')[0] : null,
+            start_date: idx === 0 ? new Date().toISOString().split('T')[0] : null,
+            completed_at: null,
+            end_date: null,
+            notes: '',
+            active: true
+          }));
+
+          if (stagesToInsert.length > 0) {
+            await supabase.from('service_stages').insert(stagesToInsert);
+          }
+
+          await recalculateServiceProgress(newService.id);
+        }
       }
 
       await fetchData();
@@ -344,15 +703,23 @@ export default function Services({ isReadOnly = false }) {
     if (!checklistForm.task.trim()) return;
 
     try {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      const userRes = await supabase.auth.getUser();
+      const userId = userRes.data?.user?.id || getMockUser().id;
+
       const { error } = await supabase
         .from('service_checklists')
         .insert([{
           service_id: serviceId,
+          organization_id: orgId,
+          user_id: userId,
           task: checklistForm.task,
           status: 'pendiente',
-          responsible: checklistForm.responsible,
-          due_date: checklistForm.due_date,
-          notes: checklistForm.notes
+          completed: false,
+          completed_at: null,
+          responsible: checklistForm.responsible || null,
+          due_date: checklistForm.due_date || null,
+          notes: checklistForm.notes || ''
         }]);
 
       if (error) throw error;
@@ -363,6 +730,7 @@ export default function Services({ isReadOnly = false }) {
         due_date: new Date().toISOString().split('T')[0],
         notes: ''
       });
+      await recalculateServiceProgress(serviceId);
       await fetchData();
     } catch (err) {
       console.error('Error adding checklist task:', err);
@@ -370,22 +738,30 @@ export default function Services({ isReadOnly = false }) {
     }
   };
 
-  const handleUpdateChecklistTaskStatus = async (taskId, newStatus) => {
+  const handleUpdateChecklistTaskStatus = async (serviceId, taskId, newStatus) => {
     if (isReadOnly) return;
     try {
+      const isCompleted = newStatus === 'completada';
+      const today = new Date().toISOString().split('T')[0];
+
       const { error } = await supabase
         .from('service_checklists')
-        .update({ status: newStatus })
+        .update({ 
+          status: newStatus,
+          completed: isCompleted,
+          completed_at: isCompleted ? today : null
+        })
         .eq('id', taskId);
 
       if (error) throw error;
+      await recalculateServiceProgress(serviceId);
       await fetchData();
     } catch (err) {
       console.error('Error updating checklist status:', err);
     }
   };
 
-  const handleDeleteChecklistTask = async (taskId) => {
+  const handleDeleteChecklistTask = async (serviceId, taskId) => {
     if (window.confirm('¿Deseas eliminar esta tarea del checklist?')) {
       try {
         const { error } = await supabase
@@ -393,6 +769,7 @@ export default function Services({ isReadOnly = false }) {
           .delete()
           .eq('id', taskId);
         if (error) throw error;
+        await recalculateServiceProgress(serviceId);
         await fetchData();
       } catch (err) {
         console.error('Error deleting checklist task:', err);
@@ -910,8 +1287,24 @@ export default function Services({ isReadOnly = false }) {
             // Calculate checklist progress
             const checklistTasks = service.checklists || [];
             const totalTasks = checklistTasks.length;
-            const completedTasks = checklistTasks.filter(t => t.status === 'completada').length;
+            const completedTasks = checklistTasks.filter(t => t.status === 'completada' || t.completed).length;
             const checklistProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+            // Calculate stages progress
+            const stagesList = service.stages || [];
+            const totalStages = stagesList.length;
+            const completedStages = stagesList.filter(st => st.status === 'completada').length;
+            const stageProgress = totalStages > 0 ? Math.round((completedStages / totalStages) * 100) : 0;
+
+            // Calculate overall progress
+            let overallProgress = 0;
+            if (totalStages > 0 && totalTasks > 0) {
+              overallProgress = Math.round((stageProgress + checklistProgress) / 2);
+            } else if (totalStages > 0) {
+              overallProgress = stageProgress;
+            } else if (totalTasks > 0) {
+              overallProgress = checklistProgress;
+            }
 
             return (
               <div key={service.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5 space-y-4 relative flex flex-col justify-between hover:shadow-md transition-shadow">
@@ -923,19 +1316,11 @@ export default function Services({ isReadOnly = false }) {
                       <span className="text-[10px] font-bold text-brand-600 bg-brand-50 border border-brand-100 px-2 py-0.5 rounded capitalize dark:bg-brand-950/30 dark:text-brand-400 dark:border-brand-900">
                         {service.type}
                       </span>
-                      {duration.alertLate ? (
-                        <span className="inline-flex items-center gap-1 text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded uppercase tracking-wider dark:bg-rose-950/30 dark:text-rose-455">
-                          <AlertTriangle className="w-3 h-3" /> Atrasado
+                      {getServiceBadges(service, duration).map((badge, bidx) => (
+                        <span key={bidx} className={`inline-flex items-center gap-1 text-[9px] font-bold border px-2 py-0.5 rounded uppercase tracking-wider ${badge.classes}`}>
+                          {badge.text}
                         </span>
-                      ) : duration.alertNear ? (
-                        <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded uppercase tracking-wider dark:bg-amber-950/30 dark:text-amber-455">
-                          <Clock className="w-3 h-3" /> Cerca de Vencer
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded uppercase tracking-wider dark:bg-emerald-950/30 dark:text-emerald-455">
-                          En plazo
-                        </span>
-                      )}
+                      ))}
                     </div>
                     <h3 className="font-extrabold text-base text-slate-800 dark:text-slate-100 mt-1">{service.book_title}</h3>
                     <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
@@ -997,35 +1382,39 @@ export default function Services({ isReadOnly = false }) {
                   {duration.autoText}
                 </div>
 
-                {/* Progress bar */}
-                <div className="space-y-1.5">
+                {/* Overall Progress Bar */}
+                <div className="space-y-2 p-4 bg-brand-50/5 dark:bg-brand-950/10 border border-brand-100/30 dark:border-brand-900/30 rounded-2xl">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-bold capitalize">Etapa: <span className="text-slate-700 dark:text-slate-205">{service.current_stage}</span></span>
-                    <span className="font-extrabold text-brand-600 dark:text-brand-400">{service.advance_percent}% de Avance (Flujo)</span>
+                    <span className="text-slate-500 font-extrabold uppercase tracking-wider text-[10px]">Avance General</span>
+                    <span className="font-extrabold text-brand-600 dark:text-brand-400 text-sm">{overallProgress}%</span>
                   </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-3 rounded-full overflow-hidden">
                     <div 
-                      className="bg-brand-500 h-full rounded-full transition-all duration-300"
-                      style={{ width: `${service.advance_percent}%` }}
+                      className="bg-gradient-to-r from-brand-500 to-emerald-500 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${overallProgress}%` }}
                     ></div>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium pt-1">
+                    <span>Etapas: {completedStages}/{totalStages} ({stageProgress}%)</span>
+                    <span>Tareas: {completedTasks}/{totalTasks} ({checklistProgress}%)</span>
                   </div>
                 </div>
 
-                {/* Checklist Progress Bar */}
-                <div className="space-y-1.5 p-3.5 bg-slate-50 dark:bg-slate-950/30 rounded-xl border border-slate-100 dark:border-slate-850">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-bold flex items-center gap-1.5">
-                      <ClipboardList className="w-3.5 h-3.5 text-brand-500" />
-                      Checklist de Tareas: <span className="text-slate-655 dark:text-slate-350">{completedTasks} de {totalTasks} completadas</span>
+                {/* Etapa Actual Card with Config button */}
+                <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-955/30 border border-slate-100 dark:border-slate-850 rounded-xl text-xs">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold block">Etapa Actual</span>
+                    <span className="font-extrabold text-slate-700 dark:text-slate-200 capitalize text-sm">
+                      {service.current_stage || 'Sin etapas configuradas'}
                     </span>
-                    <span className="font-extrabold text-brand-600 dark:text-brand-400">{checklistProgress}% de Tareas</span>
                   </div>
-                  <div className="w-full bg-slate-200 dark:bg-slate-850 h-1.5 rounded-full overflow-hidden">
-                    <div 
-                      className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-                      style={{ width: `${checklistProgress}%` }}
-                    ></div>
-                  </div>
+                  <button
+                    onClick={() => handleOpenStageConfig(service)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-brand-500 text-slate-655 dark:text-slate-350 hover:text-brand-600 dark:hover:text-brand-400 rounded-xl text-[11px] font-bold cursor-pointer transition-all shadow-sm"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    <span>Configurar etapas</span>
+                  </button>
                 </div>
 
                 {/* TIMELINE & CHECKLIST TRIGGERS */}
@@ -1074,51 +1463,153 @@ export default function Services({ isReadOnly = false }) {
                 {/* TIMELINE DRAWER */}
                 {expandedTimelineId === service.id && (
                   <div className="mt-2 p-4 border border-slate-100 dark:border-slate-850 rounded-xl bg-slate-50/30 dark:bg-slate-950/20 animate-slide-down space-y-4">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-150 dark:border-slate-800">
+                      <h4 className="font-bold text-xs text-slate-500 uppercase tracking-wider">Línea de Tiempo del Servicio</h4>
+                      <button
+                        onClick={() => handleOpenStageConfig(service)}
+                        className="px-2.5 py-1 bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-955/20 dark:text-brand-400 border border-brand-200/30 dark:border-brand-900/30 rounded-lg text-[10px] font-bold cursor-pointer"
+                      >
+                        Configurar Etapas
+                      </button>
+                    </div>
+
                     <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 pl-6 space-y-5 py-2">
-                      {(service.stages || []).map((stage) => (
-                        <div key={stage.id} className="relative flex items-start gap-4 text-xs">
-                          <span className="absolute -left-[37px] top-0.5 bg-white dark:bg-slate-900 rounded-full border-2 border-transparent">
-                            {getTimelineStatusIcon(stage.status)}
-                          </span>
-                          <div className="flex-1 space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-extrabold text-slate-800 dark:text-slate-150 capitalize">{stage.stage_name}</span>
-                              <span className={`text-[9px] font-extrabold border px-2 py-0.2 rounded-full uppercase tracking-wider ${stage.status === 'completada' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : stage.status === 'en proceso' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
-                                {stage.status}
-                              </span>
+                      {(service.stages || []).map((stage) => {
+                        const isEditing = editingStageId === stage.id;
+                        const isCompleted = stage.status === 'completada';
+                        const stageName = stage.name || stage.stage_name;
+                        const startedAt = stage.started_at || stage.start_date;
+                        const completedAt = stage.completed_at || stage.end_date;
+
+                        return (
+                          <div key={stage.id} className="relative flex items-start gap-4 text-xs">
+                            <span className="absolute -left-[37px] top-0.5 bg-white dark:bg-slate-900 rounded-full border-2 border-transparent">
+                              {getTimelineStatusIcon(stage.status)}
+                            </span>
+                            
+                            <div className="flex-1 space-y-1">
+                              {isEditing ? (
+                                <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nombre de la Etapa</label>
+                                    <input
+                                      type="text"
+                                      value={stageEditForm.name}
+                                      onChange={(e) => setStageEditForm({ ...stageEditForm, name: e.target.value })}
+                                      className="w-full px-2.5 py-1 border border-slate-200 dark:border-slate-800 rounded text-xs focus:outline-none"
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Estado</label>
+                                      <select
+                                        value={stageEditForm.status}
+                                        onChange={(e) => setStageEditForm({ ...stageEditForm, status: e.target.value })}
+                                        className="w-full px-2 py-1 border border-slate-200 dark:border-slate-800 rounded text-[11px] font-medium bg-slate-50 dark:bg-slate-950 focus:outline-none"
+                                      >
+                                        <option value="pendiente">Pendiente</option>
+                                        <option value="en proceso">En proceso</option>
+                                        <option value="completada">Completada</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">F. Inicio</label>
+                                      <input
+                                        type="date"
+                                        value={stageEditForm.started_at}
+                                        onChange={(e) => setStageEditForm({ ...stageEditForm, started_at: e.target.value })}
+                                        className="w-full px-2 py-0.5 border border-slate-200 dark:border-slate-800 rounded text-[10px] focus:outline-none"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">F. Término</label>
+                                      <input
+                                        type="date"
+                                        value={stageEditForm.completed_at}
+                                        onChange={(e) => setStageEditForm({ ...stageEditForm, completed_at: e.target.value })}
+                                        className="w-full px-2 py-0.5 border border-slate-200 dark:border-slate-800 rounded text-[10px] focus:outline-none"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Notas</label>
+                                    <textarea
+                                      rows="1"
+                                      value={stageEditForm.notes}
+                                      onChange={(e) => setStageEditForm({ ...stageEditForm, notes: e.target.value })}
+                                      className="w-full p-2 border border-slate-200 dark:border-slate-800 rounded text-xs focus:outline-none"
+                                      placeholder="Comentarios sobre la etapa..."
+                                    />
+                                  </div>
+                                  <div className="flex gap-2 justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingStageId(null)}
+                                      className="px-2.5 py-1 border border-slate-200 dark:border-slate-800 rounded text-[10px] font-bold hover:bg-slate-50 cursor-pointer"
+                                    >
+                                      Cancelar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveStage(service.id, stage.id)}
+                                      className="px-2.5 py-1 bg-brand-600 hover:bg-brand-500 text-white rounded text-[10px] font-bold cursor-pointer"
+                                    >
+                                      Guardar
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="space-y-0.5">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <input
+                                        type="checkbox"
+                                        checked={isCompleted}
+                                        onChange={(e) => handleToggleStageCompleted(service, stage.id, e.target.checked)}
+                                        className="w-3.5 h-3.5 text-brand-600 rounded cursor-pointer"
+                                      />
+                                      <span className={`font-extrabold ${isCompleted ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-150'} capitalize`}>
+                                        {stageName}
+                                      </span>
+                                      <span className={`text-[8px] font-extrabold border px-2 py-0.2 rounded-full uppercase tracking-wider ${stage.status === 'completada' ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-450 dark:border-emerald-900' : stage.status === 'en proceso' ? 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-955/20 dark:text-amber-400 dark:border-amber-900' : 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-850 dark:text-slate-400 dark:border-slate-800'}`}>
+                                        {stage.status}
+                                      </span>
+                                    </div>
+                                    <div className="flex gap-3 text-[10px] text-slate-400 font-semibold pl-5">
+                                      {startedAt && <span>Inicio: <strong>{formatDate(startedAt)}</strong></span>}
+                                      {completedAt && <span>Término: <strong>{formatDate(completedAt)}</strong></span>}
+                                    </div>
+                                    {stage.notes && (
+                                      <p className="text-[11px] text-slate-500 italic mt-1 bg-white/50 dark:bg-slate-900/30 p-2 rounded-lg border border-slate-100/30 pl-5">
+                                        "{stage.notes}"
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {!isReadOnly && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingStageId(stage.id);
+                                        setStageEditForm({
+                                          name: stageName || '',
+                                          status: stage.status || 'pendiente',
+                                          started_at: startedAt || '',
+                                          completed_at: completedAt || '',
+                                          notes: stage.notes || ''
+                                        });
+                                      }}
+                                      className="px-2 py-1 text-[10px] font-bold text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-955/30 rounded border border-transparent hover:border-brand-200/50 cursor-pointer"
+                                    >
+                                      Editar
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            {stage.responsible && (
-                              <p className="text-[10px] text-slate-405">Asignado: <span className="font-semibold">{stage.responsible}</span></p>
-                            )}
-                            {stage.start_date && (
-                              <p className="text-[10px] text-slate-400">Plazo: {stage.start_date} {stage.end_date ? `a ${stage.end_date}` : '(En curso)'}</p>
-                            )}
-                            {stage.notes && (
-                              <p className="text-[11px] text-slate-500 italic mt-1 bg-white/50 dark:bg-slate-900/30 p-2 rounded-lg border border-slate-100/30">"{stage.notes}"</p>
-                            )}
                           </div>
-                          <div className="flex gap-1 shrink-0">
-                            <button
-                              onClick={() => handleUpdateStageStatus(service.id, stage.id, 'pendiente')}
-                              className={`px-2 py-1 rounded text-[10px] font-bold border cursor-pointer ${stage.status === 'pendiente' ? 'bg-slate-200 dark:bg-slate-800' : 'bg-white dark:bg-slate-900 hover:bg-slate-50'}`}
-                            >
-                              Pend
-                            </button>
-                            <button
-                              onClick={() => handleUpdateStageStatus(service.id, stage.id, 'en proceso')}
-                              className={`px-2 py-1 rounded text-[10px] font-bold border cursor-pointer ${stage.status === 'en proceso' ? 'bg-amber-500 text-white border-transparent' : 'bg-white dark:bg-slate-900 hover:bg-slate-50'}`}
-                            >
-                              Proc
-                            </button>
-                            <button
-                              onClick={() => handleUpdateStageStatus(service.id, stage.id, 'completada')}
-                              className={`px-2 py-1 rounded text-[10px] font-bold border cursor-pointer ${stage.status === 'completada' ? 'bg-emerald-500 text-white border-transparent' : 'bg-white dark:bg-slate-900 hover:bg-slate-50'}`}
-                            >
-                              Compl
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1132,50 +1623,142 @@ export default function Services({ isReadOnly = false }) {
                       <p className="text-xs text-slate-400 py-3 text-center">No hay tareas creadas para este servicio. Agrega una abajo.</p>
                     ) : (
                       <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                        {checklistTasks.map(task => (
-                          <div key={task.id} className="p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl flex items-start justify-between gap-3 text-xs">
-                            <div className="space-y-1.5 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className={`font-semibold ${task.status === 'completada' ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-100'}`}>
-                                  {task.task}
-                                </span>
-                                <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-bold border uppercase tracking-wider ${
-                                  task.status === 'completada' 
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-450' 
-                                    : task.status === 'en proceso'
-                                    ? 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/20 dark:text-amber-400'
-                                    : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400'
-                                }`}>
-                                  {task.status}
-                                </span>
-                              </div>
-                              <div className="flex gap-3 text-[10px] text-slate-400 font-medium">
-                                {task.responsible && <span>Resp: <strong>{task.responsible}</strong></span>}
-                                {task.due_date && <span>Límite: <strong>{task.due_date}</strong></span>}
-                              </div>
-                              {task.notes && <p className="text-[10px] text-slate-400 italic">Nota: {task.notes}</p>}
-                            </div>
+                        {checklistTasks.map(task => {
+                          const isTaskEditing = editingTaskId === task.id;
+                          const isTaskCompleted = task.status === 'completada' || task.completed;
 
-                            <div className="flex gap-1.5 items-center shrink-0">
-                              <select
-                                value={task.status}
-                                onChange={(e) => handleUpdateChecklistTaskStatus(task.id, e.target.value)}
-                                className="px-2 py-1 border border-slate-200 dark:border-slate-800 rounded text-[10px] font-bold bg-slate-50 dark:bg-slate-950"
-                              >
-                                <option value="pendiente">Pendiente</option>
-                                <option value="en proceso">En Proceso</option>
-                                <option value="completada">Completada</option>
-                              </select>
-                              <button
-                                onClick={() => handleDeleteChecklistTask(task.id)}
-                                className="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/25 border border-transparent cursor-pointer"
-                                title="Eliminar tarea"
-                              >
-                                <Trash className="w-3.5 h-3.5" />
-                              </button>
+                          return (
+                            <div key={task.id} className="p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl flex flex-col gap-3 text-xs">
+                              {isTaskEditing ? (
+                                <div className="space-y-3">
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 text-left">Descripción</label>
+                                    <input
+                                      type="text"
+                                      value={taskEditForm.task}
+                                      onChange={(e) => setTaskEditForm({ ...taskEditForm, task: e.target.value })}
+                                      className="w-full px-2.5 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded text-xs focus:outline-none"
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 text-left">Estado</label>
+                                      <select
+                                        value={taskEditForm.status}
+                                        onChange={(e) => setTaskEditForm({ ...taskEditForm, status: e.target.value })}
+                                        className="w-full px-2 py-1.5 border border-slate-200 dark:border-slate-800 rounded text-[11px] font-medium bg-slate-50 dark:bg-slate-950 focus:outline-none"
+                                      >
+                                        <option value="pendiente">Pendiente</option>
+                                        <option value="en proceso">En Proceso</option>
+                                        <option value="completada">Completada</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 text-left">Responsable</label>
+                                      <input
+                                        type="text"
+                                        value={taskEditForm.responsible}
+                                        onChange={(e) => setTaskEditForm({ ...taskEditForm, responsible: e.target.value })}
+                                        className="w-full px-2.5 py-1 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded text-xs focus:outline-none"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 text-left">F. Límite</label>
+                                      <input
+                                        type="date"
+                                        value={taskEditForm.due_date}
+                                        onChange={(e) => setTaskEditForm({ ...taskEditForm, due_date: e.target.value })}
+                                        className="w-full px-2 py-0.5 border border-slate-200 dark:border-slate-800 rounded text-[10px] focus:outline-none"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 text-left">Notas</label>
+                                    <input
+                                      type="text"
+                                      value={taskEditForm.notes}
+                                      onChange={(e) => setTaskEditForm({ ...taskEditForm, notes: e.target.value })}
+                                      className="w-full px-2.5 py-1 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded text-xs focus:outline-none"
+                                      placeholder="Comentarios o notas de la tarea..."
+                                    />
+                                  </div>
+                                  <div className="flex gap-2 justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingTaskId(null)}
+                                      className="px-2.5 py-1 border border-slate-200 dark:border-slate-800 rounded text-[10px] font-bold hover:bg-slate-50 cursor-pointer"
+                                    >
+                                      Cancelar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveChecklistTask(service.id, task.id)}
+                                      className="px-2.5 py-1 bg-brand-600 hover:bg-brand-500 text-white rounded text-[10px] font-bold cursor-pointer"
+                                    >
+                                      Guardar
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-start justify-between gap-3 w-full">
+                                  <div className="space-y-1.5 flex-1 text-left">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <input
+                                        type="checkbox"
+                                        checked={isTaskCompleted}
+                                        onChange={(e) => handleUpdateChecklistTaskStatus(service.id, task.id, e.target.checked ? 'completada' : 'pendiente')}
+                                        className="w-3.5 h-3.5 text-brand-600 rounded cursor-pointer"
+                                      />
+                                      <span className={`font-semibold ${isTaskCompleted ? 'line-through text-slate-400' : 'text-slate-805 dark:text-slate-100'}`}>
+                                        {task.task}
+                                      </span>
+                                      <span className={`inline-block px-1.5 py-0.2 rounded text-[8px] font-bold border uppercase tracking-wider ${
+                                        isTaskCompleted 
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-450 dark:border-emerald-900' 
+                                          : task.status === 'en proceso'
+                                          ? 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-955/20 dark:text-amber-400 dark:border-amber-900'
+                                          : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-850 dark:text-slate-400 dark:border-slate-800'
+                                      }`}>
+                                        {task.status}
+                                      </span>
+                                    </div>
+                                    <div className="flex gap-3 text-[10px] text-slate-400 font-semibold pl-5">
+                                      {task.responsible && <span>Resp: <strong>{task.responsible}</strong></span>}
+                                      {task.due_date && <span>Límite: <strong>{formatDate(task.due_date)}</strong></span>}
+                                    </div>
+                                    {task.notes && <p className="text-[10px] text-slate-450 italic pl-5">Nota: {task.notes}</p>}
+                                  </div>
+
+                                  <div className="flex gap-1.5 items-center shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingTaskId(task.id);
+                                        setTaskEditForm({
+                                          task: task.task || '',
+                                          status: task.status || 'pendiente',
+                                          due_date: task.due_date || '',
+                                          notes: task.notes || '',
+                                          responsible: task.responsible || ''
+                                        });
+                                      }}
+                                      className="px-2 py-1 text-[10px] font-bold text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-955/30 rounded border border-transparent hover:border-brand-200/50 cursor-pointer"
+                                    >
+                                      Editar
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteChecklistTask(service.id, task.id)}
+                                      className="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/25 border border-transparent cursor-pointer"
+                                      title="Eliminar tarea"
+                                    >
+                                      <Trash className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
 
@@ -1568,6 +2151,22 @@ export default function Services({ isReadOnly = false }) {
                   </div>
                 </div>
 
+                {/* Auto Apply Stages Template (Only on creation) */}
+                {!selectedService && (
+                  <div className="flex items-center gap-2.5 p-3.5 bg-brand-50/10 border border-brand-100 dark:border-brand-900 rounded-xl">
+                    <input
+                      type="checkbox"
+                      id="autoApplyTemplate"
+                      checked={autoApplyTemplate}
+                      onChange={(e) => setAutoApplyTemplate(e.target.checked)}
+                      className="w-4 h-4 text-brand-600 rounded cursor-pointer shrink-0"
+                    />
+                    <label htmlFor="autoApplyTemplate" className="text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer text-left">
+                      Crear y aplicar automáticamente la plantilla de etapas sugerida para <span className="text-brand-600 dark:text-brand-400 capitalize">"{getRecommendedCategory(formData.type)}"</span>
+                    </label>
+                  </div>
+                )}
+
                 {/* Notes */}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Notas Internas</label>
@@ -1598,6 +2197,177 @@ export default function Services({ isReadOnly = false }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIGURAR ETAPAS MODAL */}
+      {isStageConfigOpen && activeServiceForConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-2xl w-full max-w-lg p-6 max-h-[90vh] flex flex-col justify-between animate-scale-up">
+            
+            {/* Header */}
+            <div className="flex justify-between items-start pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <h3 className="text-lg font-extrabold text-slate-800 dark:text-slate-100 text-left">Configurar Etapas</h3>
+                <p className="text-xs text-slate-400 mt-1 text-left">Servicio: <span className="font-semibold text-brand-600 dark:text-brand-400">{activeServiceForConfig.book_title}</span></p>
+              </div>
+              <button
+                onClick={() => setIsStageConfigOpen(false)}
+                className="p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Template Selector Section */}
+            <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-955/30 border border-slate-150 dark:border-slate-850 rounded-2xl space-y-3">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block text-left">Aplicar Plantilla Predefinida</span>
+              <div className="flex gap-2">
+                <select
+                  value={selectedTemplate}
+                  onChange={(e) => setSelectedTemplate(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl text-xs bg-white dark:bg-slate-900 focus:outline-none"
+                >
+                  <option value="editorial">Editorial / eBook / Libro físico</option>
+                  <option value="publicidad">Publicidad / Difusión</option>
+                  <option value="diseño">Diseño / Portada</option>
+                  <option value="asesoría">Asesoría</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={handleApplyTemplateToConfig}
+                  className="px-3.5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold cursor-pointer transition-all shrink-0"
+                >
+                  Aplicar
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 italic text-left">Nota: Aplicar una plantilla reemplazará la configuración actual de etapas de este servicio.</p>
+            </div>
+
+            {/* Configured Stages List */}
+            <div className="flex-1 my-4 overflow-y-auto pr-1 max-h-[45vh] space-y-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block text-left mb-1">Flujo de Etapas ({configStages.length})</span>
+              
+              {configStages.length === 0 ? (
+                <div className="text-center text-xs text-slate-450 py-8 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                  No hay etapas configuradas para este servicio. Agrega una personalizada o aplica una plantilla arriba.
+                </div>
+              ) : (
+                configStages.map((stage, idx) => {
+                  const stageName = stage.name || stage.stage_name || '';
+                  
+                  const moveUp = () => {
+                    if (idx === 0) return;
+                    const list = [...configStages];
+                    const temp = list[idx];
+                    list[idx] = list[idx - 1];
+                    list[idx - 1] = temp;
+                    setConfigStages(list);
+                  };
+
+                  const moveDown = () => {
+                    if (idx === configStages.length - 1) return;
+                    const list = [...configStages];
+                    const temp = list[idx];
+                    list[idx] = list[idx + 1];
+                    list[idx + 1] = temp;
+                    setConfigStages(list);
+                  };
+
+                  const deleteStage = () => {
+                    setConfigStages(configStages.filter((_, i) => i !== idx));
+                  };
+
+                  const renameStage = (newVal) => {
+                    const list = [...configStages];
+                    list[idx] = { ...list[idx], name: newVal, stage_name: newVal };
+                    setConfigStages(list);
+                  };
+
+                  return (
+                    <div key={idx} className="flex items-center gap-2 bg-slate-50/50 dark:bg-slate-950/20 p-2.5 rounded-xl border border-slate-100 dark:border-slate-850">
+                      
+                      {/* Reorder Buttons */}
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={moveUp}
+                          className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 disabled:opacity-30 cursor-pointer"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === configStages.length - 1}
+                          onClick={moveDown}
+                          className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 disabled:opacity-30 cursor-pointer"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Number Indicator */}
+                      <span className="text-[11px] font-extrabold text-slate-400 w-5 text-center">{idx + 1}</span>
+
+                      {/* Stage Name Input */}
+                      <input
+                        type="text"
+                        value={stageName}
+                        onChange={(e) => renameStage(e.target.value)}
+                        placeholder="Nombre de la etapa..."
+                        className="flex-1 px-3 py-1.5 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-xs focus:outline-none"
+                      />
+
+                      {/* Delete Button */}
+                      <button
+                        type="button"
+                        onClick={deleteStage}
+                        className="p-1.5 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/20 border border-transparent cursor-pointer shrink-0"
+                        title="Eliminar etapa"
+                      >
+                        <Trash className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Add custom stage button */}
+            <button
+              type="button"
+              onClick={() => {
+                setConfigStages([
+                  ...configStages,
+                  { name: 'Nueva etapa', stage_name: 'Nueva etapa', status: 'pendiente', order_index: configStages.length }
+                ]);
+              }}
+              className="w-full flex items-center justify-center gap-1 py-2 border border-dashed border-slate-200 hover:border-brand-500 dark:border-slate-800 hover:text-brand-600 rounded-xl text-xs font-bold text-slate-500 cursor-pointer transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Agregar Etapa Personalizada</span>
+            </button>
+
+            {/* Footer Buttons */}
+            <div className="flex gap-3 justify-end pt-4 border-t border-slate-100 dark:border-slate-800 mt-4">
+              <button
+                type="button"
+                onClick={() => setIsStageConfigOpen(false)}
+                className="px-4 py-2 border border-slate-200 dark:border-slate-800 text-slate-655 dark:text-slate-350 rounded-xl text-sm font-semibold hover:bg-slate-55 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveConfigStages}
+                className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer shadow-md"
+              >
+                Guardar Etapas
+              </button>
+            </div>
+
           </div>
         </div>
       )}

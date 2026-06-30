@@ -1001,7 +1001,7 @@ class MockQueryBuilder {
         records = records.map(row => {
           row.client = db.clients.find(c => c.id === row.client_id) || null;
           row.stages = (db.service_stages || []).filter(st => st.service_id === row.id).sort((a, b) => {
-            return a.id.localeCompare(b.id);
+            return (a.order_index ?? 0) - (b.order_index ?? 0) || a.id.localeCompare(b.id);
           });
           row.checklists = (db.service_checklists || []).filter(chk => chk.service_id === row.id);
           return row;
@@ -1858,7 +1858,7 @@ class RealSupabaseQueryBuilder {
         const clients = clientsRes.data || [];
         records = records.map(row => {
           row.client = clients.find(c => c.id === row.client_id) || null;
-          row.stages = stages.filter(st => st.service_id === row.id).sort((a, b) => a.id.localeCompare(b.id));
+          row.stages = stages.filter(st => st.service_id === row.id).sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0) || a.id.localeCompare(b.id));
           row.checklists = checklists.filter(chk => chk.service_id === row.id);
           return row;
         });

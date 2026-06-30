@@ -253,6 +253,8 @@ CREATE TABLE IF NOT EXISTS services (
     selected_services JSONB DEFAULT '[]'::jsonb,
     services_summary TEXT,
     progress INTEGER DEFAULT 0,
+    stage_progress INTEGER DEFAULT 0,
+    checklist_progress INTEGER DEFAULT 0,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -264,11 +266,17 @@ CREATE TABLE IF NOT EXISTS service_stages (
     organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
     stage_name TEXT NOT NULL,
+    name TEXT,
+    description TEXT,
+    order_index INTEGER DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'en proceso', 'completada')),
     start_date DATE,
     end_date DATE,
+    started_at DATE,
+    completed_at DATE,
     responsible TEXT,
     notes TEXT,
+    active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -488,6 +496,8 @@ CREATE TABLE IF NOT EXISTS service_checklists (
     service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
     task TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'en proceso', 'completada')),
+    completed BOOLEAN DEFAULT FALSE,
+    completed_at DATE,
     responsible TEXT,
     due_date DATE,
     notes TEXT,
