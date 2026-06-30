@@ -1146,18 +1146,47 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
       return;
     }
 
-    if (!window.confirm('¿Marcar este cliente como pagado?')) {
-      return;
-    }
-
     try {
+      // 1. Search existing income in incomes table
+      const { data: existingIncomes, error: searchError } = await supabase
+        .from('incomes')
+        .select('*')
+        .eq('client_id', client.id)
+        .eq('source', 'cliente');
+
+      if (searchError) {
+        console.error("Error searching existing income:", searchError);
+      }
+
+      let existingAmount = 0;
+      if (existingIncomes && existingIncomes.length > 0) {
+        existingAmount = parseFloat(existingIncomes[0].amount) || 0;
+      }
+
+      // Determine starting amount
+      let baseAmount = parseFloat(client.total_agreed_amount || client.agreed_amount || client.amount || existingAmount || 0);
+
+      // If the client doesn't have an amount (baseAmount is 0), ask the user to enter the amount!
+      if (baseAmount === 0) {
+        const userInput = window.prompt("El cliente no tiene un valor acordado o monto registrado. Por favor, ingresa el monto total pagado:", "0");
+        if (userInput === null) {
+          // User clicked Cancel
+          return;
+        }
+        const parsedInput = parseFloat(userInput);
+        if (isNaN(parsedInput) || parsedInput < 0) {
+          alert("Monto inválido. Operación cancelada.");
+          return;
+        }
+        baseAmount = parsedInput;
+      }
+
+      if (!window.confirm(`¿Marcar este cliente como pagado por un monto de ${client.currency || client.preferred_currency || 'CLP'} ${baseAmount.toLocaleString()}?`)) {
+        return;
+      }
+
       const todayStr = new Date().toISOString().split('T')[0];
-      
-      // Determine amount to mark as paid
-      const amountPaidEmpty = !client.amount_paid || parseFloat(client.amount_paid) === 0;
-      const finalAmountPaid = amountPaidEmpty 
-        ? parseFloat(client.total_agreed_amount || client.agreed_amount || client.amount || 0) 
-        : parseFloat(client.amount_paid);
+      const finalAmountPaid = baseAmount;
 
       // Determine client status: "pago recibido" or maintain if more advanced
       const lessAdvancedStatuses = [
@@ -1219,16 +1248,6 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
       if (updateError) throw updateError;
 
       // 2. Sync to incomes table (Crear o actualizar ingreso en incomes)
-      const { data: existingIncomes, error: searchError } = await supabase
-        .from('incomes')
-        .select('*')
-        .eq('client_id', client.id)
-        .eq('source', 'cliente');
-
-      if (searchError) {
-        console.error("Error searching existing income:", searchError);
-      }
-
       const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id || null;
