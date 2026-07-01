@@ -958,3 +958,30 @@ CREATE POLICY "Permit all operations for website_books" ON website_books
     USING (true)
     WITH CHECK (true);
 
+-- ==========================================
+-- TABLE: website_settings
+-- ==========================================
+CREATE TABLE IF NOT EXISTS website_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL DEFAULT '11111111-1111-1111-1111-111111111111',
+    user_id UUID,
+    domain TEXT NOT NULL DEFAULT 'somosnovelieditorial.com',
+    www_domain TEXT DEFAULT 'www.somosnovelieditorial.com',
+    public_url TEXT DEFAULT 'https://www.somosnovelieditorial.com/',
+    vercel_preview_url TEXT DEFAULT '',
+    domain_provider VARCHAR(100) DEFAULT 'Google Domains',
+    hosting_provider VARCHAR(100) DEFAULT 'Vercel',
+    domain_status VARCHAR(50) DEFAULT 'conectado',
+    dns_notes TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    CONSTRAINT check_domain_status CHECK (domain_status IN ('pendiente', 'conectado', 'revisar DNS'))
+);
+
+ALTER TABLE website_settings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Permit all operations for website_settings" ON website_settings
+    FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+

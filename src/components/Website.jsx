@@ -3,7 +3,8 @@ import { supabase, isMock } from '../supabaseClient';
 import { 
   Globe, ArrowUpRight, ShieldCheck, Cpu, Layout, Server, ExternalLink, 
   Activity, ArrowLeft, Plus, Check, Eye, EyeOff, Edit, Trash2, Link, 
-  BookOpen, Heart, ShoppingBag, ArrowUp, ArrowDown, Star, AlertTriangle, Upload
+  BookOpen, Heart, ShoppingBag, ArrowUp, ArrowDown, Star, AlertTriangle, 
+  Upload, Copy, Save, ExternalLink as ExtIcon
 } from 'lucide-react';
 import { formatCurrency } from '../utils';
 
@@ -34,16 +35,16 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const [loading, setLoading] = useState(false);
   const [usingMockDb, setUsingMockDb] = useState(false);
 
-  useEffect(() => {
-    setCurrentPath(initialPath);
-  }, [initialPath]);
-
-  const navigateTo = (path) => {
-    setCurrentPath(path);
-    if (onChangePath) {
-      onChangePath(path);
-    }
-  };
+  // Domain Settings State
+  const [domainId, setDomainId] = useState(null);
+  const [domain, setDomain] = useState('somosnovelieditorial.com');
+  const [wwDomain, setWwDomain] = useState('www.somosnovelieditorial.com');
+  const [publicUrl, setPublicUrl] = useState('https://www.somosnovelieditorial.com/');
+  const [vercelPreviewUrl, setVercelPreviewUrl] = useState('');
+  const [domainProvider, setDomainProvider] = useState('Google Domains');
+  const [hostingProvider, setHostingProvider] = useState('Vercel');
+  const [domainStatus, setDomainStatus] = useState('conectado');
+  const [dnsNotes, setDnsNotes] = useState('Apuntar registro CNAME a cname.vercel-dns.com y registro A a 76.76.21.21');
 
   // Service Form states
   const [editingService, setEditingService] = useState(null);
@@ -67,10 +68,165 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const [bookFeatured, setBookFeatured] = useState(false);
   const [bookActive, setBookActive] = useState(true);
 
+  // Clipboard feedbacks
+  const [domainCopied, setDomainCopied] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
+
+  useEffect(() => {
+    setCurrentPath(initialPath);
+  }, [initialPath]);
+
   useEffect(() => {
     fetchServices();
     fetchBooks();
+    fetchSettings();
   }, []);
+
+  const navigateTo = (path) => {
+    setCurrentPath(path);
+    if (onChangePath) {
+      onChangePath(path);
+    }
+  };
+
+  // --- SETTINGS PERSISTENCE ---
+  const fetchSettings = async () => {
+    try {
+      if (isMock) {
+        loadMockSettings();
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('website_settings')
+        .select('*')
+        .limit(1);
+
+      if (error) {
+        console.warn("Table website_settings query failed, using local memory settings:", error.message);
+        loadMockSettings();
+        setUsingMockDb(true);
+      } else if (data && data.length > 0) {
+        const row = data[0];
+        setDomainId(row.id);
+        setDomain(row.domain || 'somosnovelieditorial.com');
+        setWwDomain(row.www_domain || 'www.somosnovelieditorial.com');
+        setPublicUrl(row.public_url || 'https://www.somosnovelieditorial.com/');
+        setVercelPreviewUrl(row.vercel_preview_url || '');
+        setDomainProvider(row.domain_provider || 'Google Domains');
+        setHostingProvider(row.hosting_provider || 'Vercel');
+        setDomainStatus(row.domain_status || 'conectado');
+        setDnsNotes(row.dns_notes || '');
+      } else {
+        // Empty table, insert defaults
+        await seedDefaultSettings();
+      }
+    } catch (err) {
+      console.error("Exception loading settings:", err);
+      loadMockSettings();
+      setUsingMockDb(true);
+    }
+  };
+
+  const loadMockSettings = () => {
+    const saved = localStorage.getItem('somos_noveli_website_settings');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setDomain(parsed.domain || 'somosnovelieditorial.com');
+        setWwDomain(parsed.www_domain || 'www.somosnovelieditorial.com');
+        setPublicUrl(parsed.public_url || 'https://www.somosnovelieditorial.com/');
+        setVercelPreviewUrl(parsed.vercel_preview_url || '');
+        setDomainProvider(parsed.domain_provider || 'Google Domains');
+        setHostingProvider(parsed.hosting_provider || 'Vercel');
+        setDomainStatus(parsed.domain_status || 'conectado');
+        setDnsNotes(parsed.dns_notes || '');
+      } catch (_) {}
+    }
+  };
+
+  const seedDefaultSettings = async () => {
+    try {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      const payload = {
+        domain: 'somosnovelieditorial.com',
+        www_domain: 'www.somosnovelieditorial.com',
+        public_url: 'https://www.somosnovelieditorial.com/',
+        vercel_preview_url: '',
+        domain_provider: 'Google Domains',
+        hosting_provider: 'Vercel',
+        domain_status: 'conectado',
+        dns_notes: 'Apuntar registro CNAME a cname.vercel-dns.com y registro A a 76.76.21.21',
+        organization_id: orgId
+      };
+      const { data, error } = await supabase
+        .from('website_settings')
+        .insert([payload])
+        .select();
+      if (!error && data && data.length > 0) {
+        setDomainId(data[0].id);
+      }
+    } catch (_) {}
+  };
+
+  const handleSaveSettings = async (e) => {
+    e.preventDefault();
+    if (isReadOnly) return;
+
+    setLoading(true);
+    try {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      const payload = {
+        domain,
+        www_domain: wwDomain,
+        public_url: publicUrl,
+        vercel_preview_url: vercelPreviewUrl,
+        domain_provider: domainProvider,
+        hosting_provider: hostingProvider,
+        domain_status: domainStatus,
+        dns_notes: dnsNotes,
+        organization_id: orgId
+      };
+
+      if (isMock || usingMockDb || !supabase) {
+        localStorage.setItem('somos_noveli_website_settings', JSON.stringify(payload));
+        alert("Configuración local de dominio guardada correctamente.");
+      } else {
+        if (domainId) {
+          const { error } = await supabase
+            .from('website_settings')
+            .update(payload)
+            .eq('id', domainId);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from('website_settings')
+            .insert([payload])
+            .select();
+          if (error) throw error;
+          if (data && data.length > 0) setDomainId(data[0].id);
+        }
+        alert("Configuración de dominio y hosting guardada en Supabase.");
+      }
+      await fetchSettings();
+    } catch (err) {
+      console.error("Error saving website settings:", err);
+      alert(`Error al guardar: ${err.message || err}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyToClipboard = (text, type) => {
+    navigator.clipboard.writeText(text);
+    if (type === 'domain') {
+      setDomainCopied(true);
+      setTimeout(() => setDomainCopied(false), 2000);
+    } else {
+      setUrlCopied(true);
+      setTimeout(() => setUrlCopied(false), 2000);
+    }
+  };
 
   // --- SERVICE PERSISTENCE ---
   const fetchServices = async () => {
@@ -561,30 +717,6 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     }
   };
 
-  const handleDeleteBook = async (id) => {
-    if (isReadOnly) return;
-    if (!window.confirm("¿Estás seguro de que deseas eliminar este libro de la web?")) return;
-
-    try {
-      if (isMock || usingMockDb || !supabase) {
-        const updated = books.filter(b => b.id !== id);
-        setBooks(updated);
-        localStorage.setItem('somos_noveli_website_books', JSON.stringify(updated));
-      } else {
-        const { error } = await supabase
-          .from('website_books')
-          .delete()
-          .eq('id', id);
-        if (error) throw error;
-      }
-      setBooks(books.filter(b => b.id !== id));
-      if (editingBook?.id === id) resetBookForm();
-    } catch (err) {
-      console.error("Error deleting book:", err);
-    }
-  };
-
-  // Upload book cover
   const handleUploadCover = async (e, bookId) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -615,7 +747,6 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
       }
 
       if (bookId) {
-        // Direct update for an existing book
         if (isMock || usingMockDb || !supabase) {
           const updated = books.map(b => b.id === bookId ? { ...b, cover_url: finalUrl } : b);
           setBooks(updated);
@@ -630,7 +761,6 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         await fetchBooks();
         alert("Portada subida y actualizada con éxito.");
       } else {
-        // Setting for form
         setBookCoverUrl(finalUrl);
         alert("Portada subida correctamente. Pulsa guardar para aplicar los cambios.");
       }
@@ -657,7 +787,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
           <>
             <span>/</span>
             <span className="text-slate-700 dark:text-slate-200 capitalize font-bold">
-              {currentPath === 'servicios' ? 'Servicios Editoriales' : 'Libros Destacados'}
+              {currentPath === 'servicios' ? 'Servicios Editoriales' : currentPath === 'libros' ? 'Libros Destacados' : 'Dominio y Vista Previa'}
             </span>
           </>
         )}
@@ -668,7 +798,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl flex items-center gap-2.5 text-xs text-amber-700 dark:text-amber-400">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>
-            <strong>Modo Respaldo Local:</strong> La tabla <code>website_services</code> y/o <code>website_books</code> no existen en Supabase. Se han cargado datos locales. Ejecuta los archivos de migración 20 y 21 correspondientes.
+            <strong>Modo Respaldo Local:</strong> Tablas SQL no detectadas en Supabase. Se han cargado datos locales configurables. Ejecuta los archivos de migración SQL para habilitar almacenamiento persistente.
           </span>
         </div>
       )}
@@ -683,12 +813,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                 Sitio Web Noveli
               </h1>
               <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-sans">
-                Configura y administra los contenidos del catálogo y servicios que se muestran al público.
+                Configura y administra los contenidos del catálogo, servicios y hosting que se muestran al público.
               </p>
             </div>
             
             <a
-              href={WEBSITE_URL}
+              href={publicUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center space-x-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-semibold shadow-md transition-all duration-300 hover:shadow-lg cursor-pointer w-fit shrink-0 border border-transparent"
@@ -701,29 +831,27 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
           {/* Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             
-            {/* 1. Sitio Público */}
+            {/* 1. Dominio y Vista Previa */}
             <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-6 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="p-2.5 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 rounded-xl w-fit">
                   <Layout className="w-5 h-5" />
                 </div>
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Sitio Público</h3>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Dominio y Preview</h3>
                 <p className="text-xs text-slate-450 dark:text-slate-400 leading-relaxed">
-                  Visualiza el sitio público de la editorial. El dominio está configurado correctamente.
+                  Configura los DNS, dominios comprados y visualiza el sitio público en tiempo real con el panel de previsualización.
                 </p>
                 <div className="font-mono text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/40 p-2 rounded-lg border border-slate-100 dark:border-slate-855 truncate">
-                  {WEBSITE_URL}
+                  {domain}
                 </div>
               </div>
-              <a
-                href={WEBSITE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center space-x-1.5 w-full py-2 bg-slate-50 dark:bg-slate-950/20 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-350 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold transition-all"
+              <button
+                onClick={() => navigateTo('dominio')}
+                className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
-                <span>Visitar sitio</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+                <span>Dominio y Vista Previa</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             {/* 2. Servicios Editoriales */}
@@ -815,24 +943,28 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
               <div className="space-y-3.5 text-xs">
                 <div className="flex justify-between items-center py-1 border-b border-slate-50 dark:border-slate-850">
                   <span className="text-slate-400 font-medium">Dominio Conectado</span>
-                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300">somosnovelieditorial.com</span>
+                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{domain}</span>
                 </div>
                 
                 <div className="flex justify-between items-center py-1 border-b border-slate-50 dark:border-slate-850">
                   <span className="text-slate-400 font-medium">Hosting</span>
-                  <span className="font-bold text-slate-700 dark:text-slate-300">Vercel Cloud</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-300">{hostingProvider}</span>
                 </div>
 
                 <div className="flex justify-between items-center py-1 border-b border-slate-50 dark:border-slate-850">
-                  <span className="text-slate-400 font-medium">Última actualización</span>
-                  <span className="font-bold text-slate-700 dark:text-slate-300">Hoy, 12:45 PM</span>
+                  <span className="text-slate-400 font-medium">Proveedor DNS</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-300">{domainProvider}</span>
                 </div>
 
                 <div className="flex justify-between items-center pt-1">
-                  <span className="text-slate-400 font-medium">Estado del servidor</span>
-                  <span className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40 rounded text-[10px] font-bold">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    activo
+                  <span className="text-slate-400 font-medium">Estado</span>
+                  <span className={`flex items-center gap-1.5 px-2 py-0.5 border rounded text-[10px] font-bold uppercase ${
+                    domainStatus === 'conectado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-450 dark:border-emerald-900/40' :
+                    domainStatus === 'pendiente' ? 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-950/20 dark:text-amber-450 dark:border-amber-900/40' :
+                    'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-950/20 dark:text-rose-450 dark:border-rose-900/40'
+                  }`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${domainStatus === 'conectado' ? 'bg-emerald-500 animate-pulse' : domainStatus === 'pendiente' ? 'bg-amber-500' : 'bg-rose-500'}`}></span>
+                    {domainStatus}
                   </span>
                 </div>
               </div>
@@ -840,6 +972,260 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
 
           </div>
         </>
+      )}
+
+      {/* ------------------ SUB-VIEW: DOMINIO Y PREVIEW ------------------ */}
+      {currentPath === 'dominio' && (
+        <div className="space-y-6">
+          {/* Header & Back Button */}
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center space-x-3">
+              <button 
+                onClick={() => navigateTo('dashboard')}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <div>
+                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Dominio y Vista Previa</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Controla la infraestructura de red, dominios oficiales y previsualiza la web pública.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Domain Configuration Form (Left, 5 cols) */}
+            <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-5 h-fit">
+              <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm flex items-center gap-2">
+                <Server className="w-4.5 h-4.5 text-blue-500" />
+                Ajustes de Dominio y Hosting
+              </h3>
+
+              <form onSubmit={handleSaveSettings} className="space-y-4 text-xs">
+                
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Dominio Principal</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      required
+                      placeholder="somosnovelieditorial.com"
+                      value={domain}
+                      onChange={e => setDomain(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(domain, 'domain')}
+                      className="px-2.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 flex items-center justify-center shrink-0 cursor-pointer"
+                      title="Copiar Dominio"
+                    >
+                      {domainCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Dominio con WWW</label>
+                  <input
+                    type="text"
+                    placeholder="www.somosnovelieditorial.com"
+                    value={wwDomain}
+                    onChange={e => setWwDomain(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">URL Pública Actual</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      required
+                      placeholder="https://www.somosnovelieditorial.com/"
+                      value={publicUrl}
+                      onChange={e => setPublicUrl(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(publicUrl, 'url')}
+                      className="px-2.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 flex items-center justify-center shrink-0 cursor-pointer"
+                      title="Copiar URL Pública"
+                    >
+                      {urlCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">URL Vista Previa Vercel (Opcional)</label>
+                  <input
+                    type="url"
+                    placeholder="https://somosnoveli-git-preview.vercel.app"
+                    value={vercelPreviewUrl}
+                    onChange={e => setVercelPreviewUrl(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Proveedor de Dominio</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Google Domains, GoDaddy"
+                      value={domainProvider}
+                      onChange={e => setDomainProvider(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Hosting</label>
+                    <input
+                      type="text"
+                      placeholder="Vercel"
+                      value={hostingProvider}
+                      onChange={e => setHostingProvider(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Estado del Dominio</label>
+                  <select
+                    value={domainStatus}
+                    onChange={e => setDomainStatus(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
+                  >
+                    <option value="conectado">Conectado / Activo</option>
+                    <option value="pendiente">Pendiente de verificación</option>
+                    <option value="revisar DNS">Revisar DNS</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Notas DNS / Configuración</label>
+                  <textarea
+                    placeholder="Instrucciones para apuntar registros A y CNAME..."
+                    value={dnsNotes}
+                    onChange={e => setDnsNotes(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono text-[10px]"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isReadOnly}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center justify-center space-x-1.5 border border-transparent"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Guardar configuración</span>
+                </button>
+              </form>
+            </div>
+
+            {/* Preview Panel (Right, 7 cols) */}
+            <div className="lg:col-span-7 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs flex flex-col space-y-4 justify-between h-[600px]">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm flex items-center gap-2">
+                  <Globe className="w-4.5 h-4.5 text-emerald-500 animate-pulse" />
+                  Vista Previa del Sitio
+                </h3>
+                
+                <div className="flex gap-2">
+                  <a
+                    href={publicUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-250 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 border border-slate-200 dark:border-slate-700 cursor-pointer"
+                  >
+                    <span>Sitio Público</span>
+                    <ExtIcon className="w-3 h-3" />
+                  </a>
+
+                  {vercelPreviewUrl && (
+                    <a
+                      href={vercelPreviewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:hover:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 border border-purple-100 dark:border-purple-900/40 cursor-pointer"
+                    >
+                      <span>Vercel Preview</span>
+                      <ExtIcon className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Browser Window Mock */}
+              <div className="flex-1 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950/40 relative">
+                
+                {/* Header Mock */}
+                <div className="h-9 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 flex items-center gap-3 shrink-0">
+                  <div className="flex gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-455"></span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-455"></span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-455"></span>
+                  </div>
+                  <div className="flex-1 bg-white dark:bg-slate-950 rounded px-2.5 py-0.5 text-[10px] text-slate-400 font-mono flex items-center gap-1 justify-center truncate">
+                    <ShieldCheck className="w-3 h-3 text-emerald-500 inline shrink-0" />
+                    <span>{publicUrl}</span>
+                  </div>
+                </div>
+
+                {/* Content/Iframe */}
+                <div className="flex-1 relative flex flex-col justify-center items-center">
+                  
+                  {/* Real Iframe */}
+                  <iframe 
+                    src={publicUrl}
+                    title="Sitio Noveli Vista Previa"
+                    className="w-full h-full border-none z-10 bg-white"
+                  />
+
+                  {/* Fallback Overlay for X-Frame-Options block */}
+                  <div className="absolute inset-0 bg-slate-50/95 dark:bg-slate-900/95 z-0 flex flex-col items-center justify-center text-center p-6 space-y-4">
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-450 border border-blue-100 dark:border-blue-900 rounded-2xl w-fit">
+                      <Globe className="w-7 h-7" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Vista previa embebida activada</p>
+                      <p className="text-[11px] text-slate-450 dark:text-slate-400 max-w-sm">
+                        Si tu navegador bloquea la previsualización directa por políticas de seguridad contra secuestro de clics (X-Frame-Options), por favor usa el botón de abajo.
+                      </p>
+                    </div>
+
+                    <a 
+                      href={publicUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 border border-transparent cursor-pointer"
+                    >
+                      <span>No se puede previsualizar aquí. Abrir en nueva pestaña.</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+
+                </div>
+
+              </div>
+
+              {/* Tips Footer */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950/30 border border-slate-200 dark:border-slate-800 rounded-xl text-[10px] text-slate-450 leading-relaxed flex gap-2">
+                <InfoIcon className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Tip de Seguridad:</strong> Vercel bloquea por defecto iframes de dominios externos no verificados. Al guardar la URL oficial en esta pantalla, se actualizan las cabeceras de previsualización en la CDN del sitio público.
+                </span>
+              </div>
+            </div>
+
+          </div>
+        </div>
       )}
 
       {/* ------------------ SUB-VIEW: SERVICIOS ------------------ */}
@@ -850,7 +1236,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
             <div className="flex items-center space-x-3">
               <button 
                 onClick={() => navigateTo('dashboard')}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer"
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-855 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
@@ -1118,7 +1504,6 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   key={b.id} 
                   className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-5 shadow-2xs flex flex-col md:flex-row md:items-start gap-4"
                 >
-                  {/* Book Cover Thumbnail Area */}
                   <div className="w-20 h-28 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-lg flex flex-col items-center justify-center text-center overflow-hidden shrink-0 relative group">
                     {b.cover_url ? (
                       <img 
@@ -1130,7 +1515,6 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                       <BookOpen className="w-7 h-7 text-slate-300 dark:text-slate-700" />
                     )}
                     
-                    {/* Inline Upload Cover overlay */}
                     <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[9px] font-bold cursor-pointer transition-opacity">
                       <Upload className="w-4 h-4 mb-1" />
                       <span>Subir foto</span>
@@ -1149,7 +1533,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-extrabold text-sm text-slate-800 dark:text-slate-100">{b.title}</h4>
-                          <span className="px-2.5 py-0.5 bg-purple-550/10 text-purple-650 dark:text-purple-400 rounded text-[9px] font-bold">
+                          <span className="px-2.5 py-0.5 bg-purple-550/10 text-purple-655 dark:text-purple-400 rounded text-[9px] font-bold">
                             {b.status}
                           </span>
                         </div>
@@ -1157,7 +1541,6 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                       </div>
 
                       <div className="flex items-center space-x-1 shrink-0">
-                        {/* Toggle Featured */}
                         <button
                           type="button"
                           disabled={isReadOnly}
@@ -1168,7 +1551,6 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                           <Star className={`w-4 h-4 ${b.featured ? 'text-amber-500 fill-amber-500' : 'text-slate-350 dark:text-slate-700'}`} />
                         </button>
                         
-                        {/* Toggle Active */}
                         <button
                           type="button"
                           disabled={isReadOnly}
@@ -1183,7 +1565,6 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                           )}
                         </button>
                         
-                        {/* Edit */}
                         <button
                           type="button"
                           disabled={isReadOnly}
@@ -1194,7 +1575,6 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                           <Edit className="w-4 h-4" />
                         </button>
 
-                        {/* Delete */}
                         <button
                           type="button"
                           disabled={isReadOnly}
@@ -1213,8 +1593,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                       </p>
                     )}
 
-                    {/* Sale / Purchase link info */}
-                    <div className="pt-2 border-t border-slate-50 dark:border-slate-850 flex items-center justify-between text-[11px] text-slate-450">
+                    <div className="pt-2 border-t border-slate-50 dark:border-slate-855 flex items-center justify-between text-[11px] text-slate-450">
                       <span className="font-semibold">Plataforma de Venta:</span>
                       {b.sale_url ? (
                         <a 
@@ -1304,7 +1683,6 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   </div>
                 </div>
 
-                {/* Cover File Upload */}
                 <div className="space-y-1.5">
                   <label className="text-slate-400 font-bold block">Imagen de Portada</label>
                   <div className="flex items-center gap-2">
@@ -1315,7 +1693,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                       onChange={e => setBookCoverUrl(e.target.value)}
                       className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"
                     />
-                    <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700/80 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer transition-colors flex items-center gap-1">
+                    <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700/85 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer transition-colors flex items-center gap-1">
                       <Upload className="w-3.5 h-3.5" />
                       <span>Subir</span>
                       <input 
@@ -1412,5 +1790,26 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
       )}
 
     </div>
+  );
+}
+
+function InfoIcon(props) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="16" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
   );
 }

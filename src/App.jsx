@@ -214,6 +214,7 @@ const getTabFromPath = (path) => {
   
   if (cleanPath === 'sitio-web/servicios') return 'website-servicios';
   if (cleanPath === 'sitio-web/libros') return 'website-libros';
+  if (cleanPath === 'sitio-web/dominio') return 'website-dominio';
   if (cleanPath === 'sitio-web') return 'website';
 
   const mapping = {
@@ -287,7 +288,8 @@ const getPathFromTab = (tab) => {
     'seguimientos': '/seguimientos',
     'website': '/sitio-web',
     'website-servicios': '/sitio-web/servicios',
-    'website-libros': '/sitio-web/libros'
+    'website-libros': '/sitio-web/libros',
+    'website-dominio': '/sitio-web/dominio'
   };
 
   return mapping[tab] || '/';
@@ -884,13 +886,15 @@ export default function App() {
     { id: 'reserve', label: 'Reserva operacional', icon: <Wallet className="w-4.5 h-4.5" /> },
     { id: 'website', label: 'Sitio Web', icon: <Globe className="w-4.5 h-4.5" /> },
     { id: 'website-servicios', label: 'Servicios Web', icon: <Globe className="w-4.5 h-4.5" /> },
-    { id: 'website-libros', label: 'Libros Web', icon: <Globe className="w-4.5 h-4.5" /> }
+    { id: 'website-libros', label: 'Libros Web', icon: <Globe className="w-4.5 h-4.5" /> },
+    { id: 'website-dominio', label: 'Dominio Web', icon: <Globe className="w-4.5 h-4.5" /> }
   ];
 
   const handleWebsitePathChange = (path) => {
     if (path === 'dashboard') setActiveTab('website');
     else if (path === 'servicios') setActiveTab('website-servicios');
     else if (path === 'libros') setActiveTab('website-libros');
+    else if (path === 'dominio') setActiveTab('website-dominio');
   };
 
   // Render current tab content with dynamic roles and write access checks
@@ -915,6 +919,7 @@ export default function App() {
       case 'website': return <Website {...commonProps} initialPath="dashboard" onChangePath={handleWebsitePathChange} />;
       case 'website-servicios': return <Website {...commonProps} initialPath="servicios" onChangePath={handleWebsitePathChange} />;
       case 'website-libros': return <Website {...commonProps} initialPath="libros" onChangePath={handleWebsitePathChange} />;
+      case 'website-dominio': return <Website {...commonProps} initialPath="dominio" onChangePath={handleWebsitePathChange} />;
       case 'documents': return <Documents {...commonProps} />;
       case 'taxes': return <Taxes {...commonProps} />;
       case 'reports': return <Reports {...commonProps} />;
