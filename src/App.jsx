@@ -35,8 +35,10 @@ import {
   Menu, X, Sparkles, User, Tag, Package, Receipt,
   MessageSquare, FileText, BarChart3, Settings2, CheckCircle,
   Calendar, Coins, Bell, Search, AlertTriangle, Info, Clock, ShieldCheck,
-  ChevronDown, ChevronUp, ChevronRight, Wallet
+  ChevronDown, ChevronUp, ChevronRight, Wallet, Globe
 } from 'lucide-react';
+
+const WEBSITE_URL = "https://www.somosnovelieditorial.com/";
 
 const menuGroups = [
   {
@@ -95,12 +97,10 @@ const menuGroups = [
     ]
   },
   {
-    id: 'contacts',
-    label: 'Contactos',
-    icon: <Contact className="w-4 h-4" />,
-    items: [
-      { id: 'providers', label: 'Proveedores', tab: 'providers' }
-    ]
+    id: 'website',
+    label: 'Sitio Web',
+    icon: <Globe className="w-4 h-4" />,
+    url: WEBSITE_URL
   },
   {
     id: 'reports',
@@ -1012,6 +1012,21 @@ export default function App() {
               const isGroupActive = group.tab === activeTab || 
                 (group.items && group.items.some(item => item.id === activeTab || item.tab === activeTab));
               const isExpanded = expandedGroups[group.id];
+
+              if (group.url) {
+                return (
+                  <a
+                    key={group.id}
+                    href={group.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border border-transparent text-slate-655 dark:text-slate-400 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 hover:text-slate-800 dark:hover:text-slate-200"
+                  >
+                    {group.icon}
+                    <span className="font-bold">{group.label}</span>
+                  </a>
+                );
+              }
 
               if (group.tab) {
                 return (
