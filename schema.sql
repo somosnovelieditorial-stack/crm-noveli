@@ -902,3 +902,29 @@ CREATE POLICY "Select allocations" ON income_allocations FOR SELECT USING (auth.
 CREATE POLICY "Insert allocations" ON income_allocations FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
 CREATE POLICY "Update allocations" ON income_allocations FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
 CREATE POLICY "Delete allocations" ON income_allocations FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+
+-- ==========================================
+-- TABLE: website_services
+-- ==========================================
+CREATE TABLE IF NOT EXISTS website_services (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL DEFAULT '11111111-1111-1111-1111-111111111111',
+    user_id UUID,
+    title TEXT NOT NULL,
+    short_description TEXT,
+    full_description TEXT,
+    price_from NUMERIC(15,2) DEFAULT 0,
+    currency VARCHAR(10) DEFAULT 'CLP',
+    category VARCHAR(50) DEFAULT 'Editorial',
+    featured BOOLEAN DEFAULT FALSE,
+    active BOOLEAN DEFAULT TRUE,
+    display_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE website_services ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Permit all operations for website_services" ON website_services
+    FOR ALL
+    USING (true)
+    WITH CHECK (true);

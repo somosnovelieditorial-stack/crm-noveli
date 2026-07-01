@@ -1,19 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase, isMock } from '../supabaseClient';
 import { 
   Globe, ArrowUpRight, ShieldCheck, Cpu, Layout, Server, ExternalLink, 
   Activity, ArrowLeft, Plus, Check, Eye, EyeOff, Edit, Trash2, Link, 
-  BookOpen, Heart, ShoppingBag, ToggleLeft, ToggleRight
+  BookOpen, Heart, ShoppingBag, ArrowUp, ArrowDown, Star, AlertTriangle
 } from 'lucide-react';
+import { formatCurrency } from '../utils';
 
 const WEBSITE_URL = "https://www.somosnovelieditorial.com/";
 
-// Mock Data representing state
-const INITIAL_SERVICES = [
-  { id: 'ws-1', name: 'Corrección de Estilo', category: 'Editorial', price: '$2,500 CLP / pág', visible: true },
-  { id: 'ws-2', name: 'Diseño de Portada Premium', category: 'Diseño', price: '$150,000 CLP', visible: true },
-  { id: 'ws-3', name: 'Maquetación Digital (ePub/Mobi)', category: 'Digitalización', price: '$80,000 CLP', visible: true },
-  { id: 'ws-4', name: 'Impresión Bajo Demanda', category: 'Producción', price: 'Cotización personalizada', visible: false },
-  { id: 'ws-5', name: 'Distribución Global en Tiendas', category: 'Marketing', price: '$50,000 CLP', visible: true },
+// Default recommended web services
+const DEFAULT_WEB_SERVICES = [
+  { id: 'ws-1', title: 'Full eBook', category: 'Digitalización', price_from: 80000, short_description: 'Publicación completa de tu eBook en plataformas globales', featured: true, active: true, display_order: 1 },
+  { id: 'ws-2', title: 'Full Físico', category: 'Producción', price_from: 250000, short_description: 'Edición e impresión física de tu obra literaria', featured: true, active: true, display_order: 2 },
+  { id: 'ws-3', title: 'Full Total', category: 'Producción', price_from: 450000, short_description: 'El pack definitivo: eBook, libro físico, tapa blanda e ilustración', featured: true, active: true, display_order: 3 },
+  { id: 'ws-4', title: 'Corrección', category: 'Editorial', price_from: 2500, short_description: 'Corrección de estilo, gramática y ortografía profesional', featured: false, active: true, display_order: 4 },
+  { id: 'ws-5', title: 'Portada', category: 'Diseño', price_from: 120000, short_description: 'Diseño de portada personalizado y adaptado al género', featured: false, active: true, display_order: 5 },
+  { id: 'ws-6', title: 'Maquetación', category: 'Editorial', price_from: 90000, short_description: 'Maquetación interior profesional para impresión y digital', featured: false, active: true, display_order: 6 },
+  { id: 'ws-7', title: 'Difusión Editorial', category: 'Marketing', price_from: 150000, short_description: 'Campañas de marketing, notas de prensa y difusión', featured: false, active: true, display_order: 7 },
+  { id: 'ws-8', title: 'Registro de Derechos de Autor', category: 'Legal', price_from: 50000, short_description: 'Gestión legal de registro de propiedad intelectual', featured: false, active: true, display_order: 8 }
 ];
 
 const INITIAL_BOOKS = [
@@ -22,50 +27,324 @@ const INITIAL_BOOKS = [
   { id: 'wb-3', title: 'Bajo la Sombra del Alerce', author: 'Marta Valdivia', genre: 'Poesía', badge: 'Preventa', visible: false, links: { amazon: '', buscalibre: '', wattpad: '', website: '' } },
 ];
 
-export default function Website() {
+export default function Website({ isReadOnly }) {
   const [currentPath, setCurrentPath] = useState('dashboard'); // 'dashboard', 'servicios', 'libros'
-  const [services, setServices] = useState(INITIAL_SERVICES);
+  const [services, setServices] = useState([]);
   const [books, setBooks] = useState(INITIAL_BOOKS);
-  const [newServiceName, setNewServiceName] = useState('');
-  const [newServicePrice, setNewServicePrice] = useState('');
-  const [newServiceCat, setNewServiceCat] = useState('Editorial');
+  const [loading, setLoading] = useState(false);
+  const [usingMockDb, setUsingMockDb] = useState(false);
+
+  // Form states
+  const [editingService, setEditingService] = useState(null);
+  const [serviceTitle, setServiceTitle] = useState('');
+  const [serviceShortDesc, setServiceShortDesc] = useState('');
+  const [serviceFullDesc, setServiceFullDesc] = useState('');
+  const [servicePrice, setServicePrice] = useState('0');
+  const [serviceCategory, setServiceCategory] = useState('Editorial');
+  const [serviceFeatured, setServiceFeatured] = useState(false);
+
+  // Book Form states
   const [newBookTitle, setNewBookTitle] = useState('');
   const [newBookAuthor, setNewBookAuthor] = useState('');
   const [newBookGenre, setNewBookGenre] = useState('');
   const [newBookBadge, setNewBookBadge] = useState('Novedad');
 
-  // Service toggle visibility
-  const toggleServiceVisibility = (id) => {
-    setServices(services.map(s => s.id === id ? { ...s, visible: !s.visible } : s));
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const fetchServices = async () => {
+    setLoading(true);
+    try {
+      if (isMock) {
+        loadMockServices();
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('website_services')
+        .select('*')
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.warn("Table website_services query failed, falling back to local memory storage:", error.message);
+        loadMockServices();
+        setUsingMockDb(true);
+      } else {
+        if (data && data.length > 0) {
+          setServices(data);
+        } else {
+          // If table is completely empty, insert defaults
+          await seedDefaultServices();
+        }
+        setUsingMockDb(false);
+      }
+    } catch (err) {
+      console.error("Exception loading website services:", err);
+      loadMockServices();
+      setUsingMockDb(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Add mock service
-  const handleAddService = (e) => {
+  const loadMockServices = () => {
+    const saved = localStorage.getItem('somos_noveli_website_services');
+    if (saved) {
+      try {
+        setServices(JSON.parse(saved));
+      } catch (_) {
+        setServices(DEFAULT_WEB_SERVICES);
+        localStorage.setItem('somos_noveli_website_services', JSON.stringify(DEFAULT_WEB_SERVICES));
+      }
+    } else {
+      setServices(DEFAULT_WEB_SERVICES);
+      localStorage.setItem('somos_noveli_website_services', JSON.stringify(DEFAULT_WEB_SERVICES));
+    }
+  };
+
+  const seedDefaultServices = async () => {
+    try {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      const servicesToInsert = DEFAULT_WEB_SERVICES.map(s => ({
+        title: s.title,
+        category: s.category,
+        price_from: s.price_from,
+        short_description: s.short_description,
+        featured: s.featured,
+        active: s.active,
+        display_order: s.display_order,
+        organization_id: orgId
+      }));
+
+      const { data, error } = await supabase
+        .from('website_services')
+        .insert(servicesToInsert)
+        .select();
+
+      if (!error && data) {
+        setServices(data);
+      } else {
+        setServices(DEFAULT_WEB_SERVICES);
+      }
+    } catch (_) {
+      setServices(DEFAULT_WEB_SERVICES);
+    }
+  };
+
+  // Service Save (Create / Update)
+  const handleSaveService = async (e) => {
     e.preventDefault();
-    if (!newServiceName) return;
-    const newService = {
-      id: `ws-${Date.now()}`,
-      name: newServiceName,
-      category: newServiceCat,
-      price: newServicePrice || 'Cotización',
-      visible: true
-    };
-    setServices([...services, newService]);
-    setNewServiceName('');
-    setNewServicePrice('');
+    if (isReadOnly) return;
+    if (!serviceTitle.trim()) return;
+
+    setLoading(true);
+    try {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      const parsedPrice = parseFloat(servicePrice) || 0;
+
+      if (editingService) {
+        // Update Mode
+        if (isMock || usingMockDb) {
+          const updated = services.map(s => s.id === editingService.id ? {
+            ...s,
+            title: serviceTitle,
+            short_description: serviceShortDesc,
+            full_description: serviceFullDesc,
+            price_from: parsedPrice,
+            category: serviceCategory,
+            featured: serviceFeatured
+          } : s);
+          setServices(updated);
+          localStorage.setItem('somos_noveli_website_services', JSON.stringify(updated));
+        } else {
+          const { error } = await supabase
+            .from('website_services')
+            .update({
+              title: serviceTitle,
+              short_description: serviceShortDesc,
+              full_description: serviceFullDesc,
+              price_from: parsedPrice,
+              category: serviceCategory,
+              featured: serviceFeatured
+            })
+            .eq('id', editingService.id);
+          if (error) throw error;
+        }
+        alert("Servicio actualizado correctamente.");
+      } else {
+        // Create Mode
+        const newOrder = services.length > 0 ? Math.max(...services.map(s => s.display_order || 0)) + 1 : 1;
+        const payload = {
+          title: serviceTitle,
+          short_description: serviceShortDesc,
+          full_description: serviceFullDesc,
+          price_from: parsedPrice,
+          currency: 'CLP',
+          category: serviceCategory,
+          featured: serviceFeatured,
+          active: true,
+          display_order: newOrder,
+          organization_id: orgId
+        };
+
+        if (isMock || usingMockDb) {
+          const newS = { ...payload, id: `ws-${Date.now()}` };
+          const updated = [...services, newS];
+          setServices(updated);
+          localStorage.setItem('somos_noveli_website_services', JSON.stringify(updated));
+        } else {
+          const { error } = await supabase
+            .from('website_services')
+            .insert([payload]);
+          if (error) throw error;
+        }
+        alert("Servicio creado y publicado correctamente.");
+      }
+
+      resetForm();
+      await fetchServices();
+    } catch (err) {
+      console.error("Error saving website service:", err);
+      alert(`Error al guardar: ${err.message || err}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Delete service
-  const handleDeleteService = (id) => {
-    setServices(services.filter(s => s.id !== id));
+  const resetForm = () => {
+    setEditingService(null);
+    setServiceTitle('');
+    setServiceShortDesc('');
+    setServiceFullDesc('');
+    setServicePrice('0');
+    setServiceCategory('Editorial');
+    setServiceFeatured(false);
   };
 
-  // Book toggle visibility
+  const startEditService = (service) => {
+    setEditingService(service);
+    setServiceTitle(service.title || '');
+    setServiceShortDesc(service.short_description || '');
+    setServiceFullDesc(service.full_description || '');
+    setServicePrice(String(service.price_from || '0'));
+    setServiceCategory(service.category || 'Editorial');
+    setServiceFeatured(!!service.featured);
+  };
+
+  // Toggle ToggleActive
+  const handleToggleActive = async (service) => {
+    if (isReadOnly) return;
+    const updatedStatus = !service.active;
+
+    try {
+      if (isMock || usingMockDb) {
+        const updated = services.map(s => s.id === service.id ? { ...s, active: updatedStatus } : s);
+        setServices(updated);
+        localStorage.setItem('somos_noveli_website_services', JSON.stringify(updated));
+      } else {
+        const { error } = await supabase
+          .from('website_services')
+          .update({ active: updatedStatus })
+          .eq('id', service.id);
+        if (error) throw error;
+      }
+      setServices(services.map(s => s.id === service.id ? { ...s, active: updatedStatus } : s));
+    } catch (err) {
+      console.error("Error toggling active state:", err);
+    }
+  };
+
+  // Toggle Featured
+  const handleToggleFeatured = async (service) => {
+    if (isReadOnly) return;
+    const updatedStatus = !service.featured;
+
+    try {
+      if (isMock || usingMockDb) {
+        const updated = services.map(s => s.id === service.id ? { ...s, featured: updatedStatus } : s);
+        setServices(updated);
+        localStorage.setItem('somos_noveli_website_services', JSON.stringify(updated));
+      } else {
+        const { error } = await supabase
+          .from('website_services')
+          .update({ featured: updatedStatus })
+          .eq('id', service.id);
+        if (error) throw error;
+      }
+      setServices(services.map(s => s.id === service.id ? { ...s, featured: updatedStatus } : s));
+    } catch (err) {
+      console.error("Error toggling featured state:", err);
+    }
+  };
+
+  // Delete Service
+  const handleDeleteService = async (id) => {
+    if (isReadOnly) return;
+    if (!window.confirm("¿Estás seguro de que deseas eliminar este servicio de la web?")) return;
+
+    try {
+      if (isMock || usingMockDb) {
+        const updated = services.filter(s => s.id !== id);
+        setServices(updated);
+        localStorage.setItem('somos_noveli_website_services', JSON.stringify(updated));
+      } else {
+        const { error } = await supabase
+          .from('website_services')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+      }
+      setServices(services.filter(s => s.id !== id));
+      if (editingService?.id === id) resetForm();
+    } catch (err) {
+      console.error("Error deleting service:", err);
+    }
+  };
+
+  // Reorder Services
+  const moveOrder = async (index, direction) => {
+    if (isReadOnly) return;
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= services.length) return;
+
+    const list = [...services];
+    // Swap items
+    const temp = list[index];
+    list[index] = list[targetIndex];
+    list[targetIndex] = temp;
+
+    // Update display_order fields
+    const updatedList = list.map((item, idx) => ({
+      ...item,
+      display_order: idx + 1
+    }));
+
+    setServices(updatedList);
+
+    try {
+      if (isMock || usingMockDb) {
+        localStorage.setItem('somos_noveli_website_services', JSON.stringify(updatedList));
+      } else {
+        // Save swaps to database
+        const updates = updatedList.map(item => supabase
+          .from('website_services')
+          .update({ display_order: item.display_order })
+          .eq('id', item.id)
+        );
+        await Promise.all(updates);
+      }
+    } catch (err) {
+      console.error("Error saving display order:", err);
+    }
+  };
+
+  // Book CRUD states
   const toggleBookVisibility = (id) => {
     setBooks(books.map(b => b.id === id ? { ...b, visible: !b.visible } : b));
   };
 
-  // Add mock book
   const handleAddBook = (e) => {
     e.preventDefault();
     if (!newBookTitle || !newBookAuthor) return;
@@ -84,12 +363,10 @@ export default function Website() {
     setNewBookGenre('');
   };
 
-  // Delete book
   const handleDeleteBook = (id) => {
     setBooks(books.filter(b => b.id !== id));
   };
 
-  // Update book link
   const handleUpdateLink = (bookId, linkKey, value) => {
     setBooks(books.map(b => {
       if (b.id === bookId) {
@@ -125,6 +402,16 @@ export default function Website() {
           </>
         )}
       </div>
+
+      {/* Warning Badge for SQL / Mock Mode */}
+      {usingMockDb && (
+        <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl flex items-center gap-2.5 text-xs text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            <strong>Modo Respaldo Local:</strong> La tabla <code>website_services</code> no existe o no está migrada en Supabase. Se han cargado datos simulados locales. Ejecuta el archivo <code>supabase_migration_20.sql</code> para habilitar persistencia real.
+          </span>
+        </div>
+      )}
 
       {/* ------------------ MAIN VIEW: DASHBOARD ------------------ */}
       {currentPath === 'dashboard' && (
@@ -164,7 +451,7 @@ export default function Website() {
                 <p className="text-xs text-slate-450 dark:text-slate-400 leading-relaxed">
                   Visualiza el sitio público de la editorial. El dominio está configurado correctamente.
                 </p>
-                <div className="font-mono text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/40 p-2 rounded-lg border border-slate-100 dark:border-slate-850 truncate">
+                <div className="font-mono text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/40 p-2 rounded-lg border border-slate-100 dark:border-slate-855 truncate">
                   {WEBSITE_URL}
                 </div>
               </div>
@@ -191,12 +478,12 @@ export default function Website() {
                 </p>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                  <span>{services.length} servicios definidos ({services.filter(s => s.visible).length} visibles)</span>
+                  <span>{services.length} servicios definidos ({services.filter(s => s.active).length} activos)</span>
                 </div>
               </div>
               <button
                 onClick={() => setCurrentPath('servicios')}
-                className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
                 <span>Gestionar servicios web</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
@@ -220,7 +507,7 @@ export default function Website() {
               </div>
               <button
                 onClick={() => setCurrentPath('libros')}
-                className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
                 <span>Gestionar libros</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
@@ -308,8 +595,8 @@ export default function Website() {
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <div>
-                <h2 className="text-2xl font-bold text-slate-850 dark:text-slate-100">Servicios Editoriales en Web</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Controla la oferta que ven los autores en la página principal.</p>
+                <h2 className="text-2xl font-bold text-slate-850 dark:text-slate-100 font-serif">Servicios Web Públicos</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Define los servicios de la editorial que aparecerán en la web pública.</p>
               </div>
             </div>
           </div>
@@ -318,51 +605,113 @@ export default function Website() {
             
             {/* List Table */}
             <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4">
-              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Servicios Registrados</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Servicios Web</h3>
+                <span className="text-[10px] text-slate-400 font-medium">Usa las flechas para ordenar su aparición en la web</span>
+              </div>
               
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 font-bold">
-                      <th className="py-2.5">Nombre</th>
+                      <th className="py-2.5">Orden</th>
+                      <th className="py-2.5">Título</th>
                       <th className="py-2.5">Categoría</th>
-                      <th className="py-2.5">Precio Público</th>
+                      <th className="py-2.5">Precio Desde</th>
+                      <th className="py-2.5 text-center">Destacado</th>
                       <th className="py-2.5 text-center">Visibilidad</th>
                       <th className="py-2.5 text-right">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50 dark:divide-slate-850">
-                    {services.map(s => (
-                      <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20">
-                        <td className="py-3 font-bold text-slate-700 dark:text-slate-200">{s.name}</td>
+                  <tbody className="divide-y divide-slate-50 dark:divide-slate-855">
+                    {services.map((s, idx) => (
+                      <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 group">
+                        {/* Display Order controls */}
                         <td className="py-3">
-                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-350 rounded font-semibold text-[10px]">
+                          <div className="flex items-center space-x-1">
+                            <span className="font-bold text-slate-400 dark:text-slate-600 w-4">{s.display_order || idx + 1}</span>
+                            <div className="flex flex-col">
+                              <button
+                                type="button"
+                                disabled={idx === 0 || isReadOnly}
+                                onClick={() => moveOrder(idx, -1)}
+                                className="text-slate-350 dark:text-slate-700 hover:text-amber-500 disabled:opacity-30 cursor-pointer border border-transparent bg-transparent p-0"
+                              >
+                                <ArrowUp className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={idx === services.length - 1 || isReadOnly}
+                                onClick={() => moveOrder(idx, 1)}
+                                className="text-slate-350 dark:text-slate-700 hover:text-amber-500 disabled:opacity-30 cursor-pointer border border-transparent bg-transparent p-0"
+                              >
+                                <ArrowDown className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3">
+                          <div>
+                            <span className="font-bold text-slate-750 dark:text-slate-200">{s.title}</span>
+                            {s.short_description && (
+                              <p className="text-[10px] text-slate-400 line-clamp-1 max-w-[200px] mt-0.5">{s.short_description}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3">
+                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-350 rounded font-bold text-[9px] uppercase tracking-wider">
                             {s.category}
                           </span>
                         </td>
-                        <td className="py-3 font-mono font-bold text-slate-600 dark:text-slate-300">{s.price}</td>
+                        <td className="py-3 font-mono font-bold text-slate-600 dark:text-slate-300">
+                          {formatCurrency(s.price_from, s.currency || 'CLP')}
+                        </td>
+                        {/* Featured (Star) */}
+                        <td className="py-3 text-center">
+                          <button
+                            type="button"
+                            disabled={isReadOnly}
+                            onClick={() => handleToggleFeatured(s)}
+                            className="focus:outline-none border border-transparent bg-transparent cursor-pointer"
+                          >
+                            <Star className={`w-4 h-4 ${s.featured ? 'text-amber-500 fill-amber-500' : 'text-slate-350 dark:text-slate-700'}`} />
+                          </button>
+                        </td>
+                        {/* Visibilidad / Active */}
                         <td className="py-3 text-center">
                           <button 
                             type="button"
-                            onClick={() => toggleServiceVisibility(s.id)}
+                            disabled={isReadOnly}
+                            onClick={() => handleToggleActive(s)}
                             className="text-slate-500 hover:text-amber-500 cursor-pointer focus:outline-none inline-flex items-center border border-transparent bg-transparent"
                           >
-                            {s.visible ? (
+                            {s.active ? (
                               <span className="flex items-center gap-1 text-[10px] font-extrabold text-emerald-650 bg-emerald-50 dark:text-emerald-450 dark:bg-emerald-950/30 px-2 py-0.5 rounded">
-                                <Eye className="w-3.5 h-3.5" /> Visible
+                                <Eye className="w-3.5 h-3.5" /> Activo
                               </span>
                             ) : (
                               <span className="flex items-center gap-1 text-[10px] font-extrabold text-slate-500 bg-slate-50 dark:text-slate-400 dark:bg-slate-950/10 px-2 py-0.5 rounded">
-                                <EyeOff className="w-3.5 h-3.5" /> Borrador
+                                <EyeOff className="w-3.5 h-3.5" /> Inactivo
                               </span>
                             )}
                           </button>
                         </td>
-                        <td className="py-3 text-right space-x-1.5">
+                        <td className="py-3 text-right space-x-1">
                           <button 
                             type="button"
+                            disabled={isReadOnly}
+                            onClick={() => startEditService(s)}
+                            className="p-1 hover:bg-amber-50 dark:hover:bg-amber-950/20 text-slate-400 hover:text-amber-600 rounded transition-all cursor-pointer border border-transparent bg-transparent inline-flex items-center"
+                            title="Editar"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          
+                          <button 
+                            type="button"
+                            disabled={isReadOnly}
                             onClick={() => handleDeleteService(s.id)}
-                            className="p-1 hover:bg-rose-50 hover:text-rose-655 dark:hover:bg-rose-950/20 text-slate-400 rounded transition-all cursor-pointer inline-flex items-center border border-transparent bg-transparent"
+                            className="p-1 hover:bg-rose-50 hover:text-rose-655 dark:hover:bg-rose-950/20 text-slate-400 rounded transition-all cursor-pointer border border-transparent bg-transparent inline-flex items-center"
                             title="Eliminar"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -375,19 +724,31 @@ export default function Website() {
               </div>
             </div>
 
-            {/* Add Service form */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4">
-              <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">Agregar Nuevo Servicio</h3>
+            {/* Create or Edit Form */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4 h-fit">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">
+                  {editingService ? 'Editar Servicio Web' : 'Agregar Servicio Web'}
+                </h3>
+                {editingService && (
+                  <button 
+                    onClick={resetForm}
+                    className="text-[10px] font-bold text-amber-600 hover:underline border border-transparent bg-transparent cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
               
-              <form onSubmit={handleAddService} className="space-y-4 text-xs">
+              <form onSubmit={handleSaveService} className="space-y-4 text-xs">
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Nombre del Servicio</label>
+                  <label className="text-slate-400 font-bold block">Título del Servicio</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej. Diseño Editorial"
-                    value={newServiceName}
-                    onChange={e => setNewServiceName(e.target.value)}
+                    placeholder="Ej. Portada Ilustrada"
+                    value={serviceTitle}
+                    onChange={e => setServiceTitle(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
                   />
                 </div>
@@ -395,8 +756,8 @@ export default function Website() {
                 <div className="space-y-1.5">
                   <label className="text-slate-400 font-bold block">Categoría</label>
                   <select
-                    value={newServiceCat}
-                    onChange={e => setNewServiceCat(e.target.value)}
+                    value={serviceCategory}
+                    onChange={e => setServiceCategory(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
                   >
                     <option value="Editorial">Editorial</option>
@@ -404,26 +765,64 @@ export default function Website() {
                     <option value="Digitalización">Digitalización</option>
                     <option value="Producción">Producción</option>
                     <option value="Marketing">Marketing</option>
+                    <option value="Legal">Legal</option>
                   </select>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Precio Público o Rango</label>
+                  <label className="text-slate-400 font-bold block">Precio Desde (CLP)</label>
                   <input
-                    type="text"
-                    placeholder="Ej. $100,000 CLP"
-                    value={newServicePrice}
-                    onChange={e => setNewServicePrice(e.target.value)}
+                    type="number"
+                    min="0"
+                    placeholder="Ej. 120000"
+                    value={servicePrice}
+                    onChange={e => setServicePrice(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Descripción Corta</label>
+                  <textarea
+                    placeholder="Descripción resumida para cards o listados..."
+                    value={serviceShortDesc}
+                    onChange={e => setServiceShortDesc(e.target.value)}
+                    rows={2}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
                   />
                 </div>
 
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Descripción Completa (Opcional)</label>
+                  <textarea
+                    placeholder="Detalles del servicio, condiciones de entrega..."
+                    value={serviceFullDesc}
+                    onChange={e => setServiceFullDesc(e.target.value)}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2 py-1.5">
+                  <input
+                    type="checkbox"
+                    id="serviceFeatured"
+                    checked={serviceFeatured}
+                    onChange={e => setServiceFeatured(e.target.checked)}
+                    className="rounded border-slate-300 text-amber-500 focus:ring-amber-500 h-4 w-4"
+                  />
+                  <label htmlFor="serviceFeatured" className="text-slate-655 dark:text-slate-350 font-bold cursor-pointer select-none">
+                    Destacar en la página de inicio
+                  </label>
+                </div>
+
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center justify-center space-x-1.5"
+                  disabled={isReadOnly}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center justify-center space-x-1.5 border border-transparent"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Publicar en Web</span>
+                  <span>{editingService ? 'Actualizar Servicio' : 'Publicar Servicio'}</span>
                 </button>
               </form>
             </div>
@@ -462,13 +861,13 @@ export default function Website() {
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex gap-3">
-                      <div className="p-2.5 bg-slate-50 dark:bg-slate-950/30 border border-slate-100 dark:border-slate-850 rounded-xl text-slate-400 shrink-0">
+                      <div className="p-2.5 bg-slate-50 dark:bg-slate-950/30 border border-slate-100 dark:border-slate-855 rounded-xl text-slate-400 shrink-0">
                         <BookOpen className="w-5 h-5 text-purple-500" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-extrabold text-sm text-slate-800 dark:text-slate-100">{b.title}</h4>
-                          <span className="px-2 py-0.5 bg-purple-500/10 text-purple-605 dark:text-purple-400 rounded text-[9px] font-bold">
+                          <span className="px-2 py-0.5 bg-purple-550/10 text-purple-650 dark:text-purple-400 rounded text-[9px] font-bold">
                             {b.badge}
                           </span>
                         </div>
@@ -479,6 +878,7 @@ export default function Website() {
                     <div className="flex items-center space-x-1">
                       <button
                         type="button"
+                        disabled={isReadOnly}
                         onClick={() => toggleBookVisibility(b.id)}
                         className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-all cursor-pointer border border-transparent bg-transparent"
                         title={b.visible ? 'Ocultar de la Web' : 'Mostrar en la Web'}
@@ -492,6 +892,7 @@ export default function Website() {
                       
                       <button
                         type="button"
+                        disabled={isReadOnly}
                         onClick={() => handleDeleteBook(b.id)}
                         className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-550 text-slate-400 rounded transition-all cursor-pointer border border-transparent bg-transparent"
                         title="Eliminar"
@@ -511,6 +912,7 @@ export default function Website() {
                         <span className="font-bold text-slate-400 w-16">Amazon:</span>
                         <input
                           type="text"
+                          disabled={isReadOnly}
                           placeholder="Sin enlace"
                           value={b.links.amazon}
                           onChange={e => handleUpdateLink(b.id, 'amazon', e.target.value)}
@@ -523,6 +925,7 @@ export default function Website() {
                         <span className="font-bold text-slate-400 w-16">Buscalibre:</span>
                         <input
                           type="text"
+                          disabled={isReadOnly}
                           placeholder="Sin enlace"
                           value={b.links.buscalibre}
                           onChange={e => handleUpdateLink(b.id, 'buscalibre', e.target.value)}
@@ -535,6 +938,7 @@ export default function Website() {
                         <span className="font-bold text-slate-400 w-16">Wattpad:</span>
                         <input
                           type="text"
+                          disabled={isReadOnly}
                           placeholder="Sin enlace"
                           value={b.links.wattpad}
                           onChange={e => handleUpdateLink(b.id, 'wattpad', e.target.value)}
@@ -547,6 +951,7 @@ export default function Website() {
                         <span className="font-bold text-slate-400 w-16">Pág. Autor:</span>
                         <input
                           type="text"
+                          disabled={isReadOnly}
                           placeholder="Sin enlace"
                           value={b.links.website}
                           onChange={e => handleUpdateLink(b.id, 'website', e.target.value)}
@@ -615,7 +1020,8 @@ export default function Website() {
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center justify-center space-x-1.5"
+                  disabled={isReadOnly}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center justify-center space-x-1.5 border border-transparent"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Destacar en la Web</span>
