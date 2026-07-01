@@ -224,6 +224,7 @@ CREATE TABLE IF NOT EXISTS services (
     rate_date DATE,
 
     -- Missing columns
+    service_name TEXT,
     amount_paid NUMERIC(12,2) DEFAULT 0.00,
     balance_due NUMERIC(12,2) DEFAULT 0.00,
     payment_status TEXT DEFAULT 'pendiente' CHECK (payment_status IN ('sin pago', 'pendiente', 'pago parcial', 'pagado')),

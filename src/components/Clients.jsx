@@ -29,6 +29,32 @@ const safeText = (value) => String(value ?? '').toLowerCase()
 const safeIncludes = (value, search) => safeText(value).includes(safeText(search))
 const safeArrayIncludes = (value, item) => Array.isArray(value) ? value.includes(item) : false
 
+const normalizeServiceType = (name, category) => {
+  const n = String(name || '').toLowerCase().trim();
+  const c = String(category || '').toLowerCase().trim();
+
+  if (n.includes('corrección') || n.includes('correc')) return 'corrección';
+  if (n.includes('maquetación') || n.includes('maquet')) return 'maquetación';
+  if (n.includes('portada') || n.includes('diseño de portada') || n.includes('diseño portada')) return 'portada';
+  if (n.includes('ebook') || n.includes('digital') || n.includes('libro digital')) return 'ebook';
+  if (n.includes('libro físico') || n.includes('impresión') || n.includes('fisico') || n.includes('físico')) return 'libro físico';
+  if (n.includes('difusión') || n.includes('publicidad') || n.includes('lanzamiento') || n.includes('marketing')) return 'difusión';
+  if (n.includes('derechos') || n.includes('isbn') || n.includes('legal') || n.includes('derecho')) return 'derechos de autor';
+  if (n.includes('asesoría') || n.includes('asesoria') || n.includes('consultoría') || n.includes('publicación') || n.includes('publicacion')) return 'asesoría de publicación';
+
+  if (c.includes('editorial')) return 'otro';
+  if (c.includes('corrección') || c.includes('correc')) return 'corrección';
+  if (c.includes('maquetación') || c.includes('maquet')) return 'maquetación';
+  if (c.includes('portada') || c.includes('diseño')) return 'portada';
+  if (c.includes('ebook')) return 'ebook';
+  if (c.includes('físico') || c.includes('impresión')) return 'libro físico';
+  if (c.includes('difusión') || c.includes('publicidad') || c.includes('marketing')) return 'difusión';
+  if (c.includes('derechos') || c.includes('legal')) return 'derechos de autor';
+  if (c.includes('asesoría') || c.includes('asesoria') || c.includes('publicación')) return 'asesoría de publicación';
+
+  return 'otro';
+};
+
 class ClientsErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -1594,7 +1620,8 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
             const sValue = parseFloat(sItem.price) || 0;
             const servicePayload = {
               client_id: selectedClient.id,
-              type: sItem.name,
+              type: normalizeServiceType(sItem.name, sItem.category),
+              service_name: sItem.name,
               book_title: formData.service_book_title,
               value: sValue,
               currency: currency,
@@ -1698,7 +1725,8 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
             const sValue = parseFloat(sItem.price) || 0;
             const servicePayload = {
               client_id: createdClient.id,
-              type: sItem.name,
+              type: normalizeServiceType(sItem.name, sItem.category),
+              service_name: sItem.name,
               book_title: formData.service_book_title,
               value: sValue,
               currency: currency,
@@ -3362,7 +3390,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
                               <div className="flex justify-between items-start gap-2">
                                 <div>
                                   <span className="text-[10px] font-bold text-brand-600 bg-brand-50 border border-brand-100 px-2 py-0.5 rounded capitalize dark:bg-brand-950/30 dark:text-brand-400 dark:border-brand-900">
-                                    {service.type}
+                                    {service.service_name || service.type}
                                   </span>
                                   <h6 className="font-extrabold text-sm text-slate-800 dark:text-slate-100 mt-1.5">{service.book_title}</h6>
                                 </div>

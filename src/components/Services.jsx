@@ -1290,7 +1290,7 @@ export default function Services({ isReadOnly = false }) {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[10px] font-bold text-brand-600 bg-brand-50 border border-brand-100 px-2 py-0.5 rounded capitalize dark:bg-brand-950/30 dark:text-brand-400 dark:border-brand-900">
-                        {service.type}
+                        {service.service_name || service.type}
                       </span>
                       {getServiceBadges(service, duration).map((badge, bidx) => (
                         <span key={bidx} className={`inline-flex items-center gap-1 text-[9px] font-bold border px-2 py-0.5 rounded uppercase tracking-wider ${badge.classes}`}>
