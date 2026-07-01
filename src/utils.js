@@ -533,6 +533,7 @@ export const recalculateServiceProgress = async (serviceId) => {
  * Synchronizes stage events for a service to the agenda_events table
  */
 export const syncStageEventsToAgenda = async (serviceId) => {
+  return; // Desactivado
   if (!serviceId) return;
   const todayStr = new Date().toISOString().split('T')[0];
 

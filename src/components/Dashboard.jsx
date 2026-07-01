@@ -99,8 +99,7 @@ export default function Dashboard() {
         expenses,
         payroll,
         allocations,
-        reserveMovements,
-        agendaEvents
+        reserveMovements
       ] = await Promise.all([
         safeQuery('clients'),
         safeQuery('prospects'),
@@ -109,8 +108,7 @@ export default function Dashboard() {
         safeQuery('expenses'),
         safeQuery('payroll_payments'),
         safeQuery('income_allocations'),
-        safeQuery('operational_reserve_movements'),
-        safeQuery('agenda_events')
+        safeQuery('operational_reserve_movements')
       ]);
 
       // Temporary development logs (will be kept discrete)
@@ -424,19 +422,6 @@ export default function Dashboard() {
         ? Math.round(activeServicesList.reduce((sum, s) => sum + (parseFloat(s.progress || s.advance_percent || 0)), 0) / activeServicesList.length)
         : 0;
 
-      // 12. Próximos hitos de Agenda Editorial
-      const upcomingMilestones = (agendaEvents || [])
-        .filter(evt => evt.date >= todayStr && evt.status !== 'completada')
-        .sort((a, b) => new Date(a.date) - new Date(b.date))
-        .slice(0, 5)
-        .map(evt => {
-          const clientObj = (clients || []).find(c => c.id === evt.client_id);
-          return {
-            ...evt,
-            clientName: clientObj ? clientObj.name : null
-          };
-        });
-
       // Recent editorial services for bottom log
       const recentServices = (services || [])
         .sort((a, b) => new Date(b.created_at || b.start_date) - new Date(a.created_at || a.start_date))
@@ -479,7 +464,7 @@ export default function Dashboard() {
           readyToStart,
           avgProgress,
         },
-        upcomingMilestones,
+        upcomingMilestones: [],
         recentServices
       });
 
@@ -814,49 +799,8 @@ export default function Dashboard() {
                 </span>
               </div>
 
-              {/* Agenda y Últimos servicios */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
-                {/* Próximos hitos de la Agenda */}
-                <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-150 dark:border-slate-800/85 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">Hitos Próximos (Agenda Editorial)</h3>
-                      <span className="text-[10px] text-slate-455 dark:text-slate-400 font-semibold uppercase">Próximas entregas</span>
-                    </div>
-
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                      {stats.upcomingMilestones.length === 0 ? (
-                        <div className="py-8 text-center text-slate-400">
-                          <Clock className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-800" />
-                          <p className="text-xs font-semibold">No hay entregas pendientes registradas en la agenda.</p>
-                        </div>
-                      ) : (
-                        stats.upcomingMilestones.map((evt, idx) => (
-                          <div key={idx} className="py-3 flex justify-between items-center group">
-                            <div className="flex items-start gap-3">
-                              <div className="mt-0.5 p-1 bg-amber-50 dark:bg-amber-950/20 text-amber-600 rounded">
-                                <Calendar className="w-3.5 h-3.5" />
-                              </div>
-                              <div>
-                                <h4 className="font-semibold text-slate-700 dark:text-slate-200">{evt.title}</h4>
-                                <p className="text-[10px] text-slate-450 dark:text-slate-400">
-                                  {evt.clientName ? `Cliente: ${evt.clientName}` : 'Hito de Agenda'}
-                                  {evt.notes && ` • ${evt.notes}`}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 dark:text-amber-450 dark:bg-amber-950/40 px-2.5 py-1 rounded border border-amber-100 dark:border-amber-900 whitespace-nowrap">
-                                {evt.date}
-                              </span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-
+              {/* Últimos servicios */}
+              <div className="pt-2">
                 {/* Últimos Servicios Contratados */}
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-150 dark:border-slate-800/85 shadow-sm flex flex-col justify-between">
                   <div>
@@ -868,10 +812,10 @@ export default function Dashboard() {
                         stats.recentServices.map((s, idx) => (
                           <div key={idx} className="py-3 flex justify-between items-center">
                             <div className="truncate pr-2">
-                              <h4 className="font-semibold text-slate-750 dark:text-slate-200 truncate max-w-[150px]" title={s.book_title || s.title || 'Servicio'}>
+                              <h4 className="font-semibold text-slate-750 dark:text-slate-200 truncate" title={s.book_title || s.title || 'Servicio'}>
                                 {s.book_title || s.title || 'Servicio'}
                               </h4>
-                              <p className="text-[10px] text-slate-450 dark:text-slate-400 truncate max-w-[150px]" title={s.clientName}>
+                              <p className="text-[10px] text-slate-450 dark:text-slate-400" title={s.clientName}>
                                 {s.clientName} • {s.type || s.service_type}
                               </p>
                             </div>

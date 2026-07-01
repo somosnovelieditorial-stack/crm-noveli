@@ -21,7 +21,6 @@ import Integrations from './components/Integrations';
 import CompletedSales from './components/CompletedSales';
 
 // New Phase Components
-import Agenda from './components/Agenda';
 import CurrencyRates from './components/CurrencyRates';
 import Configuration from './components/Configuration';
 import Staff from './components/Staff';
@@ -47,13 +46,10 @@ const menuGroups = [
     tab: 'dashboard'
   },
   {
-    id: 'agenda',
-    label: 'Agenda',
-    icon: <Calendar className="w-4 h-4" />,
-    items: [
-      { id: 'agenda', label: 'Agenda Editorial', tab: 'agenda' },
-      { id: 'notifications', label: 'Notificaciones', tab: 'notifications' }
-    ]
+    id: 'notifications',
+    label: 'Notificaciones',
+    icon: <Bell className="w-4 h-4" />,
+    tab: 'notifications'
   },
   {
     id: 'clients_prospects',
@@ -862,7 +858,6 @@ export default function App() {
   // Expanded Tab definitions
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: <Library className="w-4.5 h-4.5" /> },
-    { id: 'agenda', label: 'Agenda Editorial', icon: <Calendar className="w-4.5 h-4.5" /> },
     { id: 'clients', label: 'Clientes', icon: <Users className="w-4.5 h-4.5" /> },
     { id: 'prospects', label: 'Prospectos', icon: <UserCheck className="w-4.5 h-4.5" /> },
     { id: 'services', label: 'Servicios Contratados', icon: <BookOpen className="w-4.5 h-4.5" /> },
@@ -889,7 +884,6 @@ export default function App() {
 
     switch (activeTab) {
       case 'dashboard': return <Dashboard {...commonProps} />;
-      case 'agenda': return <Agenda {...commonProps} />;
       case 'clients': return <Clients {...commonProps} />;
       case 'prospects': return <Prospects {...commonProps} />;
       case 'services': return <Services {...commonProps} />;
