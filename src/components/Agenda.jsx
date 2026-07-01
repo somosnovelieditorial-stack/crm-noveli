@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { 
   Calendar as CalendarIcon, Clock, Users, BookOpen, DollarSign, FileText, 
-  Plus, Check, Filter, AlertTriangle, Trash2, Edit2, X
+  Plus, Check, Filter, AlertTriangle, Trash2, Edit2, X, CheckCircle
 } from 'lucide-react';
+import { syncPaymentStatus, recalculateClientStartStatus, recalculateServiceProgress } from '../utils';
 
 export default function Agenda() {
   const [loading, setLoading] = useState(true);
@@ -41,12 +42,13 @@ export default function Agenda() {
       }
 
       // Fetch all sources
-      const [prospectsRes, servicesRes, incomesRes, documentsRes, manualEventsRes] = await Promise.all([
+      const [prospectsRes, servicesRes, incomesRes, documentsRes, manualEventsRes, clientsRes] = await Promise.all([
         supabase.from('prospects').select('*'),
         supabase.from('services').select('*'),
         supabase.from('incomes').select('*'),
         supabase.from('documents').select('*'),
-        supabase.from('agenda_events').select('*')
+        supabase.from('agenda_events').select('*'),
+        supabase.from('clients').select('*')
       ]);
 
       const prospectsList = prospectsRes.data || [];
@@ -54,6 +56,7 @@ export default function Agenda() {
       const incomesList = incomesRes.data || [];
       const documentsList = documentsRes.data || [];
       const manualEventsList = manualEventsRes.data || [];
+      const clientsList = clientsRes.data || [];
 
       // Combine into unified agenda items list
       const items = [];
@@ -67,9 +70,10 @@ export default function Agenda() {
             description: `Origen: ${p.origin}. Próxima acción: ${p.next_action || 'Sin acción definida'}. Notas: ${p.notes || ''}`,
             date: p.followup_date,
             time: '09:00',
-            type: 'prospecto',
+            type: 'seguimiento',
             entity_id: p.id,
-            completed: false
+            completed: false,
+            prospect: p
           });
         }
       });
@@ -78,16 +82,19 @@ export default function Agenda() {
       servicesList.forEach(s => {
         if (s.estimated_delivery && s.status !== 'cerrado') {
           const isNear = new Date(s.estimated_delivery) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          const serviceClient = clientsList.find(c => c.id === s.client_id);
           items.push({
             id: `serv-delivery-${s.id}`,
             title: `Entrega: ${s.book_title}`,
             description: `Servicio contratado (${s.type}). Etapa actual: ${s.current_stage || 'N/A'}. Avance: ${s.advance_percent || 0}%`,
             date: s.estimated_delivery,
             time: '18:00',
-            type: 'entrega',
+            type: 'etapa_servicio',
             entity_id: s.id,
             completed: false,
-            alert: isNear
+            alert: isNear,
+            service: s,
+            client: serviceClient
           });
         }
       });
@@ -95,8 +102,8 @@ export default function Agenda() {
       // 3. Pending payments
       incomesList.forEach(inc => {
         if (inc.status !== 'pagado') {
-          // If due date is not directly in DB, use transaction date as expected date
           const clientName = inc.client ? inc.client.name : 'Cliente General';
+          const incomeClient = clientsList.find(c => c.id === inc.client_id) || inc.client;
           items.push({
             id: `income-pending-${inc.id}`,
             title: `Pago Pendiente: ${clientName}`,
@@ -105,27 +112,31 @@ export default function Agenda() {
             time: '12:00',
             type: 'pago',
             entity_id: inc.id,
-            completed: false
+            completed: false,
+            income: inc,
+            client: incomeClient
           });
         }
       });
 
       // 4. Pending contracts
-      // Active services that do not have a linked document of type 'contrato'
       servicesList.forEach(s => {
         if (s.status !== 'cerrado') {
           const hasContract = documentsList.some(doc => doc.service_id === s.id && doc.file_type === 'contrato');
           if (!hasContract) {
+            const serviceClient = clientsList.find(c => c.id === s.client_id);
             items.push({
               id: `contract-pending-${s.id}`,
               title: `Contrato Pendiente: ${s.book_title}`,
-              description: `Falta cargar contrato firmado para el libro de ${s.client ? s.client.name : 'autor'}.`,
+               description: `Falta cargar contrato firmado para el libro de ${s.client ? s.client.name : 'autor'}.`,
               date: s.start_date || todayStr,
               time: '10:00',
               type: 'contrato',
               entity_id: s.id,
               completed: false,
-              alert: true
+              alert: true,
+              service: s,
+              client: serviceClient
             });
           }
         }
@@ -133,8 +144,9 @@ export default function Agenda() {
 
       // 5. Manual events
       manualEventsList.forEach(evt => {
-        const isStageEvent = evt.type === 'etapa_servicio';
         const isCompleted = evt.status === 'completada' || evt.completed === true;
+        const serviceClient = clientsList.find(c => c.id === evt.client_id);
+        const eventService = servicesList.find(s => s.id === evt.service_id);
 
         items.push({
           id: `manual-evt-${evt.id}`,
@@ -142,10 +154,16 @@ export default function Agenda() {
           description: evt.notes || evt.description || 'Sin descripción',
           date: evt.date,
           time: evt.time || '12:00',
-          type: isStageEvent ? 'entrega' : (evt.type || 'reunión'),
+          type: evt.type || 'otro',
           entity_id: evt.id,
           completed: isCompleted,
-          isManual: !isStageEvent
+          isManual: true,
+          client_id: evt.client_id,
+          service_id: evt.service_id,
+          stage_id: evt.stage_id,
+          client: serviceClient,
+          service: eventService,
+          rawEvent: evt
         });
       });
 
@@ -182,6 +200,298 @@ export default function Agenda() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const triggerQuickAction = async (event, actionType) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const client = event.client;
+    const service = event.service;
+    
+    // Validate IDs
+    if (
+      actionType === 'marcar_contrato_enviado' || 
+      actionType === 'marcar_contrato_firmado' || 
+      actionType === 'marcar_pagado' || 
+      actionType === 'marcar_archivos_recibidos' || 
+      actionType === 'marcar_materiales_recibidos'
+    ) {
+      const clientId = client?.id || event.client_id || service?.client_id;
+      if (!clientId) {
+        alert("Error: No se encontró el client_id necesario para esta acción.");
+        return;
+      }
+    }
+
+    if (actionType === 'marcar_etapa_completada') {
+      const stageId = event.stage_id || (event.rawEvent && event.rawEvent.stage_id);
+      const sId = event.service_id || (event.rawEvent && event.rawEvent.service_id) || service?.id;
+      if (!stageId) {
+        alert("Error: No se encontró el stage_id necesario para completar la etapa.");
+        return;
+      }
+      if (!sId) {
+        alert("Error: No se encontró el service_id necesario para recalcular el avance.");
+        return;
+      }
+    }
+
+    const confirmMsg = `¿Estás seguro de que deseas realizar esta acción rápida?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      if (actionType === 'marcar_contrato_enviado') {
+        const clientId = client?.id || event.client_id || service?.client_id;
+        const { error: clientErr } = await supabase
+          .from('clients')
+          .update({
+            contract_sent: true,
+            contract_sent_at: todayStr
+          })
+          .eq('id', clientId);
+        if (clientErr) throw clientErr;
+
+        const sId = service?.id || event.service_id;
+        if (sId) {
+          await supabase
+            .from('services')
+            .update({
+              contract_sent: true,
+              contract_sent_at: todayStr
+            })
+            .eq('id', sId);
+        }
+
+        alert("Contrato marcado como enviado con éxito.");
+      }
+
+      else if (actionType === 'marcar_contrato_firmado') {
+        const clientId = client?.id || event.client_id || service?.client_id;
+        const { error: clientErr } = await supabase
+          .from('clients')
+          .update({
+            contract_signed_received: true,
+            contract_signed_received_at: todayStr
+          })
+          .eq('id', clientId);
+        if (clientErr) throw clientErr;
+
+        const sId = service?.id || event.service_id;
+        if (sId) {
+          await supabase
+            .from('services')
+            .update({
+              contract_signed_received: true,
+              contract_signed_received_at: todayStr
+            })
+            .eq('id', sId);
+        }
+
+        if (event.isManual) {
+          await supabase
+            .from('agenda_events')
+            .update({ status: 'completada' })
+            .eq('id', event.entity_id);
+        }
+
+        await recalculateClientStartStatus(clientId);
+        alert("Contrato firmado marcado como recibido con éxito.");
+      }
+
+      else if (actionType === 'marcar_pagado') {
+        const clientId = client?.id || event.client_id || service?.client_id;
+        const clientTotal = client ? parseFloat(client.total_agreed_amount || client.agreed_amount || client.amount || 0) : 0;
+        let amountPaid = clientTotal;
+        
+        if (amountPaid <= 0) {
+          const amtStr = prompt("Ingrese el monto del pago realizado:", "0");
+          if (amtStr === null) return;
+          amountPaid = parseFloat(amtStr) || 0;
+        }
+
+        const { error: clientErr } = await supabase
+          .from('clients')
+          .update({
+            payment_status: 'pagado',
+            balance_due: 0,
+            amount_paid: amountPaid,
+            paid_at: todayStr
+          })
+          .eq('id', clientId);
+        if (clientErr) throw clientErr;
+
+        await syncPaymentStatus(clientId, true);
+
+        if (event.isManual) {
+          await supabase
+            .from('agenda_events')
+            .update({ status: 'completada' })
+            .eq('id', event.entity_id);
+        }
+
+        await recalculateClientStartStatus(clientId);
+        alert("Pago marcado como completado y sincronizado con éxito.");
+      }
+
+      else if (actionType === 'marcar_archivos_recibidos') {
+        const clientId = client?.id || event.client_id || service?.client_id;
+        const { error: clientErr } = await supabase
+          .from('clients')
+          .update({
+            files_received: true,
+            files_received_at: todayStr
+          })
+          .eq('id', clientId);
+        if (clientErr) throw clientErr;
+
+        const sId = service?.id || event.service_id;
+        if (sId) {
+          await supabase
+            .from('services')
+            .update({
+              files_received: true,
+              files_received_at: todayStr
+            })
+            .eq('id', sId);
+        }
+
+        if (event.isManual) {
+          await supabase
+            .from('agenda_events')
+            .update({ status: 'completada' })
+            .eq('id', event.entity_id);
+        }
+
+        await recalculateClientStartStatus(clientId);
+        alert("Archivos del manuscrito marcados como recibidos con éxito.");
+      }
+
+      else if (actionType === 'marcar_materiales_recibidos') {
+        const clientId = client?.id || event.client_id || service?.client_id;
+        const { error: clientErr } = await supabase
+          .from('clients')
+          .update({
+            materials_received: true,
+            materials_received_at: todayStr
+          })
+          .eq('id', clientId);
+        if (clientErr) throw clientErr;
+
+        const sId = service?.id || event.service_id;
+        if (sId) {
+          await supabase
+            .from('services')
+            .update({
+              materials_received: true,
+              materials_received_at: todayStr
+            })
+            .eq('id', sId);
+        }
+
+        if (event.isManual) {
+          await supabase
+            .from('agenda_events')
+            .update({ status: 'completada' })
+            .eq('id', event.entity_id);
+        }
+
+        await recalculateClientStartStatus(clientId);
+        alert("Materiales y briefing marcados como recibidos con éxito.");
+      }
+
+      else if (actionType === 'marcar_etapa_completada') {
+        const stageId = event.stage_id || (event.rawEvent && event.rawEvent.stage_id);
+        const sId = event.service_id || (event.rawEvent && event.rawEvent.service_id) || service?.id;
+
+        const { error: stageErr } = await supabase
+          .from('service_stages')
+          .update({
+            status: 'completada',
+            completed_at: todayStr
+          })
+          .eq('id', stageId);
+        if (stageErr) throw stageErr;
+
+        await supabase
+          .from('agenda_events')
+          .update({ status: 'completada' })
+          .eq('id', event.entity_id);
+
+        await recalculateServiceProgress(sId);
+        alert("Etapa marcada como completada con éxito.");
+      }
+
+      await fetchAgendaData();
+    } catch (err) {
+      console.error("Error executing quick action:", err);
+      alert(`Error al procesar la acción: ${err.message || err}`);
+    }
+  };
+
+  const renderQuickActions = (event) => {
+    const buttons = [];
+    const client = event.client;
+    const service = event.service;
+    const isCompleted = event.completed;
+
+    if (isCompleted) return null;
+
+    const addButton = (label, actionType, icon) => {
+      buttons.push(
+        <button
+          key={actionType}
+          onClick={() => triggerQuickAction(event, actionType)}
+          className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500 text-amber-600 hover:text-white dark:text-amber-400 dark:hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer"
+        >
+          {icon}
+          <span>{label}</span>
+        </button>
+      );
+    };
+
+    // 1. Contrato
+    if (event.type === 'contrato') {
+      if (client) {
+        if (!client.contract_sent) {
+          addButton("Marcar contrato enviado", "marcar_contrato_enviado", <CalendarIcon className="w-3.5 h-3.5" />);
+        } else if (!client.contract_signed_received) {
+          addButton("Marcar contrato recibido", "marcar_contrato_firmado", <CheckCircle className="w-3.5 h-3.5" />);
+        }
+      } else if (service) {
+        if (!service.contract_sent) {
+          addButton("Marcar contrato enviado", "marcar_contrato_enviado", <CalendarIcon className="w-3.5 h-3.5" />);
+        } else if (!service.contract_signed_received) {
+          addButton("Marcar contrato recibido", "marcar_contrato_firmado", <CheckCircle className="w-3.5 h-3.5" />);
+        }
+      }
+    }
+
+    // 2. Pago
+    if (event.type === 'pago') {
+      if ((client && client.payment_status !== 'pagado') || (service && service.payment_status !== 'pagado')) {
+        addButton("Marcar pagado", "marcar_pagado", <DollarSign className="w-3.5 h-3.5" />);
+      }
+    }
+
+    // 3. Archivos
+    if (event.type === 'archivos') {
+      if ((client && !client.files_received) || (service && !service.files_received)) {
+        addButton("Marcar archivos recibidos", "marcar_archivos_recibidos", <FileText className="w-3.5 h-3.5" />);
+      }
+    }
+
+    // 4. Materiales
+    if (event.type === 'materiales') {
+      if ((client && !client.materials_received) || (service && !service.materials_received)) {
+        addButton("Marcar materiales recibidos", "marcar_materiales_recibidos", <FileText className="w-3.5 h-3.5" />);
+      }
+    }
+
+    // 5. Etapa de servicio
+    if (event.type === 'etapa_servicio' || event.stage_id) {
+      addButton("Marcar etapa completada", "marcar_etapa_completada", <CheckCircle className="w-3.5 h-3.5" />);
+    }
+
+    return buttons.length > 0 ? <div className="flex flex-wrap gap-2">{buttons}</div> : null;
   };
 
   const handleCreateEvent = async (e) => {
@@ -375,7 +685,8 @@ export default function Agenda() {
               </div>
 
               {/* Action side */}
-              <div className="flex gap-2 justify-end items-center shrink-0">
+              <div className="flex flex-col md:flex-row gap-3 items-end md:items-center justify-end shrink-0">
+                {renderQuickActions(event)}
                 {event.isManual && (
                   <button
                     onClick={() => handleDeleteManualEvent(event.entity_id)}
