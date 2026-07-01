@@ -552,10 +552,9 @@ export default function App() {
       }
     });
 
-    // 3. Initialize theme
+    // 3. Initialize theme (default to light mode, ignore OS preferences unless explicitly saved)
     const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+    if (savedTheme === 'dark') {
       setIsDarkMode(true);
       document.documentElement.classList.add('dark');
     } else {
