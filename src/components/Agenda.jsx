@@ -202,7 +202,7 @@ export default function Agenda() {
     }
   };
 
-  const triggerQuickAction = async (event, actionType) => {
+  const handleQuickAction = async (event, actionType) => {
     const todayStr = new Date().toISOString().split('T')[0];
     const client = event.client;
     const service = event.service;
@@ -439,8 +439,8 @@ export default function Agenda() {
       buttons.push(
         <button
           key={actionType}
-          onClick={() => triggerQuickAction(event, actionType)}
-          className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500 text-amber-600 hover:text-white dark:text-amber-400 dark:hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer"
+          onClick={() => handleQuickAction(event, actionType)}
+          className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500 text-amber-700 hover:text-white dark:text-amber-400 dark:hover:bg-amber-500/20 border border-amber-500/30 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer shadow-2xs"
         >
           {icon}
           <span>{label}</span>
@@ -448,50 +448,84 @@ export default function Agenda() {
       );
     };
 
-    // 1. Contrato
-    if (event.type === 'contrato') {
-      if (client) {
-        if (!client.contract_sent) {
-          addButton("Marcar contrato enviado", "marcar_contrato_enviado", <CalendarIcon className="w-3.5 h-3.5" />);
-        } else if (!client.contract_signed_received) {
-          addButton("Marcar contrato recibido", "marcar_contrato_firmado", <CheckCircle className="w-3.5 h-3.5" />);
-        }
-      } else if (service) {
-        if (!service.contract_sent) {
-          addButton("Marcar contrato enviado", "marcar_contrato_enviado", <CalendarIcon className="w-3.5 h-3.5" />);
-        } else if (!service.contract_signed_received) {
-          addButton("Marcar contrato recibido", "marcar_contrato_firmado", <CheckCircle className="w-3.5 h-3.5" />);
-        }
+    const titleLower = String(event.title || '').toLowerCase();
+    const descLower = String(event.description || '').toLowerCase();
+    const typeLower = String(event.type || '').toLowerCase();
+
+    // 1. Si el evento es de contrato pendiente:
+    if (
+      typeLower === 'contrato' || 
+      titleLower.includes('contrato') || 
+      descLower.includes('contrato') || 
+      event.action_key === 'contrato'
+    ) {
+      const clientSent = client?.contract_sent ?? false;
+      const clientSigned = client?.contract_signed_received ?? false;
+      
+      if (!clientSent) {
+        addButton("Marcar contrato enviado", "marcar_contrato_enviado", <CalendarIcon className="w-3.5 h-3.5" />);
+      }
+      if (!clientSigned) {
+        addButton("Marcar contrato recibido", "marcar_contrato_firmado", <CheckCircle className="w-3.5 h-3.5" />);
       }
     }
 
-    // 2. Pago
-    if (event.type === 'pago') {
-      if ((client && client.payment_status !== 'pagado') || (service && service.payment_status !== 'pagado')) {
+    // 2. Si evento contiene pago pendiente:
+    if (
+      typeLower === 'pago' || 
+      titleLower.includes('pago') || 
+      titleLower.includes('cobro') || 
+      descLower.includes('pago') || 
+      descLower.includes('cobro') || 
+      event.action_key === 'pago'
+    ) {
+      const isPaid = client?.payment_status === 'pagado';
+      if (!isPaid) {
         addButton("Marcar pagado", "marcar_pagado", <DollarSign className="w-3.5 h-3.5" />);
       }
     }
 
-    // 3. Archivos
-    if (event.type === 'archivos') {
-      if ((client && !client.files_received) || (service && !service.files_received)) {
-        addButton("Marcar archivos recibidos", "marcar_archivos_recibidos", <FileText className="w-3.5 h-3.5" />);
+    // 3. Si evento contiene manuscrito/archivos:
+    if (
+      typeLower === 'archivos' || 
+      titleLower.includes('manuscrito') || 
+      titleLower.includes('archivo') || 
+      descLower.includes('manuscrito') || 
+      descLower.includes('archivo') || 
+      event.action_key === 'archivos'
+    ) {
+      const filesOk = client?.files_received ?? false;
+      if (!filesOk) {
+        addButton("Archivos recibidos", "marcar_archivos_recibidos", <FileText className="w-3.5 h-3.5" />);
       }
     }
 
-    // 4. Materiales
-    if (event.type === 'materiales') {
-      if ((client && !client.materials_received) || (service && !service.materials_received)) {
-        addButton("Marcar materiales recibidos", "marcar_materiales_recibidos", <FileText className="w-3.5 h-3.5" />);
+    // 4. Si evento contiene materiales/briefing:
+    if (
+      typeLower === 'materiales' || 
+      titleLower.includes('materiales') || 
+      titleLower.includes('briefing') || 
+      descLower.includes('materiales') || 
+      descLower.includes('briefing') || 
+      event.action_key === 'materiales'
+    ) {
+      const matOk = client?.materials_received ?? false;
+      if (!matOk) {
+        addButton("Materiales recibidos", "marcar_materiales_recibidos", <FileText className="w-3.5 h-3.5" />);
       }
     }
 
-    // 5. Etapa de servicio
-    if (event.type === 'etapa_servicio' || event.stage_id) {
-      addButton("Marcar etapa completada", "marcar_etapa_completada", <CheckCircle className="w-3.5 h-3.5" />);
+    // 5. Si event.type === "etapa_servicio":
+    if (
+      typeLower === 'etapa_servicio' || 
+      typeLower === 'entrega' || 
+      event.stage_id || 
+      event.action_key === 'etapa_servicio'
+    ) {
+      addButton("Completar etapa", "marcar_etapa_completada", <CheckCircle className="w-3.5 h-3.5" />);
     }
 
-    return buttons.length > 0 ? <div className="flex flex-wrap gap-2">{buttons}</div> : null;
+    return buttons.length > 0 ? <div className="flex flex-wrap gap-2 mt-2 md:mt-0">{buttons}</div> : null;
   };
 
   const handleCreateEvent = async (e) => {
