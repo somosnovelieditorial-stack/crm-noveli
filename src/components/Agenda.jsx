@@ -58,6 +58,60 @@ export default function Agenda() {
       const manualEventsList = manualEventsRes.data || [];
       const clientsList = clientsRes.data || [];
 
+      // 1. Sincronizar eventos antiguos (agenda_events en Supabase) en base al estado real de clientes/servicios
+      for (const evt of manualEventsList) {
+        if (evt.status === 'completada') continue;
+
+        const clientObj = clientsList.find(c => c.id === evt.client_id);
+        const serviceObj = servicesList.find(s => s.id === evt.service_id);
+
+        const titleLower = String(evt.title || '').toLowerCase();
+        const descLower = String(evt.description || '').toLowerCase();
+        const typeLower = String(evt.type || '').toLowerCase();
+
+        let shouldMarkCompleted = false;
+
+        // Contrato
+        if (typeLower === 'contrato' || titleLower.includes('contrato') || descLower.includes('contrato')) {
+          if (clientObj?.contract_signed_received || serviceObj?.contract_signed_received) {
+            shouldMarkCompleted = true;
+          }
+        }
+
+        // Pago
+        if (typeLower === 'pago' || titleLower.includes('pago') || titleLower.includes('cobro') || descLower.includes('pago') || descLower.includes('cobro')) {
+          if (clientObj?.payment_status === 'pagado' || serviceObj?.payment_status === 'pagado') {
+            shouldMarkCompleted = true;
+          }
+        }
+
+        // Archivos / Manuscrito
+        if (typeLower === 'archivos' || titleLower.includes('manuscrito') || titleLower.includes('archivo') || descLower.includes('manuscrito') || descLower.includes('archivo')) {
+          if (clientObj?.files_received || serviceObj?.files_received) {
+            shouldMarkCompleted = true;
+          }
+        }
+
+        // Materiales / Briefing
+        if (typeLower === 'materiales' || titleLower.includes('materiales') || titleLower.includes('briefing') || descLower.includes('materiales') || descLower.includes('briefing')) {
+          if (clientObj?.materials_received || serviceObj?.materials_received) {
+            shouldMarkCompleted = true;
+          }
+        }
+
+        if (shouldMarkCompleted) {
+          evt.status = 'completada';
+          // Actualización asíncrona en Supabase
+          supabase
+            .from('agenda_events')
+            .update({ status: 'completada' })
+            .eq('id', evt.id)
+            .then(({ error }) => {
+              if (error) console.error("Error auto-completing manual agenda event:", error);
+            });
+        }
+      }
+
       // Combine into unified agenda items list
       const items = [];
 
@@ -102,8 +156,11 @@ export default function Agenda() {
       // 3. Pending payments
       incomesList.forEach(inc => {
         if (inc.status !== 'pagado') {
-          const clientName = inc.client ? inc.client.name : 'Cliente General';
           const incomeClient = clientsList.find(c => c.id === inc.client_id) || inc.client;
+          // Si el cliente/servicio ya está pagado, no generar evento virtual de pago pendiente
+          if (incomeClient?.payment_status === 'pagado') return;
+
+          const clientName = incomeClient ? incomeClient.name : 'Cliente General';
           items.push({
             id: `income-pending-${inc.id}`,
             title: `Pago Pendiente: ${clientName}`,
@@ -122,13 +179,16 @@ export default function Agenda() {
       // 4. Pending contracts
       servicesList.forEach(s => {
         if (s.status !== 'cerrado') {
+          const serviceClient = clientsList.find(c => c.id === s.client_id);
+          // Si el cliente o servicio ya tiene el contrato firmado recibido, no generar evento virtual de contrato pendiente
+          if (serviceClient?.contract_signed_received || s.contract_signed_received) return;
+
           const hasContract = documentsList.some(doc => doc.service_id === s.id && doc.file_type === 'contrato');
           if (!hasContract) {
-            const serviceClient = clientsList.find(c => c.id === s.client_id);
             items.push({
               id: `contract-pending-${s.id}`,
               title: `Contrato Pendiente: ${s.book_title}`,
-               description: `Falta cargar contrato firmado para el libro de ${s.client ? s.client.name : 'autor'}.`,
+              description: `Falta cargar contrato firmado para el libro de ${s.client ? s.client.name : 'autor'}.`,
               date: s.start_date || todayStr,
               time: '10:00',
               type: 'contrato',
@@ -212,6 +272,7 @@ export default function Agenda() {
       actionType === 'marcar_contrato_enviado' || 
       actionType === 'marcar_contrato_firmado' || 
       actionType === 'marcar_pagado' || 
+      actionType === 'payment_received' || 
       actionType === 'marcar_archivos_recibidos' || 
       actionType === 'marcar_materiales_recibidos'
     ) {
@@ -297,7 +358,7 @@ export default function Agenda() {
         alert("Contrato firmado marcado como recibido con éxito.");
       }
 
-      else if (actionType === 'marcar_pagado') {
+      else if (actionType === 'marcar_pagado' || actionType === 'payment_received') {
         const clientId = client?.id || event.client_id || service?.client_id;
         const clientTotal = client ? parseFloat(client.total_agreed_amount || client.agreed_amount || client.amount || 0) : 0;
         let amountPaid = clientTotal;
@@ -466,7 +527,7 @@ export default function Agenda() {
         addButton("Marcar contrato enviado", "marcar_contrato_enviado", <CalendarIcon className="w-3.5 h-3.5" />);
       }
       if (!clientSigned) {
-        addButton("Marcar contrato recibido", "marcar_contrato_firmado", <CheckCircle className="w-3.5 h-3.5" />);
+        addButton("Contrato recibido", "marcar_contrato_firmado", <CheckCircle className="w-3.5 h-3.5" />);
       }
     }
 
@@ -481,7 +542,7 @@ export default function Agenda() {
     ) {
       const isPaid = client?.payment_status === 'pagado';
       if (!isPaid) {
-        addButton("Marcar pagado", "marcar_pagado", <DollarSign className="w-3.5 h-3.5" />);
+        addButton("Marcar pagado", "payment_received", <DollarSign className="w-3.5 h-3.5" />);
       }
     }
 
