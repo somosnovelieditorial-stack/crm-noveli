@@ -27,12 +27,23 @@ const DEFAULT_WEB_BOOKS = [
   { id: 'wb-3', title: 'Bajo la Sombra del Alerce', author: 'Marta Valdivia', genre: 'Poesía', status: 'Preventa', cover_url: '', short_description: 'Versos inspirados en los bosques milenarios y el paso del tiempo.', featured: false, sale_url: '', sale_platform: 'Amazon', active: false, display_order: 3 },
 ];
 
-export default function Website({ isReadOnly }) {
-  const [currentPath, setCurrentPath] = useState('dashboard'); // 'dashboard', 'servicios', 'libros'
+export default function Website({ isReadOnly, initialPath = 'dashboard', onChangePath }) {
+  const [currentPath, setCurrentPath] = useState(initialPath);
   const [services, setServices] = useState([]);
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [usingMockDb, setUsingMockDb] = useState(false);
+
+  useEffect(() => {
+    setCurrentPath(initialPath);
+  }, [initialPath]);
+
+  const navigateTo = (path) => {
+    setCurrentPath(path);
+    if (onChangePath) {
+      onChangePath(path);
+    }
+  };
 
   // Service Form states
   const [editingService, setEditingService] = useState(null);
@@ -637,7 +648,7 @@ export default function Website({ isReadOnly }) {
       {/* ------------------ BREADCRUMBS & NAVIGATION ------------------ */}
       <div className="flex items-center space-x-2 text-xs font-semibold text-slate-400">
         <span 
-          onClick={() => setCurrentPath('dashboard')} 
+          onClick={() => navigateTo('dashboard')} 
           className={`hover:text-amber-500 cursor-pointer transition-colors ${currentPath === 'dashboard' ? 'text-amber-600 font-bold' : ''}`}
         >
           Sitio Web
@@ -731,7 +742,7 @@ export default function Website({ isReadOnly }) {
                 </div>
               </div>
               <button
-                onClick={() => setCurrentPath('servicios')}
+                onClick={() => navigateTo('servicios')}
                 className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
                 <span>Gestionar servicios web</span>
@@ -755,7 +766,7 @@ export default function Website({ isReadOnly }) {
                 </div>
               </div>
               <button
-                onClick={() => setCurrentPath('libros')}
+                onClick={() => navigateTo('libros')}
                 className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
                 <span>Gestionar libros</span>
@@ -787,7 +798,7 @@ export default function Website({ isReadOnly }) {
                 </div>
               </div>
               <button
-                onClick={() => setCurrentPath('libros')}
+                onClick={() => navigateTo('libros')}
                 className="flex items-center justify-center space-x-1.5 w-fit px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/85 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-800 cursor-pointer self-start"
               >
                 <span>Administrar enlaces en Libros</span>
@@ -838,7 +849,7 @@ export default function Website({ isReadOnly }) {
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
             <div className="flex items-center space-x-3">
               <button 
-                onClick={() => setCurrentPath('dashboard')}
+                onClick={() => navigateTo('dashboard')}
                 className="p-2 hover:bg-slate-100 dark:hover:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -1084,7 +1095,7 @@ export default function Website({ isReadOnly }) {
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
             <div className="flex items-center space-x-3">
               <button 
-                onClick={() => setCurrentPath('dashboard')}
+                onClick={() => navigateTo('dashboard')}
                 className="p-2 hover:bg-slate-100 dark:hover:bg-slate-855 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
