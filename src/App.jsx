@@ -24,6 +24,7 @@ import CompletedSales from './components/CompletedSales';
 import CurrencyRates from './components/CurrencyRates';
 import Configuration from './components/Configuration';
 import Staff from './components/Staff';
+import Website from './components/Website';
 
 // Permission Helper
 import { hasPermission, formatCurrency } from './utils';
@@ -100,7 +101,7 @@ const menuGroups = [
     id: 'website',
     label: 'Sitio Web',
     icon: <Globe className="w-4 h-4" />,
-    url: WEBSITE_URL
+    tab: 'website'
   },
   {
     id: 'reports',
@@ -874,7 +875,8 @@ export default function App() {
     { id: 'configuration', label: 'Configuración', icon: <Settings2 className="w-4.5 h-4.5" /> },
     { id: 'integrations', label: 'Integraciones', icon: <Settings2 className="w-4.5 h-4.5" /> },
     { id: 'staff', label: 'Personal', icon: <Users className="w-4.5 h-4.5" /> },
-    { id: 'reserve', label: 'Reserva operacional', icon: <Wallet className="w-4.5 h-4.5" /> }
+    { id: 'reserve', label: 'Reserva operacional', icon: <Wallet className="w-4.5 h-4.5" /> },
+    { id: 'website', label: 'Sitio Web', icon: <Globe className="w-4.5 h-4.5" /> }
   ];
 
   // Render current tab content with dynamic roles and write access checks
@@ -896,6 +898,7 @@ export default function App() {
       case 'providers': return <Providers {...commonProps} />;
       case 'staff': return <Staff {...commonProps} defaultSubTab="members" />;
       case 'reserve': return <Staff {...commonProps} defaultSubTab="reserve" />;
+      case 'website': return <Website {...commonProps} />;
       case 'documents': return <Documents {...commonProps} />;
       case 'taxes': return <Taxes {...commonProps} />;
       case 'reports': return <Reports {...commonProps} />;
