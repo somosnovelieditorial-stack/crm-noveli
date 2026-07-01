@@ -963,79 +963,80 @@ CREATE POLICY "Permit all operations for website_books" ON website_books
 -- ==========================================
 CREATE TABLE IF NOT EXISTS website_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL DEFAULT '11111111-1111-1111-1111-111111111111',
-    user_id UUID,
-    domain TEXT NOT NULL DEFAULT 'somosnovelieditorial.com',
-    www_domain TEXT DEFAULT 'www.somosnovelieditorial.com',
+    organization_id UUID NOT NULL REFERENCES organizations(id) DEFAULT get_user_org_id(),
+    user_id UUID DEFAULT auth.uid(),
+    site_name TEXT DEFAULT 'Somos Noveli Editorial',
     public_url TEXT DEFAULT 'https://www.somosnovelieditorial.com/',
-    vercel_preview_url TEXT DEFAULT '',
-    domain_provider VARCHAR(100) DEFAULT 'Google Domains',
-    hosting_provider VARCHAR(100) DEFAULT 'Vercel',
-    domain_status VARCHAR(50) DEFAULT 'conectado',
-    dns_notes TEXT,
+    short_description TEXT,
+    contact_email TEXT,
+    instagram_url TEXT,
+    hero_title TEXT DEFAULT 'Somos Noveli Editorial',
+    hero_subtitle TEXT DEFAULT 'Tu historia merece ser contada',
+    logo_url TEXT,
+    favicon_url TEXT,
+    active BOOLEAN DEFAULT TRUE,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    CONSTRAINT check_domain_status CHECK (domain_status IN ('pendiente', 'conectado', 'revisar DNS'))
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 ALTER TABLE website_settings ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Permit all operations for website_settings" ON website_settings
-    FOR ALL
-    USING (true)
-    WITH CHECK (true);
+CREATE POLICY "Select settings" ON website_settings FOR SELECT USING (organization_id = get_user_org_id());
+CREATE POLICY "Insert settings" ON website_settings FOR INSERT WITH CHECK (organization_id = get_user_org_id() AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update settings" ON website_settings FOR UPDATE USING (organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete settings" ON website_settings FOR DELETE USING (organization_id = get_user_org_id() AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
 
--- Adding visible_on_website columns
+-- Note: website_services and website_books are already created earlier, but let's make sure they have visible_on_website
 ALTER TABLE website_services ADD COLUMN IF NOT EXISTS visible_on_website BOOLEAN DEFAULT TRUE;
 ALTER TABLE website_books ADD COLUMN IF NOT EXISTS visible_on_website BOOLEAN DEFAULT TRUE;
-ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS visible_on_website BOOLEAN DEFAULT TRUE;
 
 -- ==========================================
 -- TABLE: website_links
 -- ==========================================
 CREATE TABLE IF NOT EXISTS website_links (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL DEFAULT '11111111-1111-1111-1111-111111111111',
-    user_id UUID,
-    title TEXT NOT NULL,
+    organization_id UUID NOT NULL REFERENCES organizations(id) DEFAULT get_user_org_id(),
+    user_id UUID DEFAULT auth.uid(),
+    label TEXT NOT NULL,
     url TEXT NOT NULL,
-    platform VARCHAR(50) DEFAULT 'Amazon',
+    link_type VARCHAR(50) DEFAULT 'compra',
+    related_type VARCHAR(50),
+    related_id VARCHAR(100),
     active BOOLEAN DEFAULT TRUE,
-    featured BOOLEAN DEFAULT FALSE,
     display_order INTEGER DEFAULT 0,
-    visible_on_website BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 ALTER TABLE website_links ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Permit all operations for website_links" ON website_links
-    FOR ALL
-    USING (true)
-    WITH CHECK (true);
+CREATE POLICY "Select links" ON website_links FOR SELECT USING (organization_id = get_user_org_id());
+CREATE POLICY "Insert links" ON website_links FOR INSERT WITH CHECK (organization_id = get_user_org_id() AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update links" ON website_links FOR UPDATE USING (organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete links" ON website_links FOR DELETE USING (organization_id = get_user_org_id() AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
 
 -- ==========================================
 -- TABLE: website_sections
 -- ==========================================
 CREATE TABLE IF NOT EXISTS website_sections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL DEFAULT '11111111-1111-1111-1111-111111111111',
-    user_id UUID,
+    organization_id UUID NOT NULL REFERENCES organizations(id) DEFAULT get_user_org_id(),
+    user_id UUID DEFAULT auth.uid(),
     section_key VARCHAR(50) UNIQUE NOT NULL,
     title TEXT,
+    subtitle TEXT,
     content TEXT,
+    image_url TEXT,
     active BOOLEAN DEFAULT TRUE,
-    featured BOOLEAN DEFAULT FALSE,
     display_order INTEGER DEFAULT 0,
-    visible_on_website BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 ALTER TABLE website_sections ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Permit all operations for website_sections" ON website_sections
-    FOR ALL
-    USING (true)
-    WITH CHECK (true);
+CREATE POLICY "Select sections" ON website_sections FOR SELECT USING (organization_id = get_user_org_id());
+CREATE POLICY "Insert sections" ON website_sections FOR INSERT WITH CHECK (organization_id = get_user_org_id() AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update sections" ON website_sections FOR UPDATE USING (organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete sections" ON website_sections FOR DELETE USING (organization_id = get_user_org_id() AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
 
 
 

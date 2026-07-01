@@ -8,60 +8,73 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../utils';
 
-const WEBSITE_URL = "https://www.somosnovelieditorial.com/";
+// Fallback values
+const DEFAULT_SITE_SETTINGS = {
+  site_name: 'Somos Noveli Editorial',
+  public_url: 'https://www.somosnovelieditorial.com/',
+  short_description: 'Editorial independiente enfocada en la publicación digital y física de autores independientes.',
+  contact_email: 'contacto@somosnovelieditorial.com',
+  instagram_url: 'https://instagram.com/somosnovelieditorial',
+  hero_title: 'Somos Noveli Editorial',
+  hero_subtitle: 'Tu historia merece ser contada de la manera más hermosa.',
+  logo_url: '',
+  favicon_url: '',
+  active: true
+};
 
-// Default recommended web services
 const DEFAULT_WEB_SERVICES = [
-  { id: 'ws-1', title: 'Full eBook', category: 'Digitalización', price_from: 80000, short_description: 'Publicación completa de tu eBook en plataformas globales', featured: true, active: true, visible_on_website: true, display_order: 1 },
-  { id: 'ws-2', title: 'Full Físico', category: 'Producción', price_from: 250000, short_description: 'Edición e impresión física de tu obra literaria', featured: true, active: true, visible_on_website: true, display_order: 2 },
-  { id: 'ws-3', title: 'Full Total', category: 'Producción', price_from: 450000, short_description: 'El pack definitivo: eBook, libro físico, tapa blanda e ilustración', featured: true, active: true, visible_on_website: true, display_order: 3 },
-  { id: 'ws-4', title: 'Corrección', category: 'Editorial', price_from: 2500, short_description: 'Corrección de estilo, gramática y ortografía profesional', featured: false, active: true, visible_on_website: true, display_order: 4 },
-  { id: 'ws-5', title: 'Portada', category: 'Diseño', price_from: 120000, short_description: 'Diseño de portada personalizado y adaptado al género', featured: false, active: true, visible_on_website: true, display_order: 5 },
-  { id: 'ws-6', title: 'Maquetación', category: 'Editorial', price_from: 90000, short_description: 'Maquetación interior profesional para impresión y digital', featured: false, active: true, visible_on_website: true, display_order: 6 },
-  { id: 'ws-7', title: 'Difusión Editorial', category: 'Marketing', price_from: 150000, short_description: 'Campañas de marketing, notas de prensa y difusión', featured: false, active: true, visible_on_website: true, display_order: 7 },
-  { id: 'ws-8', title: 'Registro de Derechos de Autor', category: 'Legal', price_from: 50000, short_description: 'Gestión legal de registro de propiedad intelectual', featured: false, active: true, visible_on_website: true, display_order: 8 }
+  { title: 'Full eBook', category: 'Digitalización', price_from: 80000, short_description: 'Publicación completa de tu eBook en plataformas globales', featured: true, visible_on_website: true, active: true, display_order: 1 },
+  { title: 'Full Físico', category: 'Producción', price_from: 250000, short_description: 'Edición e impresión física de tu obra literaria', featured: true, visible_on_website: true, active: true, display_order: 2 },
+  { title: 'Full Total', category: 'Producción', price_from: 450000, short_description: 'El pack definitivo: eBook, libro físico, tapa blanda e ilustración', featured: true, visible_on_website: true, active: true, display_order: 3 },
+  { title: 'Corrección', category: 'Editorial', price_from: 2500, short_description: 'Corrección de estilo, gramática y ortografía profesional', featured: false, visible_on_website: true, active: true, display_order: 4 },
+  { title: 'Portada', category: 'Diseño', price_from: 120000, short_description: 'Diseño de portada personalizado y adaptado al género', featured: false, visible_on_website: true, active: true, display_order: 5 },
+  { title: 'Maquetación', category: 'Editorial', price_from: 90000, short_description: 'Maquetación interior profesional para impresión y digital', featured: false, visible_on_website: true, active: true, display_order: 6 },
+  { title: 'Difusión Editorial', category: 'Marketing', price_from: 150000, short_description: 'Campañas de marketing, notas de prensa y difusión', featured: false, visible_on_website: true, active: true, display_order: 7 },
+  { title: 'Registro de Derechos de Autor', category: 'Legal', price_from: 50000, short_description: 'Gestión legal de registro de propiedad intelectual', featured: false, visible_on_website: true, active: true, display_order: 8 }
 ];
 
 const DEFAULT_WEB_BOOKS = [
-  { id: 'wb-1', title: 'El Eco de los Sauces', author: 'Clara Del Monte', genre: 'Novela Histórica', status: 'Destacado', cover_url: '', short_description: 'Una fascinante novela sobre secretos familiares en el sur de Chile.', featured: true, sale_url: 'https://amazon.com', sale_platform: 'Amazon', active: true, visible_on_website: true, display_order: 1 },
-  { id: 'wb-2', title: 'Cenizas de Neón', author: 'Julio Rivera', genre: 'Ciencia Ficción', status: 'Novedad', cover_url: '', short_description: 'Un futuro distópico donde los recuerdos son la moneda de cambio.', featured: true, sale_url: 'https://wattpad.com', sale_platform: 'Wattpad', active: true, visible_on_website: true, display_order: 2 },
-  { id: 'wb-3', title: 'Bajo la Sombra del Alerce', author: 'Marta Valdivia', genre: 'Poesía', status: 'Preventa', cover_url: '', short_description: 'Versos inspirados en los bosques milenarios y el paso del tiempo.', featured: false, sale_url: '', sale_platform: 'Amazon', active: false, visible_on_website: false, display_order: 3 },
+  { title: 'El Eco de los Sauces', author: 'Clara Del Monte', genre: 'Novela Histórica', status: 'Destacado', cover_url: '', short_description: 'Una fascinante novela sobre secretos familiares en el sur de Chile.', featured: true, visible_on_website: true, sale_url: 'https://amazon.com', sale_platform: 'Amazon', display_order: 1 },
+  { title: 'Cenizas de Neón', author: 'Julio Rivera', genre: 'Ciencia Ficción', status: 'Novedad', cover_url: '', short_description: 'Un futuro distópico donde los recuerdos son la moneda de cambio.', featured: true, visible_on_website: true, sale_url: 'https://wattpad.com', sale_platform: 'Wattpad', display_order: 2 }
 ];
 
 const DEFAULT_WEB_LINKS = [
-  { id: 'wl-1', title: 'Amazon Oficial', url: 'https://www.amazon.com', platform: 'Amazon', active: true, featured: true, visible_on_website: true, display_order: 1 },
-  { id: 'wl-2', title: 'Buscalibre Chile', url: 'https://www.buscalibre.cl', platform: 'Buscalibre', active: true, featured: true, visible_on_website: true, display_order: 2 },
-  { id: 'wl-3', title: 'Wattpad Noveli', url: 'https://www.wattpad.com', platform: 'Wattpad', active: true, featured: false, visible_on_website: true, display_order: 3 }
+  { label: 'Amazon Oficial', url: 'https://www.amazon.com', link_type: 'compra', active: true, display_order: 1 },
+  { label: 'Buscalibre Chile', url: 'https://www.buscalibre.cl', link_type: 'compra', active: true, display_order: 2 },
+  { label: 'Wattpad Noveli', url: 'https://www.wattpad.com', link_type: 'lectura', active: true, display_order: 3 }
 ];
 
 const DEFAULT_WEB_SECTIONS = [
-  { id: 'sec-1', section_key: 'hero', title: 'Somos Noveli Editorial', content: 'Creamos puentes entre autores y lectores. Tu historia merece ser contada de la manera más hermosa.', active: true, featured: true, visible_on_website: true, display_order: 1 },
-  { id: 'sec-2', section_key: 'about', title: 'Sobre Nosotros', content: 'Noveli Editorial nació con la vocación de simplificar y dignificar el proceso de autopublicación. Ayudamos a autores independientes a maquetar, corregir, diseñar y distribuir sus libros a nivel global con calidad profesional.', active: true, featured: true, visible_on_website: true, display_order: 2 },
-  { id: 'sec-3', section_key: 'contact', title: 'Ponte en contacto', content: '¿Tienes un manuscrito listo? Escríbenos a contacto@somosnovelieditorial.com o búscanos en redes sociales.', active: true, featured: false, visible_on_website: true, display_order: 3 }
+  { section_key: 'inicio', title: 'Somos Noveli Editorial', subtitle: 'Tu historia merece ser contada', content: 'Creamos puentes entre autores y lectores. Tu historia merece ser contada de la manera más hermosa.', active: true, display_order: 1 },
+  { section_key: 'nosotros', title: 'Sobre Nosotros', subtitle: 'Nuestra vocación', content: 'Noveli Editorial nació con la vocación de simplificar y dignificar el proceso de autopublicación. Ayudamos a autores independientes a maquetar, corregir, diseñar y distribuir sus libros a nivel global con calidad profesional.', active: true, display_order: 2 },
+  { section_key: 'contacto', title: 'Ponte en contacto', subtitle: 'Hablemos hoy', content: '¿Tienes un manuscrito listo? Escríbenos a contacto@somosnovelieditorial.com o búscanos en redes sociales.', active: true, display_order: 3 }
 ];
 
 export default function Website({ isReadOnly, initialPath = 'dashboard', onChangePath }) {
   const [currentPath, setCurrentPath] = useState(initialPath);
+  const [loading, setLoading] = useState(false);
+  const [usingMockDb, setUsingMockDb] = useState(false);
+
+  // States for lists
   const [services, setServices] = useState([]);
   const [books, setBooks] = useState([]);
   const [links, setLinks] = useState([]);
   const [sections, setSections] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [usingMockDb, setUsingMockDb] = useState(false);
 
-  // Domain Settings State
-  const [domainId, setDomainId] = useState(null);
-  const [domain, setDomain] = useState('somosnovelieditorial.com');
-  const [wwDomain, setWwDomain] = useState('www.somosnovelieditorial.com');
-  const [publicUrl, setPublicUrl] = useState('https://www.somosnovelieditorial.com/');
-  const [vercelPreviewUrl, setVercelPreviewUrl] = useState('');
-  const [domainProvider, setDomainProvider] = useState('Google Domains');
-  const [hostingProvider, setHostingProvider] = useState('Vercel');
-  const [domainStatus, setDomainStatus] = useState('conectado');
-  const [dnsNotes, setDnsNotes] = useState('Apuntar registro CNAME a cname.vercel-dns.com y registro A a 76.76.21.21');
-  const [domainVisible, setDomainVisible] = useState(true);
+  // 1. Configuración Web states
+  const [configId, setConfigId] = useState(null);
+  const [siteName, setSiteName] = useState(DEFAULT_SITE_SETTINGS.site_name);
+  const [publicUrl, setPublicUrl] = useState(DEFAULT_SITE_SETTINGS.public_url);
+  const [shortDesc, setShortDesc] = useState(DEFAULT_SITE_SETTINGS.short_description);
+  const [contactEmail, setContactEmail] = useState(DEFAULT_SITE_SETTINGS.contact_email);
+  const [instagramUrl, setInstagramUrl] = useState(DEFAULT_SITE_SETTINGS.instagram_url);
+  const [heroTitle, setHeroTitle] = useState(DEFAULT_SITE_SETTINGS.hero_title);
+  const [heroSubtitle, setHeroSubtitle] = useState(DEFAULT_SITE_SETTINGS.hero_subtitle);
+  const [logoUrl, setLogoUrl] = useState(DEFAULT_SITE_SETTINGS.logo_url);
+  const [faviconUrl, setFaviconUrl] = useState(DEFAULT_SITE_SETTINGS.favicon_url);
+  const [configActive, setConfigActive] = useState(DEFAULT_SITE_SETTINGS.active);
 
-  // Service Form states
+  // 2. Servicios Form states
   const [editingService, setEditingService] = useState(null);
   const [serviceTitle, setServiceTitle] = useState('');
   const [serviceShortDesc, setServiceShortDesc] = useState('');
@@ -70,41 +83,38 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const [serviceCategory, setServiceCategory] = useState('Editorial');
   const [serviceFeatured, setServiceFeatured] = useState(false);
   const [serviceVisible, setServiceVisible] = useState(true);
+  const [serviceActive, setServiceActive] = useState(true);
 
-  // Book Form states
+  // 3. Libros Form states
   const [editingBook, setEditingBook] = useState(null);
   const [bookTitle, setBookTitle] = useState('');
   const [bookAuthor, setBookAuthor] = useState('');
+  const [bookCoverUrl, setBookCoverUrl] = useState('');
+  const [bookShortDesc, setBookShortDesc] = useState('');
   const [bookGenre, setBookGenre] = useState('');
   const [bookStatus, setBookStatus] = useState('Destacado');
-  const [bookShortDesc, setBookShortDesc] = useState('');
-  const [bookCoverUrl, setBookCoverUrl] = useState('');
+  const [bookFeatured, setBookFeatured] = useState(false);
+  const [bookVisible, setBookVisible] = useState(true);
   const [bookSaleUrl, setBookSaleUrl] = useState('');
   const [bookSalePlatform, setBookSalePlatform] = useState('Amazon');
-  const [bookFeatured, setBookFeatured] = useState(false);
-  const [bookActive, setBookActive] = useState(true);
-  const [bookVisible, setBookVisible] = useState(true);
 
-  // Links Form states
+  // 4. Enlaces Form states
   const [editingLink, setEditingLink] = useState(null);
-  const [linkTitle, setLinkTitle] = useState('');
+  const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
-  const [linkPlatform, setLinkPlatform] = useState('Amazon');
-  const [linkFeatured, setLinkFeatured] = useState(false);
+  const [linkType, setLinkType] = useState('compra'); // compra, lectura, autor, red social, otro
   const [linkActive, setLinkActive] = useState(true);
-  const [linkVisible, setLinkVisible] = useState(true);
 
-  // Sections Form states
+  // 5. Secciones Form states
   const [editingSection, setEditingSection] = useState(null);
-  const [sectionKey, setSectionKey] = useState('hero');
+  const [sectionKey, setSectionKey] = useState('inicio'); // inicio, servicios, libros, contacto, nosotros
   const [sectionTitle, setSectionTitle] = useState('');
+  const [sectionSubtitle, setSectionSubtitle] = useState('');
   const [sectionContent, setSectionContent] = useState('');
-  const [sectionFeatured, setSectionFeatured] = useState(false);
+  const [sectionImageUrl, setSectionImageUrl] = useState('');
   const [sectionActive, setSectionActive] = useState(true);
-  const [sectionVisible, setSectionVisible] = useState(true);
 
-  // Clipboard feedbacks
-  const [domainCopied, setDomainCopied] = useState(false);
+  // Copy feedbacks
   const [urlCopied, setUrlCopied] = useState(false);
 
   useEffect(() => {
@@ -112,11 +122,11 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   }, [initialPath]);
 
   useEffect(() => {
+    fetchSettings();
     fetchServices();
     fetchBooks();
     fetchLinks();
     fetchSections();
-    fetchSettings();
   }, []);
 
   const navigateTo = (path) => {
@@ -126,7 +136,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     }
   };
 
-  // --- SETTINGS PERSISTENCE ---
+  // Helper to read organization ID
+  const getOrgId = () => {
+    return localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+  };
+
+  // --- 1. SETTINGS DATABASE OPS ---
   const fetchSettings = async () => {
     try {
       if (isMock) {
@@ -139,70 +154,63 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         .limit(1);
 
       if (error) {
-        console.warn("Table website_settings query failed, using local memory settings:", error.message);
+        console.warn("Table website_settings query failed, using local fallback settings:", error.message);
         loadMockSettings();
         setUsingMockDb(true);
       } else if (data && data.length > 0) {
         const row = data[0];
-        setDomainId(row.id);
-        setDomain(row.domain || 'somosnovelieditorial.com');
-        setWwDomain(row.www_domain || 'www.somosnovelieditorial.com');
-        setPublicUrl(row.public_url || 'https://www.somosnovelieditorial.com/');
-        setVercelPreviewUrl(row.vercel_preview_url || '');
-        setDomainProvider(row.domain_provider || 'Google Domains');
-        setHostingProvider(row.hosting_provider || 'Vercel');
-        setDomainStatus(row.domain_status || 'conectado');
-        setDnsNotes(row.dns_notes || '');
-        setDomainVisible(row.visible_on_website !== false);
+        setConfigId(row.id);
+        setSiteName(row.site_name || DEFAULT_SITE_SETTINGS.site_name);
+        setPublicUrl(row.public_url || DEFAULT_SITE_SETTINGS.public_url);
+        setShortDesc(row.short_description || '');
+        setContactEmail(row.contact_email || '');
+        setInstagramUrl(row.instagram_url || '');
+        setHeroTitle(row.hero_title || '');
+        setHeroSubtitle(row.hero_subtitle || '');
+        setLogoUrl(row.logo_url || '');
+        setFaviconUrl(row.favicon_url || '');
+        setConfigActive(row.active !== false);
       } else {
         await seedDefaultSettings();
       }
     } catch (err) {
-      console.error("Exception loading settings:", err);
+      console.error(err);
       loadMockSettings();
       setUsingMockDb(true);
     }
   };
 
   const loadMockSettings = () => {
-    const saved = localStorage.getItem('somos_noveli_website_settings');
+    const saved = localStorage.getItem('somos_noveli_website_settings_cms');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        setDomain(parsed.domain || 'somosnovelieditorial.com');
-        setWwDomain(parsed.www_domain || 'www.somosnovelieditorial.com');
-        setPublicUrl(parsed.public_url || 'https://www.somosnovelieditorial.com/');
-        setVercelPreviewUrl(parsed.vercel_preview_url || '');
-        setDomainProvider(parsed.domain_provider || 'Google Domains');
-        setHostingProvider(parsed.hosting_provider || 'Vercel');
-        setDomainStatus(parsed.domain_status || 'conectado');
-        setDnsNotes(parsed.dns_notes || '');
-        setDomainVisible(parsed.visible_on_website !== false);
+        const row = JSON.parse(saved);
+        setSiteName(row.site_name);
+        setPublicUrl(row.public_url);
+        setShortDesc(row.short_description);
+        setContactEmail(row.contact_email);
+        setInstagramUrl(row.instagram_url);
+        setHeroTitle(row.hero_title);
+        setHeroSubtitle(row.hero_subtitle);
+        setLogoUrl(row.logo_url);
+        setFaviconUrl(row.favicon_url);
+        setConfigActive(row.active);
       } catch (_) {}
     }
   };
 
   const seedDefaultSettings = async () => {
     try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
       const payload = {
-        domain: 'somosnovelieditorial.com',
-        www_domain: 'www.somosnovelieditorial.com',
-        public_url: 'https://www.somosnovelieditorial.com/',
-        vercel_preview_url: '',
-        domain_provider: 'Google Domains',
-        hosting_provider: 'Vercel',
-        domain_status: 'conectado',
-        dns_notes: 'Apuntar registro CNAME a cname.vercel-dns.com y registro A a 76.76.21.21',
-        visible_on_website: true,
-        organization_id: orgId
+        organization_id: getOrgId(),
+        ...DEFAULT_SITE_SETTINGS
       };
       const { data, error } = await supabase
         .from('website_settings')
         .insert([payload])
         .select();
       if (!error && data && data.length > 0) {
-        setDomainId(data[0].id);
+        setConfigId(data[0].id);
       }
     } catch (_) {}
   };
@@ -213,29 +221,29 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
 
     setLoading(true);
     try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
       const payload = {
-        domain,
-        www_domain: wwDomain,
+        site_name: siteName,
         public_url: publicUrl,
-        vercel_preview_url: vercelPreviewUrl,
-        domain_provider: domainProvider,
-        hosting_provider: hostingProvider,
-        domain_status: domainStatus,
-        dns_notes: dnsNotes,
-        visible_on_website: domainVisible,
-        organization_id: orgId
+        short_description: shortDesc,
+        contact_email: contactEmail,
+        instagram_url: instagramUrl,
+        hero_title: heroTitle,
+        hero_subtitle: heroSubtitle,
+        logo_url: logoUrl,
+        favicon_url: faviconUrl,
+        active: configActive,
+        organization_id: getOrgId()
       };
 
       if (isMock || usingMockDb || !supabase) {
-        localStorage.setItem('somos_noveli_website_settings', JSON.stringify(payload));
-        alert("Configuración local de dominio guardada correctamente.");
+        localStorage.setItem('somos_noveli_website_settings_cms', JSON.stringify(payload));
+        alert("Configuración de sitio guardada en memoria local.");
       } else {
-        if (domainId) {
+        if (configId) {
           const { error } = await supabase
             .from('website_settings')
             .update(payload)
-            .eq('id', domainId);
+            .eq('id', configId);
           if (error) throw error;
         } else {
           const { data, error } = await supabase
@@ -243,20 +251,19 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
             .insert([payload])
             .select();
           if (error) throw error;
-          if (data && data.length > 0) setDomainId(data[0].id);
+          if (data && data.length > 0) setConfigId(data[0].id);
         }
-        alert("Configuración de dominio y hosting guardada en Supabase.");
+        alert("Configuración web guardada correctamente en Supabase.");
       }
       await fetchSettings();
     } catch (err) {
-      console.error("Error saving website settings:", err);
-      alert(`Error al guardar: ${err.message || err}`);
+      alert(`Error al guardar configuración: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- SERVICE PERSISTENCE ---
+  // --- 2. SERVICIOS DATABASE OPS ---
   const fetchServices = async () => {
     try {
       if (isMock) {
@@ -266,18 +273,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
       const { data, error } = await supabase
         .from('website_services')
         .select('*')
-        .order('display_order', { ascending: true })
-        .order('created_at', { ascending: true });
+        .order('display_order', { ascending: true });
 
       if (error) {
         loadMockServices();
-        setUsingMockDb(true);
       } else {
-        if (data && data.length > 0) {
-          setServices(data);
-        } else {
-          await seedDefaultServices();
-        }
+        setServices(data || []);
       }
     } catch (_) {
       loadMockServices();
@@ -285,129 +286,116 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   };
 
   const loadMockServices = () => {
-    const saved = localStorage.getItem('somos_noveli_website_services');
-    if (saved) {
-      try { setServices(JSON.parse(saved)); } catch (_) { setServices(DEFAULT_WEB_SERVICES); }
-    } else {
-      setServices(DEFAULT_WEB_SERVICES);
-    }
-  };
-
-  const seedDefaultServices = async () => {
-    try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
-      const servicesToInsert = DEFAULT_WEB_SERVICES.map(s => ({
-        title: s.title,
-        category: s.category,
-        price_from: s.price_from,
-        short_description: s.short_description,
-        featured: s.featured,
-        active: s.active,
-        visible_on_website: s.visible_on_website,
-        display_order: s.display_order,
-        organization_id: orgId
-      }));
-      await supabase.from('website_services').insert(servicesToInsert);
-      const { data } = await supabase.from('website_services').select('*').order('display_order');
-      if (data) setServices(data);
-    } catch (_) {}
+    const saved = localStorage.getItem('somos_noveli_services_cms');
+    setServices(saved ? JSON.parse(saved) : DEFAULT_WEB_SERVICES);
   };
 
   const handleSaveService = async (e) => {
     e.preventDefault();
     if (isReadOnly) return;
-    if (!serviceTitle.trim()) return;
 
     setLoading(true);
     try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
-      const parsedPrice = parseFloat(servicePrice) || 0;
       const payload = {
         title: serviceTitle,
         short_description: serviceShortDesc,
         full_description: serviceFullDesc,
-        price_from: parsedPrice,
+        price_from: parseFloat(servicePrice) || 0,
+        currency: 'CLP',
         category: serviceCategory,
         featured: serviceFeatured,
         visible_on_website: serviceVisible,
-        organization_id: orgId
+        active: serviceActive,
+        organization_id: getOrgId()
       };
 
       if (editingService) {
         if (isMock || usingMockDb) {
           const updated = services.map(s => s.id === editingService.id ? { ...s, ...payload } : s);
           setServices(updated);
-          localStorage.setItem('somos_noveli_website_services', JSON.stringify(updated));
+          localStorage.setItem('somos_noveli_services_cms', JSON.stringify(updated));
         } else {
           await supabase.from('website_services').update(payload).eq('id', editingService.id);
         }
       } else {
         const newOrder = services.length > 0 ? Math.max(...services.map(s => s.display_order || 0)) + 1 : 1;
-        const insertPayload = { ...payload, active: true, display_order: newOrder };
+        const insertPayload = { ...payload, display_order: newOrder };
         if (isMock || usingMockDb) {
           const updated = [...services, { ...insertPayload, id: `ws-${Date.now()}` }];
           setServices(updated);
-          localStorage.setItem('somos_noveli_website_services', JSON.stringify(updated));
+          localStorage.setItem('somos_noveli_services_cms', JSON.stringify(updated));
         } else {
           await supabase.from('website_services').insert([insertPayload]);
         }
       }
       resetForm();
       await fetchServices();
-      alert("Servicio guardado con éxito.");
+      alert("Servicio guardado.");
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      alert(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const startEditService = (service) => {
-    setEditingService(service);
-    setServiceTitle(service.title || '');
-    setServiceShortDesc(service.short_description || '');
-    setServiceFullDesc(service.full_description || '');
-    setServicePrice(String(service.price_from || '0'));
-    setServiceCategory(service.category || 'Editorial');
-    setServiceFeatured(!!service.featured);
-    setServiceVisible(service.visible_on_website !== false);
-  };
-
-  const toggleServiceBoolean = async (service, field) => {
+  const toggleServiceBool = async (service, field) => {
     if (isReadOnly) return;
     const newVal = !service[field];
     try {
       if (isMock || usingMockDb) {
         const updated = services.map(s => s.id === service.id ? { ...s, [field]: newVal } : s);
         setServices(updated);
-        localStorage.setItem('somos_noveli_website_services', JSON.stringify(updated));
+        localStorage.setItem('somos_noveli_services_cms', JSON.stringify(updated));
       } else {
         await supabase.from('website_services').update({ [field]: newVal }).eq('id', service.id);
       }
       setServices(services.map(s => s.id === service.id ? { ...s, [field]: newVal } : s));
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (_) {}
+  };
+
+  const moveServiceOrder = async (index, direction) => {
+    if (isReadOnly) return;
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= services.length) return;
+
+    const list = [...services];
+    const temp = list[index];
+    list[index] = list[targetIdx];
+    list[targetIdx] = temp;
+
+    const updated = list.map((item, idx) => ({ ...item, display_order: idx + 1 }));
+    setServices(updated);
+
+    try {
+      if (isMock || usingMockDb) {
+        localStorage.setItem('somos_noveli_services_cms', JSON.stringify(updated));
+      } else {
+        const promises = updated.map(item => supabase
+          .from('website_services')
+          .update({ display_order: item.display_order })
+          .eq('id', item.id)
+        );
+        await Promise.all(promises);
+      }
+    } catch (_) {}
   };
 
   const handleDeleteService = async (id) => {
     if (isReadOnly) return;
-    if (!window.confirm("¿Seguro de que deseas eliminar este servicio de la web pública?")) return;
+    if (!window.confirm("¿Eliminar este servicio?")) return;
     try {
       if (isMock || usingMockDb) {
         const updated = services.filter(s => s.id !== id);
         setServices(updated);
-        localStorage.setItem('somos_noveli_website_services', JSON.stringify(updated));
+        localStorage.setItem('somos_noveli_services_cms', JSON.stringify(updated));
       } else {
         await supabase.from('website_services').delete().eq('id', id);
       }
       setServices(services.filter(s => s.id !== id));
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (_) {}
   };
 
-  // --- BOOK PERSISTENCE ---
+  // --- 3. LIBROS DATABASE OPS ---
   const fetchBooks = async () => {
     try {
       if (isMock) {
@@ -422,11 +410,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
       if (error) {
         loadMockBooks();
       } else {
-        if (data && data.length > 0) {
-          setBooks(data);
-        } else {
-          await seedDefaultBooks();
-        }
+        setBooks(data || []);
       }
     } catch (_) {
       loadMockBooks();
@@ -434,65 +418,35 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   };
 
   const loadMockBooks = () => {
-    const saved = localStorage.getItem('somos_noveli_website_books');
-    if (saved) {
-      try { setBooks(JSON.parse(saved)); } catch (_) { setBooks(DEFAULT_WEB_BOOKS); }
-    } else {
-      setBooks(DEFAULT_WEB_BOOKS);
-    }
-  };
-
-  const seedDefaultBooks = async () => {
-    try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
-      const booksToInsert = DEFAULT_WEB_BOOKS.map(b => ({
-        title: b.title,
-        author: b.author,
-        genre: b.genre,
-        status: b.status,
-        short_description: b.short_description,
-        featured: b.featured,
-        sale_url: b.sale_url,
-        sale_platform: b.sale_platform,
-        active: b.active,
-        visible_on_website: b.visible_on_website,
-        display_order: b.display_order,
-        organization_id: orgId
-      }));
-      await supabase.from('website_books').insert(booksToInsert);
-      const { data } = await supabase.from('website_books').select('*').order('display_order');
-      if (data) setBooks(data);
-    } catch (_) {}
+    const saved = localStorage.getItem('somos_noveli_books_cms');
+    setBooks(saved ? JSON.parse(saved) : DEFAULT_WEB_BOOKS);
   };
 
   const handleSaveBook = async (e) => {
     e.preventDefault();
     if (isReadOnly) return;
-    if (!bookTitle.trim()) return;
 
     setLoading(true);
     try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
       const payload = {
         title: bookTitle,
         author: bookAuthor,
+        cover_url: bookCoverUrl,
+        short_description: bookShortDesc,
         genre: bookGenre,
         status: bookStatus,
-        short_description: bookShortDesc,
-        cover_url: bookCoverUrl,
+        featured: bookFeatured,
+        visible_on_website: bookVisible,
         sale_url: bookSaleUrl,
         sale_platform: bookSalePlatform,
-        featured: bookFeatured,
-        active: bookActive,
-        visible_on_website: bookVisible,
-        organization_id: orgId
+        organization_id: getOrgId()
       };
 
       if (editingBook) {
         if (isMock || usingMockDb) {
           const updated = books.map(b => b.id === editingBook.id ? { ...b, ...payload } : b);
           setBooks(updated);
-          localStorage.setItem('somos_noveli_website_books', JSON.stringify(updated));
+          localStorage.setItem('somos_noveli_books_cms', JSON.stringify(updated));
         } else {
           await supabase.from('website_books').update(payload).eq('id', editingBook.id);
         }
@@ -502,39 +456,123 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         if (isMock || usingMockDb) {
           const updated = [...books, { ...insertPayload, id: `wb-${Date.now()}` }];
           setBooks(updated);
-          localStorage.setItem('somos_noveli_website_books', JSON.stringify(updated));
+          localStorage.setItem('somos_noveli_books_cms', JSON.stringify(updated));
         } else {
           await supabase.from('website_books').insert([insertPayload]);
         }
       }
       resetBookForm();
       await fetchBooks();
-      alert("Libro guardado con éxito.");
+      alert("Libro guardado.");
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      alert(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleBookBoolean = async (book, field) => {
+  const toggleBookBool = async (book, field) => {
     if (isReadOnly) return;
     const newVal = !book[field];
     try {
       if (isMock || usingMockDb) {
         const updated = books.map(b => b.id === book.id ? { ...b, [field]: newVal } : b);
         setBooks(updated);
-        localStorage.setItem('somos_noveli_website_books', JSON.stringify(updated));
+        localStorage.setItem('somos_noveli_books_cms', JSON.stringify(updated));
       } else {
         await supabase.from('website_books').update({ [field]: newVal }).eq('id', book.id);
       }
       setBooks(books.map(b => b.id === book.id ? { ...b, [field]: newVal } : b));
+    } catch (_) {}
+  };
+
+  const moveBookOrder = async (index, direction) => {
+    if (isReadOnly) return;
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= books.length) return;
+
+    const list = [...books];
+    const temp = list[index];
+    list[index] = list[targetIdx];
+    list[targetIdx] = temp;
+
+    const updated = list.map((item, idx) => ({ ...item, display_order: idx + 1 }));
+    setBooks(updated);
+
+    try {
+      if (isMock || usingMockDb) {
+        localStorage.setItem('somos_noveli_books_cms', JSON.stringify(updated));
+      } else {
+        const promises = updated.map(item => supabase
+          .from('website_books')
+          .update({ display_order: item.display_order })
+          .eq('id', item.id)
+        );
+        await Promise.all(promises);
+      }
+    } catch (_) {}
+  };
+
+  const handleDeleteBook = async (id) => {
+    if (isReadOnly) return;
+    if (!window.confirm("¿Eliminar este libro?")) return;
+    try {
+      if (isMock || usingMockDb) {
+        const updated = books.filter(b => b.id !== id);
+        setBooks(updated);
+        localStorage.setItem('somos_noveli_books_cms', JSON.stringify(updated));
+      } else {
+        await supabase.from('website_books').delete().eq('id', id);
+      }
+      setBooks(books.filter(b => b.id !== id));
+    } catch (_) {}
+  };
+
+  const handleUploadCover = async (e, bookId) => {
+    const file = e.target.files[0];
+    if (!file || isReadOnly) return;
+    setLoading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_cover.${fileExt}`;
+      const storagePath = `${getOrgId()}/website/covers/${fileName}`;
+
+      let finalUrl = '';
+      if (isMock || usingMockDb) {
+        finalUrl = `mock://covers/${storagePath}`;
+      } else {
+        const { error: uploadErr } = await supabase.storage
+          .from('documents')
+          .upload(storagePath, file, { upsert: true });
+        if (uploadErr) throw uploadErr;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(storagePath);
+        finalUrl = publicUrlData?.publicUrl || '';
+      }
+
+      if (bookId) {
+        if (isMock || usingMockDb) {
+          const updated = books.map(b => b.id === bookId ? { ...b, cover_url: finalUrl } : b);
+          setBooks(updated);
+          localStorage.setItem('somos_noveli_books_cms', JSON.stringify(updated));
+        } else {
+          await supabase.from('website_books').update({ cover_url: finalUrl }).eq('id', bookId);
+        }
+        await fetchBooks();
+      } else {
+        setBookCoverUrl(finalUrl);
+      }
+      alert("Portada subida correctamente.");
     } catch (err) {
-      console.error(err);
+      alert(`Error al subir portada: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // --- LINKS PERSISTENCE (website_links) ---
+  // --- 4. ENLACES DATABASE OPS ---
   const fetchLinks = async () => {
     try {
       if (isMock) {
@@ -549,11 +587,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
       if (error) {
         loadMockLinks();
       } else {
-        if (data && data.length > 0) {
-          setLinks(data);
-        } else {
-          await seedDefaultLinks();
-        }
+        setLinks(data || []);
       }
     } catch (_) {
       loadMockLinks();
@@ -561,56 +595,29 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   };
 
   const loadMockLinks = () => {
-    const saved = localStorage.getItem('somos_noveli_website_links');
-    if (saved) {
-      try { setLinks(JSON.parse(saved)); } catch (_) { setLinks(DEFAULT_WEB_LINKS); }
-    } else {
-      setLinks(DEFAULT_WEB_LINKS);
-    }
-  };
-
-  const seedDefaultLinks = async () => {
-    try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
-      const toInsert = DEFAULT_WEB_LINKS.map(l => ({
-        title: l.title,
-        url: l.url,
-        platform: l.platform,
-        active: l.active,
-        featured: l.featured,
-        visible_on_website: l.visible_on_website,
-        display_order: l.display_order,
-        organization_id: orgId
-      }));
-      await supabase.from('website_links').insert(toInsert);
-      const { data } = await supabase.from('website_links').select('*').order('display_order');
-      if (data) setLinks(data);
-    } catch (_) {}
+    const saved = localStorage.getItem('somos_noveli_links_cms');
+    setLinks(saved ? JSON.parse(saved) : DEFAULT_WEB_LINKS);
   };
 
   const handleSaveLink = async (e) => {
     e.preventDefault();
     if (isReadOnly) return;
-    if (!linkTitle.trim() || !linkUrl.trim()) return;
 
     setLoading(true);
     try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
       const payload = {
-        title: linkTitle,
+        label: linkLabel,
         url: linkUrl,
-        platform: linkPlatform,
-        featured: linkFeatured,
+        link_type: linkType,
         active: linkActive,
-        visible_on_website: linkVisible,
-        organization_id: orgId
+        organization_id: getOrgId()
       };
 
       if (editingLink) {
         if (isMock || usingMockDb) {
           const updated = links.map(l => l.id === editingLink.id ? { ...l, ...payload } : l);
           setLinks(updated);
-          localStorage.setItem('somos_noveli_website_links', JSON.stringify(updated));
+          localStorage.setItem('somos_noveli_links_cms', JSON.stringify(updated));
         } else {
           await supabase.from('website_links').update(payload).eq('id', editingLink.id);
         }
@@ -620,76 +627,79 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         if (isMock || usingMockDb) {
           const updated = [...links, { ...insertPayload, id: `wl-${Date.now()}` }];
           setLinks(updated);
-          localStorage.setItem('somos_noveli_website_links', JSON.stringify(updated));
+          localStorage.setItem('somos_noveli_links_cms', JSON.stringify(updated));
         } else {
           await supabase.from('website_links').insert([insertPayload]);
         }
       }
       resetLinkForm();
       await fetchLinks();
-      alert("Enlace guardado correctamente.");
+      alert("Enlace guardado.");
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      alert(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const startEditLink = (link) => {
-    setEditingLink(link);
-    setLinkTitle(link.title || '');
-    setLinkUrl(link.url || '');
-    setLinkPlatform(link.platform || 'Amazon');
-    setLinkFeatured(!!link.featured);
-    setLinkActive(!!link.active);
-    setLinkVisible(link.visible_on_website !== false);
-  };
-
-  const resetLinkForm = () => {
-    setEditingLink(null);
-    setLinkTitle('');
-    setLinkUrl('');
-    setLinkPlatform('Amazon');
-    setLinkFeatured(false);
-    setLinkActive(true);
-    setLinkVisible(true);
-  };
-
-  const toggleLinkBoolean = async (link, field) => {
+  const toggleLinkBool = async (link, field) => {
     if (isReadOnly) return;
     const newVal = !link[field];
     try {
       if (isMock || usingMockDb) {
         const updated = links.map(l => l.id === link.id ? { ...l, [field]: newVal } : l);
         setLinks(updated);
-        localStorage.setItem('somos_noveli_website_links', JSON.stringify(updated));
+        localStorage.setItem('somos_noveli_links_cms', JSON.stringify(updated));
       } else {
         await supabase.from('website_links').update({ [field]: newVal }).eq('id', link.id);
       }
       setLinks(links.map(l => l.id === link.id ? { ...l, [field]: newVal } : l));
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (_) {}
+  };
+
+  const moveLinkOrder = async (index, direction) => {
+    if (isReadOnly) return;
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= links.length) return;
+
+    const list = [...links];
+    const temp = list[index];
+    list[index] = list[targetIdx];
+    list[targetIdx] = temp;
+
+    const updated = list.map((item, idx) => ({ ...item, display_order: idx + 1 }));
+    setLinks(updated);
+
+    try {
+      if (isMock || usingMockDb) {
+        localStorage.setItem('somos_noveli_links_cms', JSON.stringify(updated));
+      } else {
+        const promises = updated.map(item => supabase
+          .from('website_links')
+          .update({ display_order: item.display_order })
+          .eq('id', item.id)
+        );
+        await Promise.all(promises);
+      }
+    } catch (_) {}
   };
 
   const handleDeleteLink = async (id) => {
     if (isReadOnly) return;
-    if (!window.confirm("¿Seguro de que deseas eliminar este enlace?")) return;
+    if (!window.confirm("¿Eliminar este enlace?")) return;
     try {
       if (isMock || usingMockDb) {
         const updated = links.filter(l => l.id !== id);
         setLinks(updated);
-        localStorage.setItem('somos_noveli_website_links', JSON.stringify(updated));
+        localStorage.setItem('somos_noveli_links_cms', JSON.stringify(updated));
       } else {
         await supabase.from('website_links').delete().eq('id', id);
       }
       setLinks(links.filter(l => l.id !== id));
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (_) {}
   };
 
-  // --- SECTIONS PERSISTENCE (website_sections) ---
+  // --- 5. SECCIONES DATABASE OPS ---
   const fetchSections = async () => {
     try {
       if (isMock) {
@@ -704,11 +714,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
       if (error) {
         loadMockSections();
       } else {
-        if (data && data.length > 0) {
-          setSections(data);
-        } else {
-          await seedDefaultSections();
-        }
+        setSections(data || []);
       }
     } catch (_) {
       loadMockSections();
@@ -716,56 +722,31 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   };
 
   const loadMockSections = () => {
-    const saved = localStorage.getItem('somos_noveli_website_sections');
-    if (saved) {
-      try { setSections(JSON.parse(saved)); } catch (_) { setSections(DEFAULT_WEB_SECTIONS); }
-    } else {
-      setSections(DEFAULT_WEB_SECTIONS);
-    }
-  };
-
-  const seedDefaultSections = async () => {
-    try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
-      const toInsert = DEFAULT_WEB_SECTIONS.map(s => ({
-        section_key: s.section_key,
-        title: s.title,
-        content: s.content,
-        active: s.active,
-        featured: s.featured,
-        visible_on_website: s.visible_on_website,
-        display_order: s.display_order,
-        organization_id: orgId
-      }));
-      await supabase.from('website_sections').insert(toInsert);
-      const { data } = await supabase.from('website_sections').select('*').order('display_order');
-      if (data) setSections(data);
-    } catch (_) {}
+    const saved = localStorage.getItem('somos_noveli_sections_cms');
+    setSections(saved ? JSON.parse(saved) : DEFAULT_WEB_SECTIONS);
   };
 
   const handleSaveSection = async (e) => {
     e.preventDefault();
     if (isReadOnly) return;
-    if (!sectionTitle.trim() || !sectionContent.trim()) return;
 
     setLoading(true);
     try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
       const payload = {
         section_key: sectionKey,
         title: sectionTitle,
+        subtitle: sectionSubtitle,
         content: sectionContent,
-        featured: sectionFeatured,
+        image_url: sectionImageUrl,
         active: sectionActive,
-        visible_on_website: sectionVisible,
-        organization_id: orgId
+        organization_id: getOrgId()
       };
 
       if (editingSection) {
         if (isMock || usingMockDb) {
           const updated = sections.map(s => s.id === editingSection.id ? { ...s, ...payload } : s);
           setSections(updated);
-          localStorage.setItem('somos_noveli_website_sections', JSON.stringify(updated));
+          localStorage.setItem('somos_noveli_sections_cms', JSON.stringify(updated));
         } else {
           await supabase.from('website_sections').update(payload).eq('id', editingSection.id);
         }
@@ -775,73 +756,108 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         if (isMock || usingMockDb) {
           const updated = [...sections, { ...insertPayload, id: `sec-${Date.now()}` }];
           setSections(updated);
-          localStorage.setItem('somos_noveli_website_sections', JSON.stringify(updated));
+          localStorage.setItem('somos_noveli_sections_cms', JSON.stringify(updated));
         } else {
           await supabase.from('website_sections').insert([insertPayload]);
         }
       }
       resetSectionForm();
       await fetchSections();
-      alert("Sección de texto guardada con éxito.");
+      alert("Sección de página guardada.");
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      alert(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const startEditSection = (sec) => {
-    setEditingSection(sec);
-    setSectionKey(sec.section_key || 'hero');
-    setSectionTitle(sec.title || '');
-    setSectionContent(sec.content || '');
-    setSectionFeatured(!!sec.featured);
-    setSectionActive(!!sec.active);
-    setSectionVisible(sec.visible_on_website !== false);
-  };
-
-  const resetSectionForm = () => {
-    setEditingSection(null);
-    setSectionKey('hero');
-    setSectionTitle('');
-    setSectionContent('');
-    setSectionFeatured(false);
-    setSectionActive(true);
-    setSectionVisible(true);
-  };
-
-  const toggleSectionBoolean = async (sec, field) => {
+  const toggleSectionBool = async (sec, field) => {
     if (isReadOnly) return;
     const newVal = !sec[field];
     try {
       if (isMock || usingMockDb) {
         const updated = sections.map(s => s.id === sec.id ? { ...s, [field]: newVal } : s);
         setSections(updated);
-        localStorage.setItem('somos_noveli_website_sections', JSON.stringify(updated));
+        localStorage.setItem('somos_noveli_sections_cms', JSON.stringify(updated));
       } else {
         await supabase.from('website_sections').update({ [field]: newVal }).eq('id', sec.id);
       }
       setSections(sections.map(s => s.id === sec.id ? { ...s, [field]: newVal } : s));
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (_) {}
   };
 
   const handleDeleteSection = async (id) => {
     if (isReadOnly) return;
-    if (!window.confirm("¿Seguro de que deseas eliminar este bloque de texto?")) return;
+    if (!window.confirm("¿Eliminar esta sección?")) return;
     try {
       if (isMock || usingMockDb) {
         const updated = sections.filter(s => s.id !== id);
         setSections(updated);
-        localStorage.setItem('somos_noveli_website_sections', JSON.stringify(updated));
+        localStorage.setItem('somos_noveli_sections_cms', JSON.stringify(updated));
       } else {
         await supabase.from('website_sections').delete().eq('id', id);
       }
       setSections(sections.filter(s => s.id !== id));
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (_) {}
+  };
+
+  // Form resets
+  const resetForm = () => {
+    setEditingService(null);
+    setServiceTitle('');
+    setServiceShortDesc('');
+    setServiceFullDesc('');
+    setServicePrice('0');
+    setServiceCategory('Editorial');
+    setServiceFeatured(false);
+    setServiceVisible(true);
+    setServiceActive(true);
+  };
+
+  const resetBookForm = () => {
+    setEditingBook(null);
+    setBookTitle('');
+    setBookAuthor('');
+    setBookCoverUrl('');
+    setBookShortDesc('');
+    setBookGenre('');
+    setBookStatus('Destacado');
+    setBookFeatured(false);
+    setBookVisible(true);
+    setBookSaleUrl('');
+    setBookSalePlatform('Amazon');
+  };
+
+  const resetLinkForm = () => {
+    setEditingLink(null);
+    setLinkLabel('');
+    setLinkUrl('');
+    setLinkType('compra');
+    setLinkActive(true);
+  };
+
+  const resetSectionForm = () => {
+    setEditingSection(null);
+    setSectionKey('inicio');
+    setSectionTitle('');
+    setSectionSubtitle('');
+    setSectionContent('');
+    setSectionImageUrl('');
+    setSectionActive(true);
+  };
+
+  const startEditBook = (book) => {
+    setEditingBook(book);
+    setBookTitle(book.title || '');
+    setBookAuthor(book.author || '');
+    setBookCoverUrl(book.cover_url || '');
+    setBookShortDesc(book.short_description || '');
+    setBookGenre(book.genre || '');
+    setBookStatus(book.status || 'Destacado');
+    setBookFeatured(!!book.featured);
+    setBookVisible(book.visible_on_website !== false);
+    setBookSaleUrl(book.sale_url || '');
+    setBookSalePlatform(book.sale_platform || 'Amazon');
   };
 
   return (
@@ -859,14 +875,24 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
           <>
             <span>/</span>
             <span className="text-slate-700 dark:text-slate-200 capitalize font-bold">
-              {currentPath === 'servicios' ? 'Servicios Web' : 
-               currentPath === 'libros' ? 'Libros Destacados' : 
-               currentPath === 'enlaces' ? 'Enlaces de Venta' : 
-               currentPath === 'textos' ? 'Textos Principales' : 'Configuración de Dominio'}
+              {currentPath === 'configuracion' ? 'Configuración Web' :
+               currentPath === 'servicios' ? 'Servicios Web' : 
+               currentPath === 'libros' ? 'Libros Web' : 
+               currentPath === 'enlaces' ? 'Enlaces de Venta' : 'Secciones de Página'}
             </span>
           </>
         )}
       </div>
+
+      {/* Warning Badge for SQL / Mock Mode */}
+      {usingMockDb && (
+        <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl flex items-center gap-2.5 text-xs text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            <strong>Modo Respaldo Local:</strong> Se están utilizando datos en memoria del navegador. Por favor ejecuta el script <code>supabase_migration_24.sql</code> en tu consola de Supabase para activar persistencia real.
+          </span>
+        </div>
+      )}
 
       {/* ------------------ MAIN VIEW: DASHBOARD ------------------ */}
       {currentPath === 'dashboard' && (
@@ -876,10 +902,10 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
             <div>
               <h1 className="text-3xl font-extrabold text-slate-855 dark:text-slate-100 tracking-tight font-serif flex items-center gap-2">
                 <Globe className="w-8 h-8 text-amber-500" />
-                Panel de Sitio Web Público
+                CMS Sitio Web Público
               </h1>
               <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-sans">
-                Administra todos los textos, ofertas y contenidos que consume la página pública de Noveli desde Supabase.
+                Panel administrativo para controlar las ofertas, libros destacados, secciones y enlaces del portal oficial de Noveli.
               </p>
             </div>
             
@@ -890,7 +916,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
               className="flex items-center space-x-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-semibold shadow-md transition-all duration-300 hover:shadow-lg cursor-pointer border border-transparent"
             >
               <ExternalLink className="w-4 h-4" />
-              <span>Ver sitio oficial</span>
+              <span>Abrir web pública</span>
             </a>
           </div>
 
@@ -903,67 +929,65 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                 <div className="p-2.5 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 rounded-xl w-fit">
                   <Settings className="w-5 h-5" />
                 </div>
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Configuración Web</h3>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">1. Configuración Web</h3>
                 <p className="text-xs text-slate-450 dark:text-slate-400 leading-relaxed">
-                  Configura el dominio, hosting y el estado de visibilidad general de la página pública en la red.
+                  Configura la información del sitio, meta descripción, logotipo, favicon y enlaces de redes sociales.
                 </p>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
-                  {domain}
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono truncate">
+                  {siteName}
                 </div>
               </div>
               <button
-                onClick={() => navigateTo('dominio')}
+                onClick={() => navigateTo('configuracion')}
                 className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
-                <span>Administrar Dominio</span>
+                <span>Configurar Sitio</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* 2. Servicios Editoriales */}
+            {/* 2. Servicios Web */}
             <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-6 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="p-2.5 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-455 rounded-xl w-fit">
                   <Cpu className="w-5 h-5" />
                 </div>
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Servicios Web</h3>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">2. Servicios Web</h3>
                 <p className="text-xs text-slate-455 dark:text-slate-400 leading-relaxed">
-                  Crea y destaca los servicios que se muestran públicamente (eBook, Físico, Difusión, etc.).
+                  Agrega y edita los servicios ofrecidos en la web con sus respectivos precios, categorías y descripciones.
                 </p>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                  <span>{services.length} servicios ({services.filter(s => s.visible_on_website).length} visibles)</span>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
+                  {services.length} servicios registrados ({services.filter(s => s.visible_on_website).length} visibles)
                 </div>
               </div>
               <button
                 onClick={() => navigateTo('servicios')}
                 className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
-                <span>Gestionar Servicios</span>
+                <span>Configurar Servicios</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* 3. Libros Destacados */}
+            {/* 3. Libros Web */}
             <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-6 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="p-2.5 bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400 rounded-xl w-fit">
                   <BookOpen className="w-5 h-5" />
                 </div>
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Libros Destacados</h3>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">3. Libros Web</h3>
                 <p className="text-xs text-slate-455 dark:text-slate-400 leading-relaxed">
-                  Administra las obras que se destacan en el catálogo público de la editorial.
+                  Carga libros destacados en el catálogo, sube portadas de libros y asocia enlaces de venta directa.
                 </p>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-purple-500"></span>
-                  <span>{books.length} libros ({books.filter(b => b.visible_on_website).length} visibles)</span>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
+                  {books.length} libros cargados ({books.filter(b => b.visible_on_website).length} visibles)
                 </div>
               </div>
               <button
                 onClick={() => navigateTo('libros')}
                 className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
-                <span>Gestionar Libros</span>
+                <span>Configurar Catálogo</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -974,228 +998,145 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                 <div className="p-2.5 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-455 rounded-xl w-fit">
                   <ShoppingBag className="w-5 h-5" />
                 </div>
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Enlaces de Venta</h3>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">4. Enlaces de Venta/Lectura</h3>
                 <p className="text-xs text-slate-455 dark:text-slate-400 leading-relaxed">
-                  Gestiona enlaces globales de venta y lectura oficial de Noveli (Amazon, Buscalibre, Wattpad).
+                  Administra las redirecciones externas de la web (enlaces de compra, lectura, redes sociales o páginas de autor).
                 </p>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
-                  <span>{links.length} enlaces ({links.filter(l => l.visible_on_website).length} visibles)</span>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
+                  {links.length} enlaces activos
                 </div>
               </div>
               <button
                 onClick={() => navigateTo('enlaces')}
                 className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
-                <span>Gestionar Enlaces</span>
+                <span>Configurar Enlaces</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* 5. Textos Principales */}
+            {/* 5. Secciones de Página */}
             <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-6 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 rounded-xl w-fit">
                   <AlignLeft className="w-5 h-5" />
                 </div>
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Textos de la Página</h3>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">5. Secciones de Página</h3>
                 <p className="text-xs text-slate-455 dark:text-slate-400 leading-relaxed">
-                  Modifica los textos principales de las secciones públicas: Hero, Quiénes Somos y Contacto.
+                  Modifica los bloques de texto estáticos y secciones de la landing page (inicio, nosotros, contacto).
                 </p>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                  <span>{sections.length} secciones ({sections.filter(s => s.visible_on_website).length} visibles)</span>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
+                  {sections.length} secciones configuradas ({sections.filter(s => s.active).length} activas)
                 </div>
               </div>
               <button
-                onClick={() => navigateTo('textos')}
+                onClick={() => navigateTo('secciones')}
                 className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
-                <span>Gestionar Textos</span>
+                <span>Configurar Secciones</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
-            </div>
-
-            {/* 6. Estado General */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-6 rounded-2xl shadow-2xs space-y-4">
-              <h3 className="text-sm font-bold text-slate-855 dark:text-slate-100 flex items-center gap-2">
-                <Activity className="w-4.5 h-4.5 text-emerald-500 animate-pulse" />
-                Arquitectura CMS Pública
-              </h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Este panel opera como CMS desacoplado. Los datos guardados aquí son consumidos por el sitio público mediante la API cliente de Supabase.
-              </p>
-              <div className="p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl space-y-2 text-[10px]">
-                <div className="flex justify-between">
-                  <span className="text-slate-400 font-bold">Datos Privados del CRM:</span>
-                  <span className="text-rose-500 font-bold uppercase">No compartidos</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400 font-bold">Base de Datos:</span>
-                  <span className="text-slate-600 dark:text-slate-300 font-bold">PostgreSQL / Supabase</span>
-                </div>
-              </div>
             </div>
 
           </div>
         </>
       )}
 
-      {/* ------------------ SUB-VIEW: DOMINIO Y PREVIEW ------------------ */}
-      {currentPath === 'dominio' && (
+      {/* ------------------ SUB-VIEW: CONFIGURACION ------------------ */}
+      {currentPath === 'configuracion' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
             <div className="flex items-center space-x-3">
-              <button 
-                onClick={() => navigateTo('dashboard')}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer"
-              >
+              <button onClick={() => navigateTo('dashboard')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer">
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <div>
-                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Configuración de Dominio</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Controla la infraestructura de red, dominios oficiales y previsualiza la web pública.</p>
+                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Configuración de Sitio Web</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Controla la metadata principal, imagen de marca y textos globales de la web.</p>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* Form */}
-            <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-5 h-fit">
-              <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm flex items-center gap-2">
-                <Server className="w-4.5 h-4.5 text-blue-500" />
-                Infraestructura Web
-              </h3>
-
+            <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Ajustes Generales</h3>
+              
               <form onSubmit={handleSaveSettings} className="space-y-4 text-xs">
                 
-                <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Dominio Principal</label>
-                  <input
-                    type="text"
-                    required
-                    value={domain}
-                    onChange={e => setDomain(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Dominio con WWW</label>
-                  <input
-                    type="text"
-                    value={wwDomain}
-                    onChange={e => setWwDomain(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">URL Pública Actual</label>
-                  <input
-                    type="url"
-                    required
-                    value={publicUrl}
-                    onChange={e => setPublicUrl(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">URL Vista Previa Vercel</label>
-                  <input
-                    type="url"
-                    value={vercelPreviewUrl}
-                    onChange={e => setVercelPreviewUrl(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-slate-400 font-bold block">Proveedor</label>
-                    <input
-                      type="text"
-                      value={domainProvider}
-                      onChange={e => setDomainProvider(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent text-xs text-slate-800 dark:text-slate-100"
-                    />
+                    <label className="text-slate-400 font-bold block">Nombre del Sitio</label>
+                    <input type="text" required value={siteName} onChange={e => setSiteName(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
                   </div>
-
                   <div className="space-y-1.5">
-                    <label className="text-slate-400 font-bold block">Hosting</label>
-                    <input
-                      type="text"
-                      value={hostingProvider}
-                      onChange={e => setHostingProvider(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent text-xs text-slate-800 dark:text-slate-100"
-                    />
+                    <label className="text-slate-400 font-bold block">URL Pública Oficial</label>
+                    <input type="url" required value={publicUrl} onChange={e => setPublicUrl(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono" />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Estado</label>
-                  <select
-                    value={domainStatus}
-                    onChange={e => setDomainStatus(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent text-xs text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="conectado">Conectado / Activo</option>
-                    <option value="pendiente">Pendiente de verificación</option>
-                    <option value="revisar DNS">Revisar DNS</option>
-                  </select>
+                  <label className="text-slate-400 font-bold block">Descripción Breve (SEO)</label>
+                  <textarea value={shortDesc} onChange={e => setShortDesc(e.target.value)} rows={2} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
                 </div>
 
-                <div className="flex items-center space-x-2 py-1.5">
-                  <input
-                    type="checkbox"
-                    id="domainVisible"
-                    checked={domainVisible}
-                    onChange={e => setDomainVisible(e.target.checked)}
-                    className="rounded border-slate-300 text-amber-500 h-4 w-4"
-                  />
-                  <label htmlFor="domainVisible" className="text-slate-655 dark:text-slate-350 font-bold cursor-pointer">
-                    Dominio visible en la web pública
-                  </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Correo de Contacto Público</label>
+                    <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Instagram URL</label>
+                    <input type="url" value={instagramUrl} onChange={e => setInstagramUrl(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono" />
+                  </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={isReadOnly}
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center justify-center space-x-1.5 border border-transparent"
-                >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-50 dark:border-slate-800">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Título Principal Hero</label>
+                    <input type="text" value={heroTitle} onChange={e => setHeroTitle(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-serif" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Subtítulo Hero</label>
+                    <input type="text" value={heroSubtitle} onChange={e => setHeroSubtitle(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-50 dark:border-slate-800">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Logo URL (Brand Assets)</label>
+                    <input type="text" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Favicon URL</label>
+                    <input type="text" value={faviconUrl} onChange={e => setFaviconUrl(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono" />
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2 py-1">
+                  <input type="checkbox" id="configActive" checked={configActive} onChange={e => setConfigActive(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
+                  <label htmlFor="configActive" className="text-slate-655 dark:text-slate-350 font-bold cursor-pointer select-none">Sitio Web Activo y Verificable</label>
+                </div>
+
+                <button type="submit" disabled={isReadOnly} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center gap-1.5 border border-transparent shadow-md">
                   <Save className="w-4 h-4" />
-                  <span>Guardar configuración</span>
+                  <span>Guardar Configuración</span>
                 </button>
               </form>
             </div>
 
-            {/* Iframe View */}
-            <div className="lg:col-span-7 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs flex flex-col space-y-4 justify-between h-[600px]">
-              <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
-                <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm flex items-center gap-2">
-                  <Globe className="w-4.5 h-4.5 text-emerald-500 animate-pulse" />
-                  Vista Previa del Sitio
-                </h3>
-              </div>
-
-              <div className="flex-1 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950/40 relative">
-                <div className="h-9 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 flex items-center gap-3 shrink-0">
-                  <div className="flex-1 bg-white dark:bg-slate-950 rounded px-2.5 py-0.5 text-[10px] text-slate-450 font-mono truncate text-center">
-                    {publicUrl}
-                  </div>
-                </div>
-                <div className="flex-1 relative flex flex-col justify-center items-center">
-                  <iframe src={publicUrl} title="Preview" className="w-full h-full border-none z-10 bg-white" />
-                  <div className="absolute inset-0 bg-slate-50/90 dark:bg-slate-900/90 z-0 flex flex-col items-center justify-center text-center p-6 space-y-4">
-                    <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Vista previa del sitio oficial</p>
-                    <p className="text-[11px] text-slate-400 max-w-sm">Si tu navegador bloquea el iframe por políticas del hosting, abre el sitio externamente.</p>
-                    <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold flex items-center gap-1 border border-transparent">
-                      <span>No se puede previsualizar aquí. Abrir en nueva pestaña.</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
+            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4 h-fit">
+              <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">Previsualizador Rápido</h3>
+              <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950/40 relative h-64">
+                <iframe src={publicUrl} title="Small Preview" className="w-full h-full border-none z-10 bg-white" />
+                <div className="absolute inset-0 bg-slate-50/95 dark:bg-slate-900/95 z-0 flex flex-col items-center justify-center text-center p-4 space-y-2">
+                  <Globe className="w-6 h-6 text-slate-400" />
+                  <p className="text-[10px] text-slate-500 leading-relaxed">Vista previa estática. Puedes abrir el portal público en una nueva ventana.</p>
+                  <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-300 text-[10px] font-bold flex items-center gap-1">
+                    <span>Ver Sitio</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
               </div>
             </div>
@@ -1214,7 +1155,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
               </button>
               <div>
                 <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Servicios Web Públicos</h2>
-                <p className="text-xs text-slate-400 mt-0.5 font-sans">Configura qué servicios aparecen en la web y si se destacan en la portada.</p>
+                <p className="text-xs text-slate-400 mt-0.5 font-sans">Administra los servicios de Noveli visibles de cara al público.</p>
               </div>
             </div>
           </div>
@@ -1225,9 +1166,10 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-slate-150 dark:border-slate-800 text-slate-400 font-bold">
+                      <th className="py-2.5">Orden</th>
                       <th className="py-2.5">Título</th>
                       <th className="py-2.5">Categoría</th>
-                      <th className="py-2.5">Precio</th>
+                      <th className="py-2.5">Precio Desde</th>
                       <th className="py-2.5 text-center">Destacado</th>
                       <th className="py-2.5 text-center">Activo</th>
                       <th className="py-2.5 text-center">En Web</th>
@@ -1235,36 +1177,47 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-855">
-                    {services.map((s) => (
-                      <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20">
+                    {services.map((s, idx) => (
+                      <tr key={s.id || idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20">
+                        {/* Order arrow controls */}
+                        <td className="py-3">
+                          <div className="flex items-center space-x-1">
+                            <span className="font-bold text-slate-400 w-4">{s.display_order || idx + 1}</span>
+                            <div className="flex flex-col">
+                              <button type="button" disabled={idx === 0 || isReadOnly} onClick={() => moveServiceOrder(idx, -1)} className="text-slate-350 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowUp className="w-3 h-3" /></button>
+                              <button type="button" disabled={idx === services.length - 1 || isReadOnly} onClick={() => moveServiceOrder(idx, 1)} className="text-slate-350 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowDown className="w-3 h-3" /></button>
+                            </div>
+                          </div>
+                        </td>
                         <td className="py-3 font-bold text-slate-750 dark:text-slate-200">{s.title}</td>
                         <td className="py-3"><span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-350 rounded font-bold text-[9px] uppercase tracking-wider">{s.category}</span></td>
-                        <td className="py-3 font-mono font-bold">{formatCurrency(s.price_from, 'CLP')}</td>
+                        <td className="py-3 font-mono font-bold">{formatCurrency(s.price_from, s.currency || 'CLP')}</td>
+                        
                         {/* Destacado */}
                         <td className="py-3 text-center">
-                          <button type="button" onClick={() => toggleServiceBoolean(s, 'featured')} className="focus:outline-none bg-transparent border border-transparent cursor-pointer">
-                            <Star className={`w-4 h-4 ${s.featured ? 'text-amber-500 fill-amber-500' : 'text-slate-350 dark:text-slate-700'}`} />
+                          <button type="button" onClick={() => toggleServiceBool(s, 'featured')} className="focus:outline-none bg-transparent border-none cursor-pointer">
+                            <Star className={`w-4 h-4 ${s.featured ? 'text-amber-500 fill-amber-500' : 'text-slate-350'}`} />
                           </button>
                         </td>
                         {/* Activo */}
                         <td className="py-3 text-center">
-                          <button type="button" onClick={() => toggleServiceBoolean(s, 'active')} className="focus:outline-none bg-transparent border border-transparent cursor-pointer">
-                            {s.active ? <Check className="w-4 h-4 text-emerald-500 mx-auto" /> : <EyeOff className="w-4 h-4 text-slate-400 mx-auto" />}
+                          <button type="button" onClick={() => toggleServiceBool(s, 'active')} className="focus:outline-none bg-transparent border-none cursor-pointer">
+                            {s.active !== false ? <Check className="w-4 h-4 text-emerald-500 mx-auto" /> : <EyeOff className="w-4 h-4 text-slate-400 mx-auto" />}
                           </button>
                         </td>
-                        {/* visible_on_website */}
+                        {/* En Web / visible_on_website */}
                         <td className="py-3 text-center">
-                          <button type="button" onClick={() => toggleServiceBoolean(s, 'visible_on_website')} className="focus:outline-none bg-transparent border border-transparent cursor-pointer">
+                          <button type="button" onClick={() => toggleServiceBool(s, 'visible_on_website')} className="focus:outline-none bg-transparent border-none cursor-pointer">
                             {s.visible_on_website !== false ? (
                               <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 border border-emerald-100 rounded text-[9px] font-bold">visible</span>
                             ) : (
-                              <span className="px-2 py-0.5 bg-slate-50 dark:bg-slate-950/10 text-slate-500 border border-slate-200 rounded text-[9px] font-bold">oculto</span>
+                              <span className="px-2 py-0.5 bg-slate-50 dark:bg-slate-950/10 text-slate-500 border border-slate-250 rounded text-[9px] font-bold">oculto</span>
                             )}
                           </button>
                         </td>
-                        <td className="py-3 text-right space-x-1.5">
-                          <button onClick={() => startEditService(s)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-450 rounded border border-transparent bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleDeleteService(s.id)} className="p-1 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-slate-455 rounded border border-transparent bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <td className="py-3 text-right space-x-1">
+                          <button onClick={() => startEditService(s)} className="p-1 hover:bg-slate-100 text-slate-450 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleDeleteService(s.id)} className="p-1 hover:bg-rose-50 text-slate-450 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-3.5 h-3.5" /></button>
                         </td>
                       </tr>
                     ))}
@@ -1280,7 +1233,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
               </h3>
               <form onSubmit={handleSaveService} className="space-y-4 text-xs">
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Título</label>
+                  <label className="text-slate-400 font-bold block">Título del Servicio</label>
                   <input type="text" required placeholder="Ej. Full eBook" value={serviceTitle} onChange={e => setServiceTitle(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
                 </div>
                 <div className="space-y-1.5">
@@ -1291,11 +1244,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                     <option value="Digitalización">Digitalización</option>
                     <option value="Producción">Producción</option>
                     <option value="Marketing">Marketing</option>
+                    <option value="Legal">Legal</option>
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Precio Desde</label>
-                  <input type="number" value={servicePrice} onChange={e => setServicePrice(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                  <label className="text-slate-400 font-bold block">Precio Desde (CLP)</label>
+                  <input type="number" value={servicePrice} onChange={e => setServicePrice(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-slate-400 font-bold block">Descripción Corta</label>
@@ -1306,18 +1260,22 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   <textarea value={serviceFullDesc} onChange={e => setServiceFullDesc(e.target.value)} rows={3} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
                 </div>
                 
-                <div className="flex gap-4 py-1.5">
-                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer">
+                <div className="flex gap-4 py-1">
+                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
                     <input type="checkbox" checked={serviceFeatured} onChange={e => setServiceFeatured(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
                     <span>Destacado</span>
                   </label>
-                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer">
+                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
                     <input type="checkbox" checked={serviceVisible} onChange={e => setServiceVisible(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
-                    <span>Visible en la web</span>
+                    <span>Visible en Web</span>
+                  </label>
+                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
+                    <input type="checkbox" checked={serviceActive} onChange={e => setServiceActive(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
+                    <span>Activo</span>
                   </label>
                 </div>
 
-                <button type="submit" disabled={isReadOnly} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1">
+                <button type="submit" disabled={isReadOnly} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1 border border-transparent">
                   <Plus className="w-4 h-4" />
                   <span>Guardar Servicio</span>
                 </button>
@@ -1336,18 +1294,25 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <div>
-                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Libros Destacados</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Controla las portadas, novedades y enlaces de venta en la web de Noveli.</p>
+                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Catálogo de Libros Web</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Define las portadas, novedades y enlaces de venta para los lectores.</p>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
-              {books.map(b => (
-                <div key={b.id} className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-5 shadow-2xs flex gap-4">
+              {books.map((b, idx) => (
+                <div key={b.id || idx} className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-5 shadow-2xs flex gap-4 relative">
+                  {/* Reorder Arrows in Book Container */}
+                  <div className="flex flex-col justify-center items-center gap-2 border-r border-slate-50 dark:border-slate-800 pr-3 shrink-0">
+                    <button type="button" disabled={idx === 0 || isReadOnly} onClick={() => moveBookOrder(idx, -1)} className="text-slate-300 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowUp className="w-4 h-4" /></button>
+                    <span className="text-[10px] font-bold text-slate-400">{b.display_order || idx + 1}</span>
+                    <button type="button" disabled={idx === books.length - 1 || isReadOnly} onClick={() => moveBookOrder(idx, 1)} className="text-slate-300 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowDown className="w-4 h-4" /></button>
+                  </div>
+
                   <div className="w-20 h-28 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-lg flex flex-col items-center justify-center overflow-hidden shrink-0 relative group">
-                    {b.cover_url ? <img src={b.cover_url.startsWith('mock://') ? `https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=100&auto=format&fit=crop&q=60` : b.cover_url} className="w-full h-full object-cover" /> : <BookOpen className="w-7 h-7 text-slate-300" />}
+                    {b.cover_url ? <img src={b.cover_url.startsWith('mock://') ? `https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=100&auto=format&fit=crop&q=60` : b.cover_url} className="w-full h-full object-cover" /> : <BookOpen className="w-7 h-7 text-slate-350" />}
                     <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[9px] font-bold cursor-pointer">
                       <Upload className="w-4 h-4 mb-1" />
                       <span>Subir foto</span>
@@ -1359,28 +1324,31 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                     <div className="flex justify-between items-start">
                       <div>
                         <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">{b.title}</h4>
-                        <p className="text-xs text-slate-400 mt-0.5">Autor: {b.author} • Género: {b.genre}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Autor: {b.author} • Género: {b.genre} • <span className="text-purple-600 dark:text-purple-400 font-bold uppercase text-[9px] bg-purple-50 dark:bg-purple-950/20 px-1.5 py-0.5 rounded">{b.status || 'Destacado'}</span></p>
                       </div>
 
                       <div className="flex items-center space-x-1 shrink-0">
-                        {/* Featured */}
-                        <button type="button" onClick={() => toggleBookBoolean(b, 'featured')} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded border border-transparent bg-transparent cursor-pointer">
+                        {/* Destacado */}
+                        <button type="button" onClick={() => toggleBookBool(b, 'featured')} className="p-1 hover:bg-slate-100 rounded border-none bg-transparent cursor-pointer">
                           <Star className={`w-4 h-4 ${b.featured ? 'text-amber-500 fill-amber-500' : 'text-slate-350'}`} />
                         </button>
-                        {/* Active */}
-                        <button type="button" onClick={() => toggleBookBoolean(b, 'active')} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded border border-transparent bg-transparent cursor-pointer">
-                          {b.active ? <Check className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-slate-400" />}
-                        </button>
-                        {/* visible_on_website */}
-                        <button type="button" onClick={() => toggleBookBoolean(b, 'visible_on_website')} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded border border-transparent bg-transparent cursor-pointer">
+                        {/* En Web / visible_on_website */}
+                        <button type="button" onClick={() => toggleBookBool(b, 'visible_on_website')} className="p-1 hover:bg-slate-100 rounded border-none bg-transparent cursor-pointer">
                           {b.visible_on_website !== false ? <Eye className="w-4 h-4 text-emerald-600" /> : <EyeOff className="w-4 h-4 text-slate-350" />}
                         </button>
                         
-                        <button onClick={() => startEditBook(b)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-amber-600 rounded border border-transparent bg-transparent cursor-pointer"><Edit className="w-4 h-4" /></button>
-                        <button onClick={() => handleDeleteBook(b.id)} className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-slate-400 rounded border border-transparent bg-transparent cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => startEditBook(b)} className="p-1 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-4 h-4" /></button>
+                        <button onClick={() => handleDeleteBook(b.id)} className="p-1 hover:bg-rose-50 text-slate-400 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </div>
                     {b.short_description && <p className="text-xs text-slate-500 italic">"{b.short_description}"</p>}
+                    {b.sale_url && (
+                      <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
+                        <ShoppingBag className="w-3.5 h-3.5" />
+                        <span>Enlace: {b.sale_platform} ➔ </span>
+                        <a href={b.sale_url} target="_blank" rel="noopener noreferrer" className="hover:underline truncate max-w-[200px] font-mono">{b.sale_url}</a>
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1391,19 +1359,30 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
               <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">{editingBook ? 'Editar Libro' : 'Destacar Libro'}</h3>
               <form onSubmit={handleSaveBook} className="space-y-4 text-xs">
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Título del Libro</label>
+                  <label className="text-slate-400 font-bold block">Título</label>
                   <input type="text" required value={bookTitle} onChange={e => setBookTitle(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-slate-400 font-bold block">Autor</label>
                   <input type="text" required value={bookAuthor} onChange={e => setBookAuthor(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Género</label>
-                  <input type="text" value={bookGenre} onChange={e => setBookGenre(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Género</label>
+                    <input type="text" value={bookGenre} onChange={e => setBookGenre(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Estado/Etiqueta</label>
+                    <select value={bookStatus} onChange={e => setBookStatus(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent">
+                      <option value="Destacado">Destacado</option>
+                      <option value="Novedad">Novedad</option>
+                      <option value="Preventa">Preventa</option>
+                      <option value="Lanzamiento">Lanzamiento</option>
+                    </select>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Imagen de Portada</label>
+                  <label className="text-slate-400 font-bold block">Portada URL</label>
                   <div className="flex gap-2">
                     <input type="text" value={bookCoverUrl} onChange={e => setBookCoverUrl(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono" />
                     <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
@@ -1417,10 +1396,10 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   <label className="text-slate-400 font-bold block">Reseña</label>
                   <textarea value={bookShortDesc} onChange={e => setBookShortDesc(e.target.value)} rows={3} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
                 </div>
-
+                
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-slate-400 font-bold block">Plataforma</label>
+                    <label className="text-slate-400 font-bold block">Plataforma de Venta</label>
                     <select value={bookSalePlatform} onChange={e => setBookSalePlatform(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent">
                       <option value="Amazon">Amazon</option>
                       <option value="Buscalibre">Buscalibre</option>
@@ -1430,23 +1409,23 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-slate-400 font-bold block">Enlace</label>
-                    <input type="text" value={bookSaleUrl} onChange={e => setBookSaleUrl(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                    <label className="text-slate-400 font-bold block">Enlace de Compra</label>
+                    <input type="url" value={bookSaleUrl} onChange={e => setBookSaleUrl(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
                   </div>
                 </div>
 
                 <div className="flex gap-4 py-1">
-                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer">
+                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
                     <input type="checkbox" checked={bookFeatured} onChange={e => setBookFeatured(e.target.checked)} className="rounded text-purple-550 h-4 w-4" />
                     <span>Destacado</span>
                   </label>
-                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer">
+                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
                     <input type="checkbox" checked={bookVisible} onChange={e => setBookVisible(e.target.checked)} className="rounded text-purple-550 h-4 w-4" />
                     <span>Visible en Web</span>
                   </label>
                 </div>
 
-                <button type="submit" disabled={isReadOnly} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1">
+                <button type="submit" disabled={isReadOnly} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1 border border-transparent">
                   <Plus className="w-4 h-4" />
                   <span>Guardar Libro</span>
                 </button>
@@ -1456,16 +1435,16 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         </div>
       )}
 
-      {/* ------------------ SUB-VIEW: ENLACES (website_links) ------------------ */}
+      {/* ------------------ SUB-VIEW: ENLACES ------------------ */}
       {currentPath === 'enlaces' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
             <div className="flex items-center space-x-3">
-              <button onClick={() => navigateTo('dashboard')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer">
+              <button onClick={() => navigateTo('dashboard')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-855 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer">
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <div>
-                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Enlaces de Venta y Lectura</h2>
+                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Enlaces de Venta y Redes</h2>
                 <p className="text-xs text-slate-400 mt-0.5 font-sans">Administra los enlaces externos oficiales de Noveli para marketplaces y plataformas.</p>
               </div>
             </div>
@@ -1477,46 +1456,38 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-slate-150 dark:border-slate-800 text-slate-400 font-bold">
-                      <th className="py-2.5">Título</th>
-                      <th className="py-2.5">Plataforma</th>
-                      <th className="py-2.5">Enlace</th>
-                      <th className="py-2.5 text-center">Destacado</th>
+                      <th className="py-2.5">Orden</th>
+                      <th className="py-2.5">Etiqueta</th>
+                      <th className="py-2.5">Tipo de Enlace</th>
+                      <th className="py-2.5">URL</th>
                       <th className="py-2.5 text-center">Activo</th>
-                      <th className="py-2.5 text-center">En Web</th>
                       <th className="py-2.5 text-right">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-855">
-                    {links.map((l) => (
-                      <tr key={l.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20">
-                        <td className="py-3 font-bold text-slate-750 dark:text-slate-200">{l.title}</td>
-                        <td className="py-3"><span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-350 rounded font-bold text-[9px] uppercase tracking-wider">{l.platform}</span></td>
-                        <td className="py-3 font-mono text-[10px] text-slate-400 truncate max-w-[150px]"><a href={l.url} target="_blank" rel="noopener noreferrer" className="hover:underline flex items-center gap-1">{l.url} <ExternalLink className="w-2.5 h-2.5" /></a></td>
-                        {/* Destacado */}
-                        <td className="py-3 text-center">
-                          <button type="button" onClick={() => toggleLinkBoolean(l, 'featured')} className="focus:outline-none bg-transparent border border-transparent cursor-pointer">
-                            <Star className={`w-4 h-4 ${l.featured ? 'text-amber-500 fill-amber-500' : 'text-slate-350'}`} />
-                          </button>
+                    {links.map((l, idx) => (
+                      <tr key={l.id || idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20">
+                        <td className="py-3">
+                          <div className="flex items-center space-x-1">
+                            <span className="font-bold text-slate-400 w-4">{l.display_order || idx + 1}</span>
+                            <div className="flex flex-col">
+                              <button type="button" disabled={idx === 0 || isReadOnly} onClick={() => moveLinkOrder(idx, -1)} className="text-slate-300 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowUp className="w-3 h-3" /></button>
+                              <button type="button" disabled={idx === links.length - 1 || isReadOnly} onClick={() => moveLinkOrder(idx, 1)} className="text-slate-300 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowDown className="w-3 h-3" /></button>
+                            </div>
+                          </div>
                         </td>
+                        <td className="py-3 font-bold text-slate-750 dark:text-slate-200">{l.label}</td>
+                        <td className="py-3"><span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-350 rounded font-bold text-[9px] uppercase tracking-wider">{l.link_type}</span></td>
+                        <td className="py-3 font-mono text-[10px] text-slate-400 truncate max-w-[150px]"><a href={l.url} target="_blank" rel="noopener noreferrer" className="hover:underline flex items-center gap-1">{l.url} <ExternalLink className="w-2.5 h-2.5" /></a></td>
                         {/* Activo */}
                         <td className="py-3 text-center">
-                          <button type="button" onClick={() => toggleLinkBoolean(l, 'active')} className="focus:outline-none bg-transparent border border-transparent cursor-pointer">
-                            {l.active ? <Check className="w-4 h-4 text-emerald-500 mx-auto" /> : <EyeOff className="w-4 h-4 text-slate-400 mx-auto" />}
-                          </button>
-                        </td>
-                        {/* visible_on_website */}
-                        <td className="py-3 text-center">
-                          <button type="button" onClick={() => toggleLinkBoolean(l, 'visible_on_website')} className="focus:outline-none bg-transparent border border-transparent cursor-pointer">
-                            {l.visible_on_website !== false ? (
-                              <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 border border-emerald-100 rounded text-[9px] font-bold">visible</span>
-                            ) : (
-                              <span className="px-2 py-0.5 bg-slate-50 dark:bg-slate-950/10 text-slate-500 border border-slate-200 rounded text-[9px] font-bold">oculto</span>
-                            )}
+                          <button type="button" onClick={() => toggleLinkBool(l, 'active')} className="focus:outline-none bg-transparent border-none cursor-pointer">
+                            {l.active !== false ? <Check className="w-4 h-4 text-emerald-500 mx-auto" /> : <EyeOff className="w-4 h-4 text-slate-400 mx-auto" />}
                           </button>
                         </td>
                         <td className="py-3 text-right space-x-1.5">
-                          <button onClick={() => startEditLink(l)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-450 rounded border border-transparent bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleDeleteLink(l.id)} className="p-1 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-slate-455 rounded border border-transparent bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => startEditLink(l)} className="p-1 hover:bg-slate-100 text-slate-455 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleDeleteLink(l.id)} className="p-1 hover:bg-rose-50 text-slate-455 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-3.5 h-3.5" /></button>
                         </td>
                       </tr>
                     ))}
@@ -1532,17 +1503,17 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
               </h3>
               <form onSubmit={handleSaveLink} className="space-y-4 text-xs">
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Título Visible</label>
-                  <input type="text" required placeholder="Ej. Tienda Amazon" value={linkTitle} onChange={e => setLinkTitle(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                  <label className="text-slate-400 font-bold block">Etiqueta Visible</label>
+                  <input type="text" required placeholder="Ej. Tienda Amazon" value={linkLabel} onChange={e => setLinkLabel(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Plataforma</label>
-                  <select value={linkPlatform} onChange={e => setLinkPlatform(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent">
-                    <option value="Amazon">Amazon</option>
-                    <option value="Buscalibre">Buscalibre</option>
-                    <option value="Wattpad">Wattpad</option>
-                    <option value="Página del autor">Página del autor</option>
-                    <option value="Otro">Otro</option>
+                  <label className="text-slate-400 font-bold block">Tipo de Enlace</label>
+                  <select value={linkType} onChange={e => setLinkType(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent">
+                    <option value="compra">Compra</option>
+                    <option value="lectura">Lectura</option>
+                    <option value="autor">Página del Autor</option>
+                    <option value="red social">Red Social</option>
+                    <option value="otro">Otro</option>
                   </select>
                 </div>
                 <div className="space-y-1.5">
@@ -1551,17 +1522,13 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                 </div>
                 
                 <div className="flex gap-4 py-1.5">
-                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer">
-                    <input type="checkbox" checked={linkFeatured} onChange={e => setLinkFeatured(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
-                    <span>Destacado</span>
-                  </label>
-                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer">
-                    <input type="checkbox" checked={linkVisible} onChange={e => setLinkVisible(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
-                    <span>Visible en Web</span>
+                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
+                    <input type="checkbox" checked={linkActive} onChange={e => setLinkActive(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
+                    <span>Activo / Visible en la web</span>
                   </label>
                 </div>
 
-                <button type="submit" disabled={isReadOnly} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1">
+                <button type="submit" disabled={isReadOnly} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1 border border-transparent">
                   <Plus className="w-4 h-4" />
                   <span>Guardar Enlace</span>
                 </button>
@@ -1571,84 +1538,91 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         </div>
       )}
 
-      {/* ------------------ SUB-VIEW: TEXTOS (website_sections) ------------------ */}
-      {currentPath === 'textos' && (
+      {/* ------------------ SUB-VIEW: SECCIONES ------------------ */}
+      {currentPath === 'secciones' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
             <div className="flex items-center space-x-3">
-              <button onClick={() => navigateTo('dashboard')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer">
+              <button onClick={() => navigateTo('dashboard')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-855 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer">
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <div>
-                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Textos Principales de la Página</h2>
-                <p className="text-xs text-slate-400 mt-0.5 font-sans">Administra los textos principales de la página: Hero title, Sobre Nosotros, Contacto, etc.</p>
+                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Secciones de Página</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Modifica los bloques de texto estáticos y el contenido de las secciones públicas.</p>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
-              {sections.map((sec) => (
-                <div key={sec.id} className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-5 shadow-2xs space-y-3">
+              {sections.map((sec, idx) => (
+                <div key={sec.id || idx} className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-5 shadow-2xs space-y-3">
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-950/20 text-amber-600 border border-amber-100 rounded text-[9px] font-bold uppercase font-mono tracking-wider">{sec.section_key}</span>
                       <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 mt-1.5">{sec.title || 'Bloque sin título'}</h4>
+                      {sec.subtitle && <p className="text-[10px] text-slate-400">{sec.subtitle}</p>}
                     </div>
 
                     <div className="flex items-center space-x-1 shrink-0">
                       {/* Active */}
-                      <button type="button" onClick={() => toggleSectionBoolean(sec, 'active')} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded border border-transparent bg-transparent cursor-pointer">
-                        {sec.active ? <Check className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-slate-400" />}
-                      </button>
-                      {/* visible_on_website */}
-                      <button type="button" onClick={() => toggleSectionBoolean(sec, 'visible_on_website')} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded border border-transparent bg-transparent cursor-pointer">
-                        {sec.visible_on_website !== false ? <Eye className="w-4 h-4 text-emerald-600" /> : <EyeOff className="w-4 h-4 text-slate-350" />}
+                      <button type="button" onClick={() => toggleSectionBool(sec, 'active')} className="p-1 hover:bg-slate-100 rounded border-none bg-transparent cursor-pointer">
+                        {sec.active !== false ? <Check className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-slate-400" />}
                       </button>
                       
-                      <button onClick={() => startEditSection(sec)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-amber-600 rounded border border-transparent bg-transparent cursor-pointer"><Edit className="w-4 h-4" /></button>
-                      <button onClick={() => handleDeleteSection(sec.id)} className="p-1 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-slate-400 rounded border border-transparent bg-transparent cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => startEditSection(sec)} className="p-1 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded border-none bg-transparent cursor-pointer"><Edit className="w-4 h-4" /></button>
+                      <button onClick={() => handleDeleteSection(sec.id)} className="p-1 hover:bg-rose-50 text-slate-400 rounded border-none bg-transparent cursor-pointer"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </div>
                   <p className="text-xs text-slate-500 leading-relaxed font-sans">{sec.content}</p>
+                  {sec.image_url && (
+                    <div className="font-mono text-[9px] text-slate-400 truncate bg-slate-50 dark:bg-slate-950/20 p-2 rounded">
+                      Imagen URL: {sec.image_url}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
 
             {/* Form */}
             <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4 h-fit">
-              <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">{editingSection ? 'Editar Texto' : 'Nuevo Bloque de Texto'}</h3>
+              <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">{editingSection ? 'Editar Sección' : 'Nueva Sección de Página'}</h3>
               <form onSubmit={handleSaveSection} className="space-y-4 text-xs">
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Llave de Sección</label>
+                  <label className="text-slate-400 font-bold block">Llave de Sección (section_key)</label>
                   <select value={sectionKey} onChange={e => setSectionKey(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent">
-                    <option value="hero">Hero (Encabezado principal)</option>
-                    <option value="about">About (Sobre nosotros)</option>
-                    <option value="contact">Contact (Contacto oficial)</option>
-                    <option value="custom">Custom (Sección personalizada)</option>
+                    <option value="inicio">Inicio (Home Hero)</option>
+                    <option value="servicios">Servicios (Sección Servicios)</option>
+                    <option value="libros">Libros (Sección Libros)</option>
+                    <option value="contacto">Contacto (Sección Contacto)</option>
+                    <option value="nosotros">Nosotros (Sección Nosotros)</option>
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Título de Sección</label>
+                  <label className="text-slate-400 font-bold block">Título</label>
                   <input type="text" required placeholder="Ej. Sobre Nosotros" value={sectionTitle} onChange={e => setSectionTitle(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Contenido de Sección</label>
-                  <textarea required placeholder="Escribe el cuerpo de texto que consumirá la web pública..." value={sectionContent} onChange={e => setSectionContent(e.target.value)} rows={5} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                  <label className="text-slate-400 font-bold block">Subtítulo</label>
+                  <input type="text" placeholder="Ej. Quiénes somos" value={sectionSubtitle} onChange={e => setSectionSubtitle(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Contenido</label>
+                  <textarea required placeholder="Escribe el cuerpo de texto..." value={sectionContent} onChange={e => setSectionContent(e.target.value)} rows={5} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Imagen URL</label>
+                  <input type="text" placeholder="https://..." value={sectionImageUrl} onChange={e => setSectionImageUrl(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono" />
                 </div>
 
                 <div className="flex gap-4 py-1.5">
-                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer">
-                    <input type="checkbox" checked={sectionFeatured} onChange={e => setSectionFeatured(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
-                    <span>Destacado</span>
-                  </label>
-                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer">
-                    <input type="checkbox" checked={sectionVisible} onChange={e => setSectionVisible(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
-                    <span>Visible en la web</span>
+                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
+                    <input type="checkbox" checked={sectionActive} onChange={e => setSectionActive(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
+                    <span>Sección Activa / Visible en la Web</span>
                   </label>
                 </div>
 
-                <button type="submit" disabled={isReadOnly} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1">
+                <button type="submit" disabled={isReadOnly} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1 border border-transparent">
                   <Plus className="w-4 h-4" />
                   <span>Guardar Sección</span>
                 </button>
