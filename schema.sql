@@ -928,3 +928,33 @@ CREATE POLICY "Permit all operations for website_services" ON website_services
     FOR ALL
     USING (true)
     WITH CHECK (true);
+
+-- ==========================================
+-- TABLE: website_books
+-- ==========================================
+CREATE TABLE IF NOT EXISTS website_books (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL DEFAULT '11111111-1111-1111-1111-111111111111',
+    user_id UUID,
+    title TEXT NOT NULL,
+    author TEXT NOT NULL,
+    cover_url TEXT,
+    short_description TEXT,
+    genre VARCHAR(100),
+    status VARCHAR(50) DEFAULT 'Destacado',
+    featured BOOLEAN DEFAULT FALSE,
+    sale_url TEXT,
+    sale_platform VARCHAR(50) DEFAULT 'Amazon',
+    active BOOLEAN DEFAULT TRUE,
+    display_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    CONSTRAINT check_sale_platform CHECK (sale_platform IN ('Amazon', 'Buscalibre', 'Wattpad', 'Página del autor', 'Otro'))
+);
+
+ALTER TABLE website_books ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Permit all operations for website_books" ON website_books
+    FOR ALL
+    USING (true)
+    WITH CHECK (true);
+

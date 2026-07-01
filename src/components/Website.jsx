@@ -3,7 +3,7 @@ import { supabase, isMock } from '../supabaseClient';
 import { 
   Globe, ArrowUpRight, ShieldCheck, Cpu, Layout, Server, ExternalLink, 
   Activity, ArrowLeft, Plus, Check, Eye, EyeOff, Edit, Trash2, Link, 
-  BookOpen, Heart, ShoppingBag, ArrowUp, ArrowDown, Star, AlertTriangle
+  BookOpen, Heart, ShoppingBag, ArrowUp, ArrowDown, Star, AlertTriangle, Upload
 } from 'lucide-react';
 import { formatCurrency } from '../utils';
 
@@ -21,20 +21,20 @@ const DEFAULT_WEB_SERVICES = [
   { id: 'ws-8', title: 'Registro de Derechos de Autor', category: 'Legal', price_from: 50000, short_description: 'Gestión legal de registro de propiedad intelectual', featured: false, active: true, display_order: 8 }
 ];
 
-const INITIAL_BOOKS = [
-  { id: 'wb-1', title: 'El Eco de los Sauces', author: 'Clara Del Monte', genre: 'Novela Histórica', badge: 'Destacado', visible: true, links: { amazon: 'https://amazon.com', buscalibre: 'https://buscalibre.com', wattpad: '', website: 'https://somosnovelieditorial.com' } },
-  { id: 'wb-2', title: 'Cenizas de Neón', author: 'Julio Rivera', genre: 'Ciencia Ficción', badge: 'Novedad', visible: true, links: { amazon: 'https://amazon.com', buscalibre: '', wattpad: 'https://wattpad.com', website: '' } },
-  { id: 'wb-3', title: 'Bajo la Sombra del Alerce', author: 'Marta Valdivia', genre: 'Poesía', badge: 'Preventa', visible: false, links: { amazon: '', buscalibre: '', wattpad: '', website: '' } },
+const DEFAULT_WEB_BOOKS = [
+  { id: 'wb-1', title: 'El Eco de los Sauces', author: 'Clara Del Monte', genre: 'Novela Histórica', status: 'Destacado', cover_url: '', short_description: 'Una fascinante novela sobre secretos familiares en el sur de Chile.', featured: true, sale_url: 'https://amazon.com', sale_platform: 'Amazon', active: true, display_order: 1 },
+  { id: 'wb-2', title: 'Cenizas de Neón', author: 'Julio Rivera', genre: 'Ciencia Ficción', status: 'Novedad', cover_url: '', short_description: 'Un futuro distópico donde los recuerdos son la moneda de cambio.', featured: true, sale_url: 'https://wattpad.com', sale_platform: 'Wattpad', active: true, display_order: 2 },
+  { id: 'wb-3', title: 'Bajo la Sombra del Alerce', author: 'Marta Valdivia', genre: 'Poesía', status: 'Preventa', cover_url: '', short_description: 'Versos inspirados en los bosques milenarios y el paso del tiempo.', featured: false, sale_url: '', sale_platform: 'Amazon', active: false, display_order: 3 },
 ];
 
 export default function Website({ isReadOnly }) {
   const [currentPath, setCurrentPath] = useState('dashboard'); // 'dashboard', 'servicios', 'libros'
   const [services, setServices] = useState([]);
-  const [books, setBooks] = useState(INITIAL_BOOKS);
+  const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [usingMockDb, setUsingMockDb] = useState(false);
 
-  // Form states
+  // Service Form states
   const [editingService, setEditingService] = useState(null);
   const [serviceTitle, setServiceTitle] = useState('');
   const [serviceShortDesc, setServiceShortDesc] = useState('');
@@ -44,15 +44,24 @@ export default function Website({ isReadOnly }) {
   const [serviceFeatured, setServiceFeatured] = useState(false);
 
   // Book Form states
-  const [newBookTitle, setNewBookTitle] = useState('');
-  const [newBookAuthor, setNewBookAuthor] = useState('');
-  const [newBookGenre, setNewBookGenre] = useState('');
-  const [newBookBadge, setNewBookBadge] = useState('Novedad');
+  const [editingBook, setEditingBook] = useState(null);
+  const [bookTitle, setBookTitle] = useState('');
+  const [bookAuthor, setBookAuthor] = useState('');
+  const [bookGenre, setBookGenre] = useState('');
+  const [bookStatus, setBookStatus] = useState('Destacado');
+  const [bookShortDesc, setBookShortDesc] = useState('');
+  const [bookCoverUrl, setBookCoverUrl] = useState('');
+  const [bookSaleUrl, setBookSaleUrl] = useState('');
+  const [bookSalePlatform, setBookSalePlatform] = useState('Amazon');
+  const [bookFeatured, setBookFeatured] = useState(false);
+  const [bookActive, setBookActive] = useState(true);
 
   useEffect(() => {
     fetchServices();
+    fetchBooks();
   }, []);
 
+  // --- SERVICE PERSISTENCE ---
   const fetchServices = async () => {
     setLoading(true);
     try {
@@ -75,7 +84,6 @@ export default function Website({ isReadOnly }) {
         if (data && data.length > 0) {
           setServices(data);
         } else {
-          // If table is completely empty, insert defaults
           await seedDefaultServices();
         }
         setUsingMockDb(false);
@@ -133,7 +141,6 @@ export default function Website({ isReadOnly }) {
     }
   };
 
-  // Service Save (Create / Update)
   const handleSaveService = async (e) => {
     e.preventDefault();
     if (isReadOnly) return;
@@ -145,7 +152,6 @@ export default function Website({ isReadOnly }) {
       const parsedPrice = parseFloat(servicePrice) || 0;
 
       if (editingService) {
-        // Update Mode
         if (isMock || usingMockDb) {
           const updated = services.map(s => s.id === editingService.id ? {
             ...s,
@@ -174,7 +180,6 @@ export default function Website({ isReadOnly }) {
         }
         alert("Servicio actualizado correctamente.");
       } else {
-        // Create Mode
         const newOrder = services.length > 0 ? Math.max(...services.map(s => s.display_order || 0)) + 1 : 1;
         const payload = {
           title: serviceTitle,
@@ -233,7 +238,6 @@ export default function Website({ isReadOnly }) {
     setServiceFeatured(!!service.featured);
   };
 
-  // Toggle ToggleActive
   const handleToggleActive = async (service) => {
     if (isReadOnly) return;
     const updatedStatus = !service.active;
@@ -256,7 +260,6 @@ export default function Website({ isReadOnly }) {
     }
   };
 
-  // Toggle Featured
   const handleToggleFeatured = async (service) => {
     if (isReadOnly) return;
     const updatedStatus = !service.featured;
@@ -279,7 +282,6 @@ export default function Website({ isReadOnly }) {
     }
   };
 
-  // Delete Service
   const handleDeleteService = async (id) => {
     if (isReadOnly) return;
     if (!window.confirm("¿Estás seguro de que deseas eliminar este servicio de la web?")) return;
@@ -303,19 +305,16 @@ export default function Website({ isReadOnly }) {
     }
   };
 
-  // Reorder Services
   const moveOrder = async (index, direction) => {
     if (isReadOnly) return;
     const targetIndex = index + direction;
     if (targetIndex < 0 || targetIndex >= services.length) return;
 
     const list = [...services];
-    // Swap items
     const temp = list[index];
     list[index] = list[targetIndex];
     list[targetIndex] = temp;
 
-    // Update display_order fields
     const updatedList = list.map((item, idx) => ({
       ...item,
       display_order: idx + 1
@@ -327,7 +326,6 @@ export default function Website({ isReadOnly }) {
       if (isMock || usingMockDb) {
         localStorage.setItem('somos_noveli_website_services', JSON.stringify(updatedList));
       } else {
-        // Save swaps to database
         const updates = updatedList.map(item => supabase
           .from('website_services')
           .update({ display_order: item.display_order })
@@ -340,46 +338,297 @@ export default function Website({ isReadOnly }) {
     }
   };
 
-  // Book CRUD states
-  const toggleBookVisibility = (id) => {
-    setBooks(books.map(b => b.id === id ? { ...b, visible: !b.visible } : b));
-  };
-
-  const handleAddBook = (e) => {
-    e.preventDefault();
-    if (!newBookTitle || !newBookAuthor) return;
-    const newBook = {
-      id: `wb-${Date.now()}`,
-      title: newBookTitle,
-      author: newBookAuthor,
-      genre: newBookGenre || 'Novela',
-      badge: newBookBadge,
-      visible: true,
-      links: { amazon: '', buscalibre: '', wattpad: '', website: '' }
-    };
-    setBooks([...books, newBook]);
-    setNewBookTitle('');
-    setNewBookAuthor('');
-    setNewBookGenre('');
-  };
-
-  const handleDeleteBook = (id) => {
-    setBooks(books.filter(b => b.id !== id));
-  };
-
-  const handleUpdateLink = (bookId, linkKey, value) => {
-    setBooks(books.map(b => {
-      if (b.id === bookId) {
-        return {
-          ...b,
-          links: {
-            ...b.links,
-            [linkKey]: value
-          }
-        };
+  // --- BOOK PERSISTENCE ---
+  const fetchBooks = async () => {
+    try {
+      if (isMock) {
+        loadMockBooks();
+        return;
       }
-      return b;
-    }));
+
+      const { data, error } = await supabase
+        .from('website_books')
+        .select('*')
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.warn("Table website_books query failed, falling back to local memory storage:", error.message);
+        loadMockBooks();
+      } else {
+        if (data && data.length > 0) {
+          setBooks(data);
+        } else {
+          await seedDefaultBooks();
+        }
+      }
+    } catch (err) {
+      console.error("Exception loading website books:", err);
+      loadMockBooks();
+    }
+  };
+
+  const loadMockBooks = () => {
+    const saved = localStorage.getItem('somos_noveli_website_books');
+    if (saved) {
+      try {
+        setBooks(JSON.parse(saved));
+      } catch (_) {
+        setBooks(DEFAULT_WEB_BOOKS);
+        localStorage.setItem('somos_noveli_website_books', JSON.stringify(DEFAULT_WEB_BOOKS));
+      }
+    } else {
+      setBooks(DEFAULT_WEB_BOOKS);
+      localStorage.setItem('somos_noveli_website_books', JSON.stringify(DEFAULT_WEB_BOOKS));
+    }
+  };
+
+  const seedDefaultBooks = async () => {
+    try {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      const booksToInsert = DEFAULT_WEB_BOOKS.map(b => ({
+        title: b.title,
+        author: b.author,
+        genre: b.genre,
+        status: b.status,
+        short_description: b.short_description,
+        featured: b.featured,
+        sale_url: b.sale_url,
+        sale_platform: b.sale_platform,
+        active: b.active,
+        display_order: b.display_order,
+        organization_id: orgId
+      }));
+
+      const { data, error } = await supabase
+        .from('website_books')
+        .insert(booksToInsert)
+        .select();
+
+      if (!error && data) {
+        setBooks(data);
+      } else {
+        setBooks(DEFAULT_WEB_BOOKS);
+      }
+    } catch (_) {
+      setBooks(DEFAULT_WEB_BOOKS);
+    }
+  };
+
+  const handleSaveBook = async (e) => {
+    e.preventDefault();
+    if (isReadOnly) return;
+    if (!bookTitle.trim() || !bookAuthor.trim()) return;
+
+    setLoading(true);
+    try {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      const payload = {
+        title: bookTitle,
+        author: bookAuthor,
+        genre: bookGenre,
+        status: bookStatus,
+        short_description: bookShortDesc,
+        cover_url: bookCoverUrl,
+        sale_url: bookSaleUrl,
+        sale_platform: bookSalePlatform,
+        featured: bookFeatured,
+        active: bookActive,
+        organization_id: orgId
+      };
+
+      if (editingBook) {
+        if (isMock || usingMockDb || !supabase) {
+          const updated = books.map(b => b.id === editingBook.id ? { ...b, ...payload } : b);
+          setBooks(updated);
+          localStorage.setItem('somos_noveli_website_books', JSON.stringify(updated));
+        } else {
+          const { error } = await supabase
+            .from('website_books')
+            .update(payload)
+            .eq('id', editingBook.id);
+          if (error) throw error;
+        }
+        alert("Libro actualizado correctamente.");
+      } else {
+        const newOrder = books.length > 0 ? Math.max(...books.map(b => b.display_order || 0)) + 1 : 1;
+        const insertPayload = { ...payload, display_order: newOrder };
+
+        if (isMock || usingMockDb || !supabase) {
+          const newB = { ...insertPayload, id: `wb-${Date.now()}` };
+          const updated = [...books, newB];
+          setBooks(updated);
+          localStorage.setItem('somos_noveli_website_books', JSON.stringify(updated));
+        } else {
+          const { error } = await supabase
+            .from('website_books')
+            .insert([insertPayload]);
+          if (error) throw error;
+        }
+        alert("Libro destacado correctamente.");
+      }
+
+      resetBookForm();
+      await fetchBooks();
+    } catch (err) {
+      console.error("Error saving book:", err);
+      alert(`Error al guardar: ${err.message || err}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEditBook = (book) => {
+    setEditingBook(book);
+    setBookTitle(book.title || '');
+    setBookAuthor(book.author || '');
+    setBookGenre(book.genre || '');
+    setBookStatus(book.status || 'Destacado');
+    setBookShortDesc(book.short_description || '');
+    setBookCoverUrl(book.cover_url || '');
+    setBookSaleUrl(book.sale_url || '');
+    setBookSalePlatform(book.sale_platform || 'Amazon');
+    setBookFeatured(!!book.featured);
+    setBookActive(!!book.active);
+  };
+
+  const resetBookForm = () => {
+    setEditingBook(null);
+    setBookTitle('');
+    setBookAuthor('');
+    setBookGenre('');
+    setBookStatus('Destacado');
+    setBookShortDesc('');
+    setBookCoverUrl('');
+    setBookSaleUrl('');
+    setBookSalePlatform('Amazon');
+    setBookFeatured(false);
+    setBookActive(true);
+  };
+
+  const toggleBookActive = async (book) => {
+    if (isReadOnly) return;
+    const updatedStatus = !book.active;
+
+    try {
+      if (isMock || usingMockDb || !supabase) {
+        const updated = books.map(b => b.id === book.id ? { ...b, active: updatedStatus } : b);
+        setBooks(updated);
+        localStorage.setItem('somos_noveli_website_books', JSON.stringify(updated));
+      } else {
+        const { error } = await supabase
+          .from('website_books')
+          .update({ active: updatedStatus })
+          .eq('id', book.id);
+        if (error) throw error;
+      }
+      setBooks(books.map(b => b.id === book.id ? { ...b, active: updatedStatus } : b));
+    } catch (err) {
+      console.error("Error toggling book active:", err);
+    }
+  };
+
+  const toggleBookFeatured = async (book) => {
+    if (isReadOnly) return;
+    const updatedStatus = !book.featured;
+
+    try {
+      if (isMock || usingMockDb || !supabase) {
+        const updated = books.map(b => b.id === book.id ? { ...b, featured: updatedStatus } : b);
+        setBooks(updated);
+        localStorage.setItem('somos_noveli_website_books', JSON.stringify(updated));
+      } else {
+        const { error } = await supabase
+          .from('website_books')
+          .update({ featured: updatedStatus })
+          .eq('id', book.id);
+        if (error) throw error;
+      }
+      setBooks(books.map(b => b.id === book.id ? { ...b, featured: updatedStatus } : b));
+    } catch (err) {
+      console.error("Error toggling book featured:", err);
+    }
+  };
+
+  const handleDeleteBook = async (id) => {
+    if (isReadOnly) return;
+    if (!window.confirm("¿Estás seguro de que deseas eliminar este libro de la web?")) return;
+
+    try {
+      if (isMock || usingMockDb || !supabase) {
+        const updated = books.filter(b => b.id !== id);
+        setBooks(updated);
+        localStorage.setItem('somos_noveli_website_books', JSON.stringify(updated));
+      } else {
+        const { error } = await supabase
+          .from('website_books')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+      }
+      setBooks(books.filter(b => b.id !== id));
+      if (editingBook?.id === id) resetBookForm();
+    } catch (err) {
+      console.error("Error deleting book:", err);
+    }
+  };
+
+  // Upload book cover
+  const handleUploadCover = async (e, bookId) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (isReadOnly) return;
+
+    setLoading(true);
+    try {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_cover.${fileExt}`;
+      const storagePath = `${orgId}/website/covers/${fileName}`;
+
+      let finalUrl = '';
+      if (isMock || usingMockDb || !supabase) {
+        finalUrl = `mock://covers/${storagePath}`;
+      } else {
+        const { error: uploadErr } = await supabase.storage
+          .from('documents')
+          .upload(storagePath, file, { upsert: true });
+
+        if (uploadErr) throw uploadErr;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(storagePath);
+        
+        finalUrl = publicUrlData?.publicUrl || '';
+      }
+
+      if (bookId) {
+        // Direct update for an existing book
+        if (isMock || usingMockDb || !supabase) {
+          const updated = books.map(b => b.id === bookId ? { ...b, cover_url: finalUrl } : b);
+          setBooks(updated);
+          localStorage.setItem('somos_noveli_website_books', JSON.stringify(updated));
+        } else {
+          const { error } = await supabase
+            .from('website_books')
+            .update({ cover_url: finalUrl })
+            .eq('id', bookId);
+          if (error) throw error;
+        }
+        await fetchBooks();
+        alert("Portada subida y actualizada con éxito.");
+      } else {
+        // Setting for form
+        setBookCoverUrl(finalUrl);
+        alert("Portada subida correctamente. Pulsa guardar para aplicar los cambios.");
+      }
+    } catch (err) {
+      console.error("Error uploading cover:", err);
+      alert(`Error al subir imagen: ${err.message || err}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -408,7 +657,7 @@ export default function Website({ isReadOnly }) {
         <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl flex items-center gap-2.5 text-xs text-amber-700 dark:text-amber-400">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>
-            <strong>Modo Respaldo Local:</strong> La tabla <code>website_services</code> no existe o no está migrada en Supabase. Se han cargado datos simulados locales. Ejecuta el archivo <code>supabase_migration_20.sql</code> para habilitar persistencia real.
+            <strong>Modo Respaldo Local:</strong> La tabla <code>website_services</code> y/o <code>website_books</code> no existen en Supabase. Se han cargado datos locales. Ejecuta los archivos de migración 20 y 21 correspondientes.
           </span>
         </div>
       )}
@@ -419,10 +668,10 @@ export default function Website({ isReadOnly }) {
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
             <div>
-              <h1 className="text-3xl font-extrabold text-slate-855 dark:text-slate-100 tracking-tight">
+              <h1 className="text-3xl font-extrabold text-slate-855 dark:text-slate-100 tracking-tight font-serif">
                 Sitio Web Noveli
               </h1>
-              <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+              <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-sans">
                 Configura y administra los contenidos del catálogo y servicios que se muestran al público.
               </p>
             </div>
@@ -431,7 +680,7 @@ export default function Website({ isReadOnly }) {
               href={WEBSITE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center space-x-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-semibold shadow-md transition-all duration-300 hover:shadow-lg cursor-pointer w-fit shrink-0"
+              className="flex items-center space-x-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-semibold shadow-md transition-all duration-300 hover:shadow-lg cursor-pointer w-fit shrink-0 border border-transparent"
             >
               <ExternalLink className="w-4 h-4" />
               <span>Abrir sitio web</span>
@@ -469,7 +718,7 @@ export default function Website({ isReadOnly }) {
             {/* 2. Servicios Editoriales */}
             <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-6 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
               <div className="space-y-2">
-                <div className="p-2.5 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-450 rounded-xl w-fit">
+                <div className="p-2.5 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-455 rounded-xl w-fit">
                   <Cpu className="w-5 h-5" />
                 </div>
                 <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Servicios Editoriales</h3>
@@ -502,7 +751,7 @@ export default function Website({ isReadOnly }) {
                 </p>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-purple-500"></span>
-                  <span>{books.length} libros cargados ({books.filter(b => b.visible).length} visibles)</span>
+                  <span>{books.length} libros cargados ({books.filter(b => b.active).length} activos)</span>
                 </div>
               </div>
               <button
@@ -595,7 +844,7 @@ export default function Website({ isReadOnly }) {
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <div>
-                <h2 className="text-2xl font-bold text-slate-850 dark:text-slate-100 font-serif">Servicios Web Públicos</h2>
+                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Servicios Web Públicos</h2>
                 <p className="text-xs text-slate-400 mt-0.5">Define los servicios de la editorial que aparecerán en la web pública.</p>
               </div>
             </div>
@@ -626,7 +875,6 @@ export default function Website({ isReadOnly }) {
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-855">
                     {services.map((s, idx) => (
                       <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 group">
-                        {/* Display Order controls */}
                         <td className="py-3">
                           <div className="flex items-center space-x-1">
                             <span className="font-bold text-slate-400 dark:text-slate-600 w-4">{s.display_order || idx + 1}</span>
@@ -666,7 +914,6 @@ export default function Website({ isReadOnly }) {
                         <td className="py-3 font-mono font-bold text-slate-600 dark:text-slate-300">
                           {formatCurrency(s.price_from, s.currency || 'CLP')}
                         </td>
-                        {/* Featured (Star) */}
                         <td className="py-3 text-center">
                           <button
                             type="button"
@@ -677,7 +924,6 @@ export default function Website({ isReadOnly }) {
                             <Star className={`w-4 h-4 ${s.featured ? 'text-amber-500 fill-amber-500' : 'text-slate-350 dark:text-slate-700'}`} />
                           </button>
                         </td>
-                        {/* Visibilidad / Active */}
                         <td className="py-3 text-center">
                           <button 
                             type="button"
@@ -844,8 +1090,8 @@ export default function Website({ isReadOnly }) {
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <div>
-                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100">Libros Destacados en la Web</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Define las portadas, novedades y enlaces de venta para los lectores.</p>
+                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Catálogo de Libros en la Web</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Controla las portadas, novedades y enlaces de venta en la web de Noveli.</p>
               </div>
             </div>
           </div>
@@ -853,169 +1099,290 @@ export default function Website({ isReadOnly }) {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* List & Links Editor */}
-            <div className="lg:col-span-2 space-y-5">
+            <div className="lg:col-span-2 space-y-4">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Libros Publicados</h3>
+              
               {books.map(b => (
                 <div 
                   key={b.id} 
-                  className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-5 shadow-2xs space-y-4"
+                  className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-5 shadow-2xs flex flex-col md:flex-row md:items-start gap-4"
                 >
-                  <div className="flex justify-between items-start">
-                    <div className="flex gap-3">
-                      <div className="p-2.5 bg-slate-50 dark:bg-slate-950/30 border border-slate-100 dark:border-slate-855 rounded-xl text-slate-400 shrink-0">
-                        <BookOpen className="w-5 h-5 text-purple-500" />
-                      </div>
+                  {/* Book Cover Thumbnail Area */}
+                  <div className="w-20 h-28 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-lg flex flex-col items-center justify-center text-center overflow-hidden shrink-0 relative group">
+                    {b.cover_url ? (
+                      <img 
+                        src={b.cover_url.startsWith('mock://') ? `https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=100&auto=format&fit=crop&q=60` : b.cover_url} 
+                        alt="Portada" 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <BookOpen className="w-7 h-7 text-slate-300 dark:text-slate-700" />
+                    )}
+                    
+                    {/* Inline Upload Cover overlay */}
+                    <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[9px] font-bold cursor-pointer transition-opacity">
+                      <Upload className="w-4 h-4 mb-1" />
+                      <span>Subir foto</span>
+                      <input 
+                        type="file" 
+                        accept="image/*"
+                        disabled={isReadOnly}
+                        onChange={(e) => handleUploadCover(e, b.id)}
+                        className="hidden" 
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex-1 space-y-3">
+                    <div className="flex justify-between items-start">
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-extrabold text-sm text-slate-800 dark:text-slate-100">{b.title}</h4>
-                          <span className="px-2 py-0.5 bg-purple-550/10 text-purple-650 dark:text-purple-400 rounded text-[9px] font-bold">
-                            {b.badge}
+                          <span className="px-2.5 py-0.5 bg-purple-550/10 text-purple-650 dark:text-purple-400 rounded text-[9px] font-bold">
+                            {b.status}
                           </span>
                         </div>
                         <p className="text-xs text-slate-400 mt-0.5">Autor: {b.author} • Género: {b.genre}</p>
                       </div>
+
+                      <div className="flex items-center space-x-1 shrink-0">
+                        {/* Toggle Featured */}
+                        <button
+                          type="button"
+                          disabled={isReadOnly}
+                          onClick={() => toggleBookFeatured(b)}
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-all cursor-pointer border border-transparent bg-transparent"
+                          title={b.featured ? 'Desmarcar de Inicio' : 'Destacar en Inicio'}
+                        >
+                          <Star className={`w-4 h-4 ${b.featured ? 'text-amber-500 fill-amber-500' : 'text-slate-350 dark:text-slate-700'}`} />
+                        </button>
+                        
+                        {/* Toggle Active */}
+                        <button
+                          type="button"
+                          disabled={isReadOnly}
+                          onClick={() => toggleBookActive(b)}
+                          className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-all cursor-pointer border border-transparent bg-transparent"
+                          title={b.active ? 'Ocultar de la Web' : 'Mostrar en la Web'}
+                        >
+                          {b.active ? (
+                            <Eye className="w-4 h-4 text-emerald-500" />
+                          ) : (
+                            <EyeOff className="w-4 h-4 text-slate-400" />
+                          )}
+                        </button>
+                        
+                        {/* Edit */}
+                        <button
+                          type="button"
+                          disabled={isReadOnly}
+                          onClick={() => startEditBook(b)}
+                          className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-all cursor-pointer border border-transparent bg-transparent text-slate-400 hover:text-amber-600"
+                          title="Editar"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+
+                        {/* Delete */}
+                        <button
+                          type="button"
+                          disabled={isReadOnly}
+                          onClick={() => handleDeleteBook(b.id)}
+                          className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-550 text-slate-400 rounded transition-all cursor-pointer border border-transparent bg-transparent"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center space-x-1">
-                      <button
-                        type="button"
-                        disabled={isReadOnly}
-                        onClick={() => toggleBookVisibility(b.id)}
-                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-all cursor-pointer border border-transparent bg-transparent"
-                        title={b.visible ? 'Ocultar de la Web' : 'Mostrar en la Web'}
-                      >
-                        {b.visible ? (
-                          <Eye className="w-4 h-4 text-emerald-500" />
-                        ) : (
-                          <EyeOff className="w-4 h-4 text-slate-400" />
-                        )}
-                      </button>
-                      
-                      <button
-                        type="button"
-                        disabled={isReadOnly}
-                        onClick={() => handleDeleteBook(b.id)}
-                        className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-550 text-slate-400 rounded transition-all cursor-pointer border border-transparent bg-transparent"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                    {b.short_description && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 italic">
+                        "{b.short_description}"
+                      </p>
+                    )}
 
-                  {/* Links Manager Block */}
-                  <div className="pt-3 border-t border-slate-50 dark:border-slate-850 space-y-2">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Enlaces de Compra</span>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
-                      {/* Amazon */}
-                      <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850 rounded-lg">
-                        <span className="font-bold text-slate-400 w-16">Amazon:</span>
-                        <input
-                          type="text"
-                          disabled={isReadOnly}
-                          placeholder="Sin enlace"
-                          value={b.links.amazon}
-                          onChange={e => handleUpdateLink(b.id, 'amazon', e.target.value)}
-                          className="bg-transparent border-none focus:outline-none w-full text-slate-655 dark:text-slate-300 font-mono text-[10px]"
-                        />
-                      </div>
-                      
-                      {/* Buscalibre */}
-                      <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850 rounded-lg">
-                        <span className="font-bold text-slate-400 w-16">Buscalibre:</span>
-                        <input
-                          type="text"
-                          disabled={isReadOnly}
-                          placeholder="Sin enlace"
-                          value={b.links.buscalibre}
-                          onChange={e => handleUpdateLink(b.id, 'buscalibre', e.target.value)}
-                          className="bg-transparent border-none focus:outline-none w-full text-slate-655 dark:text-slate-300 font-mono text-[10px]"
-                        />
-                      </div>
-
-                      {/* Wattpad */}
-                      <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850 rounded-lg">
-                        <span className="font-bold text-slate-400 w-16">Wattpad:</span>
-                        <input
-                          type="text"
-                          disabled={isReadOnly}
-                          placeholder="Sin enlace"
-                          value={b.links.wattpad}
-                          onChange={e => handleUpdateLink(b.id, 'wattpad', e.target.value)}
-                          className="bg-transparent border-none focus:outline-none w-full text-slate-655 dark:text-slate-300 font-mono text-[10px]"
-                        />
-                      </div>
-
-                      {/* Web Oficial */}
-                      <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850 rounded-lg">
-                        <span className="font-bold text-slate-400 w-16">Pág. Autor:</span>
-                        <input
-                          type="text"
-                          disabled={isReadOnly}
-                          placeholder="Sin enlace"
-                          value={b.links.website}
-                          onChange={e => handleUpdateLink(b.id, 'website', e.target.value)}
-                          className="bg-transparent border-none focus:outline-none w-full text-slate-655 dark:text-slate-300 font-mono text-[10px]"
-                        />
-                      </div>
+                    {/* Sale / Purchase link info */}
+                    <div className="pt-2 border-t border-slate-50 dark:border-slate-850 flex items-center justify-between text-[11px] text-slate-450">
+                      <span className="font-semibold">Plataforma de Venta:</span>
+                      {b.sale_url ? (
+                        <a 
+                          href={b.sale_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-amber-600 hover:underline font-bold"
+                        >
+                          <ShoppingBag className="w-3.5 h-3.5" />
+                          <span>{b.sale_platform} (Comprar / Leer)</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : (
+                        <span className="text-slate-400 italic">Sin enlace configurado</span>
+                      )}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Add Book Form */}
+            {/* Add / Edit Book Form */}
             <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4 h-fit">
-              <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">Destacar Nuevo Libro</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">
+                  {editingBook ? 'Editar Libro Web' : 'Destacar Libro Web'}
+                </h3>
+                {editingBook && (
+                  <button 
+                    onClick={resetBookForm}
+                    className="text-[10px] font-bold text-amber-600 hover:underline border border-transparent bg-transparent cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
               
-              <form onSubmit={handleAddBook} className="space-y-4 text-xs">
+              <form onSubmit={handleSaveBook} className="space-y-4 text-xs">
                 <div className="space-y-1.5">
                   <label className="text-slate-400 font-bold block">Título del Libro</label>
                   <input
                     type="text"
                     required
                     placeholder="Ej. El Canto del Cisne"
-                    value={newBookTitle}
-                    onChange={e => setNewBookTitle(e.target.value)}
+                    value={bookTitle}
+                    onChange={e => setBookTitle(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Nombre del Autor</label>
+                  <label className="text-slate-400 font-bold block">Autor</label>
                   <input
                     type="text"
                     required
                     placeholder="Ej. Gabriel Fuentes"
-                    value={newBookAuthor}
-                    onChange={e => setNewBookAuthor(e.target.value)}
+                    value={bookAuthor}
+                    onChange={e => setBookAuthor(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
                   />
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Género</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Poesía"
+                      value={bookGenre}
+                      onChange={e => setBookGenre(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Estado / Etiqueta</label>
+                    <select
+                      value={bookStatus}
+                      onChange={e => setBookStatus(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
+                    >
+                      <option value="Destacado">Destacado</option>
+                      <option value="Novedad">Novedad</option>
+                      <option value="Preventa">Preventa</option>
+                      <option value="Lanzamiento">Lanzamiento</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Cover File Upload */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Género Literario</label>
-                  <input
-                    type="text"
-                    placeholder="Ej. Poesía, Novela, Ensayo"
-                    value={newBookGenre}
-                    onChange={e => setNewBookGenre(e.target.value)}
+                  <label className="text-slate-400 font-bold block">Imagen de Portada</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="URL de imagen..."
+                      value={bookCoverUrl}
+                      onChange={e => setBookCoverUrl(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"
+                    />
+                    <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700/80 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer transition-colors flex items-center gap-1">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Subir</span>
+                      <input 
+                        type="file" 
+                        accept="image/*"
+                        disabled={isReadOnly}
+                        onChange={(e) => handleUploadCover(e)}
+                        className="hidden" 
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Reseña o Descripción</label>
+                  <textarea
+                    placeholder="Escribe una pequeña sinopsis para los lectores..."
+                    value={bookShortDesc}
+                    onChange={e => setBookShortDesc(e.target.value)}
+                    rows={3}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Etiqueta Destacada</label>
-                  <select
-                    value={newBookBadge}
-                    onChange={e => setNewBookBadge(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="Destacado">Destacado</option>
-                    <option value="Novedad">Novedad</option>
-                    <option value="Preventa">Preventa</option>
-                    <option value="Lanzamiento">Lanzamiento</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Plataforma</label>
+                    <select
+                      value={bookSalePlatform}
+                      onChange={e => setBookSalePlatform(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 bg-transparent text-xs text-slate-800 dark:text-slate-100"
+                    >
+                      <option value="Amazon">Amazon</option>
+                      <option value="Buscalibre">Buscalibre</option>
+                      <option value="Wattpad">Wattpad</option>
+                      <option value="Página del autor">Página del autor</option>
+                      <option value="Otro">Otro</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Enlace de Venta / Lectura</label>
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={bookSaleUrl}
+                      onChange={e => setBookSaleUrl(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 bg-transparent text-xs text-slate-800 dark:text-slate-100 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-4 py-1">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="bookFeatured"
+                      checked={bookFeatured}
+                      onChange={e => setBookFeatured(e.target.checked)}
+                      className="rounded border-slate-300 text-purple-500 focus:ring-purple-500 h-4 w-4"
+                    />
+                    <label htmlFor="bookFeatured" className="text-slate-655 dark:text-slate-350 font-bold cursor-pointer select-none">
+                      Destacado
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="bookActive"
+                      checked={bookActive}
+                      onChange={e => setBookActive(e.target.checked)}
+                      className="rounded border-slate-300 text-purple-500 focus:ring-purple-500 h-4 w-4"
+                    />
+                    <label htmlFor="bookActive" className="text-slate-655 dark:text-slate-350 font-bold cursor-pointer select-none">
+                      Activo / Visible
+                    </label>
+                  </div>
                 </div>
 
                 <button
@@ -1024,7 +1391,7 @@ export default function Website({ isReadOnly }) {
                   className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center justify-center space-x-1.5 border border-transparent"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Destacar en la Web</span>
+                  <span>{editingBook ? 'Actualizar Libro' : 'Destacar Libro'}</span>
                 </button>
               </form>
             </div>
