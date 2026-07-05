@@ -8,7 +8,20 @@ import {
   UploadCloud, FileSpreadsheet, Image, File, Eye, Trash
 } from 'lucide-react';
 
-export default function Quotations() {
+const getExtensionSuggestion = (pages) => {
+  if (!pages || pages <= 80) {
+    return { pct: 0, text: "Ajuste sugerido: 0% (Extensión base)", warning: false };
+  }
+  if (pages >= 81 && pages <= 150) {
+    return { pct: 20, text: "Ajuste sugerido: +15% a +25% (Aprox +20%)", warning: false };
+  }
+  if (pages >= 151 && pages <= 250) {
+    return { pct: 40, text: "Ajuste sugerido: +30% a +50% (Aprox +40%)", warning: false };
+  }
+  return { pct: 0, text: "Cotización personalizada obligatoria (libro extenso)", warning: true };
+};
+
+export default function Quotations({ preselectedEntity, clearPreselectedEntity }) {
   const [quotations, setQuotations] = useState([]);
   const [clients, setClients] = useState([]);
   const [prospects, setProspects] = useState([]);
@@ -60,6 +73,36 @@ export default function Quotations() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (preselectedEntity && !loading) {
+      setSelectedQuotation(null);
+      setFormHeader({
+        client_id: preselectedEntity.type === 'client' ? preselectedEntity.id : '',
+        prospect_id: preselectedEntity.type === 'prospect' ? preselectedEntity.id : '',
+        discount: 0,
+        currency: 'CLP',
+        exchange_rate: 1,
+        status: 'borrador',
+        notes: '',
+        includes_vat: false,
+        pages: 0,
+        extension_adjustment: 0
+      });
+      setFormItems([]);
+      setFormError('');
+      setIsModalOpen(true);
+      setNewDocFile(null);
+      setNewDocTitle('');
+      setNewDocNotes('');
+      setNewDocType('contrato');
+      setQuotationDocuments([]);
+      
+      if (clearPreselectedEntity) {
+        clearPreselectedEntity();
+      }
+    }
+  }, [preselectedEntity, loading]);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -110,7 +153,9 @@ export default function Quotations() {
       exchange_rate: 1,
       status: 'borrador',
       notes: '',
-      includes_vat: false
+      includes_vat: false,
+      pages: 0,
+      extension_adjustment: 0
     });
     setFormItems([]);
     setFormError('');
@@ -132,7 +177,9 @@ export default function Quotations() {
       exchange_rate: quot.exchange_rate || 1,
       status: quot.status || 'borrador',
       notes: quot.notes || '',
-      includes_vat: quot.includes_vat || false
+      includes_vat: quot.includes_vat || false,
+      pages: quot.pages || 0,
+      extension_adjustment: quot.extension_adjustment || 0
     });
 
     const itemsMapped = (quot.items || []).map(item => ({
@@ -451,12 +498,18 @@ export default function Quotations() {
 
   const getTotals = () => {
     const subtotal = getSubtotal(formItems);
+    const adjPct = Number(formHeader.extension_adjustment) || 0;
+    const extensionAmount = Math.round(subtotal * (adjPct / 100));
+    const subtotalAdjusted = subtotal + extensionAmount;
+    
     const discount = Number(formHeader.discount) || 0;
-    const total = Math.max(0, subtotal - discount);
+    const total = Math.max(0, subtotalAdjusted - discount);
     
     const split = calculateVatSplit(total, formHeader.includes_vat);
     return {
       subtotal,
+      extensionAmount,
+      subtotalAdjusted,
       discount,
       net: split.net,
       vat: split.vat,
@@ -493,7 +546,9 @@ export default function Quotations() {
         rate_date: new Date().toISOString().split('T')[0],
         status: formHeader.status,
         notes: formHeader.notes,
-        includes_vat: formHeader.includes_vat
+        includes_vat: formHeader.includes_vat,
+        pages: Number(formHeader.pages) || 0,
+        extension_adjustment: Number(formHeader.extension_adjustment) || 0
       };
 
       if (selectedQuotation) {
@@ -570,8 +625,10 @@ export default function Quotations() {
     try {
       const items = quot.items || [];
       const subtotal = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
+      const adjPct = Number(quot.extension_adjustment) || 0;
+      const subtotalAdjusted = subtotal * (1 + adjPct / 100);
       const discount = quot.discount || 0;
-      const totalAmount = Math.max(0, subtotal - discount);
+      const totalAmount = Math.max(0, subtotalAdjusted - discount);
 
       // Loop through each quotation item and insert a contracted service
       for (const item of items) {
@@ -582,6 +639,8 @@ export default function Quotations() {
           serviceType = 'maquetación';
         }
 
+        const adjustedValue = (Number(item.price) * Number(item.quantity)) * (1 + adjPct / 100);
+
         const { error: serviceErr } = await supabase
           .from('services')
           .insert([{
@@ -589,10 +648,10 @@ export default function Quotations() {
             type: serviceType,
             book_title: bookTitlePrompt,
             status: 'recibido',
-            value: item.price * item.quantity,
+            value: adjustedValue,
             currency: quot.currency,
             exchange_rate: quot.exchange_rate || 1,
-            value_converted: (item.price * item.quantity) * (quot.exchange_rate || 1),
+            value_converted: adjustedValue * (quot.exchange_rate || 1),
             rate_date: new Date().toISOString().split('T')[0],
             notes: `Creado desde cotización aceptada. Descripción del ítem: ${item.custom_name || ''}`
           }]);
@@ -794,8 +853,10 @@ export default function Quotations() {
                 {filteredQuotations.map((quot) => {
                   const items = quot.items || [];
                   const subtotal = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
+                  const adjPct = Number(quot.extension_adjustment) || 0;
+                  const subtotalAdjusted = subtotal * (1 + adjPct / 100);
                   const discount = quot.discount || 0;
-                  const total = Math.max(0, subtotal - discount);
+                  const total = Math.max(0, subtotalAdjusted - discount);
                   const showConverted = quot.currency !== 'CLP';
 
                   return (
@@ -833,6 +894,11 @@ export default function Quotations() {
                         <div className="text-[10px] text-slate-400">
                           {quot.includes_vat ? 'Impuesto IVA incluido' : 'Exento de IVA'}
                         </div>
+                        {Number(quot.pages) > 0 && (
+                          <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">
+                            {quot.pages} págs (+{quot.extension_adjustment || 0}%)
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border uppercase tracking-wider ${getStatusColor(quot.status)}`}>
@@ -1086,6 +1152,59 @@ export default function Quotations() {
                 </div>
               </div>
 
+              {/* Ajuste por Extensión */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Páginas del Manuscrito
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Ej. 120"
+                    value={formHeader.pages || ''}
+                    onChange={(e) => {
+                      const pagesVal = Number(e.target.value);
+                      const suggestion = getExtensionSuggestion(pagesVal);
+                      setFormHeader(prev => ({
+                        ...prev,
+                        pages: pagesVal,
+                        extension_adjustment: suggestion.warning ? prev.extension_adjustment : suggestion.pct
+                      }));
+                    }}
+                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Ajuste por Extensión (%)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      value={formHeader.extension_adjustment || 0}
+                      onChange={(e) => setFormHeader({...formHeader, extension_adjustment: Number(e.target.value)})}
+                      className="block w-full px-3 py-2 pr-8 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                    <span className="absolute right-3 top-2.5 text-xs text-slate-400">%</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col justify-end">
+                  {formHeader.pages > 0 && (
+                    <div className={`text-[11px] font-semibold p-2 rounded-lg border ${
+                      getExtensionSuggestion(formHeader.pages).warning 
+                        ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/40' 
+                        : 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/20 dark:text-indigo-400 dark:border-indigo-900/40'
+                    }`}>
+                      {getExtensionSuggestion(formHeader.pages).text}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Multicurrency Exchange Rate Input (Conditional) */}
               {formHeader.currency !== 'CLP' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-xl border border-brand-100 dark:border-brand-900 bg-brand-50/10">
@@ -1136,16 +1255,32 @@ export default function Quotations() {
 
               {/* Totals Summary */}
               <div className="pt-4 border-t border-slate-150 dark:border-slate-800 flex justify-end">
-                <div className="w-64 space-y-2 text-right">
+                <div className="w-72 space-y-2 text-right">
                   <div className="flex justify-between text-xs text-slate-400 font-bold uppercase">
-                    <span>Subtotal:</span>
+                    <span>Subtotal Base:</span>
                     <span className="font-mono text-slate-750 dark:text-slate-200">
                       {formatCurrency(getTotals().subtotal, formHeader.currency)}
                     </span>
                   </div>
+                  {getTotals().extensionAmount > 0 && (
+                    <div className="flex justify-between text-xs text-indigo-600 dark:text-indigo-400 font-bold uppercase">
+                      <span>Recargo Extensión (+{formHeader.extension_adjustment}%):</span>
+                      <span className="font-mono">
+                        +{formatCurrency(getTotals().extensionAmount, formHeader.currency)}
+                      </span>
+                    </div>
+                  )}
+                  {formHeader.pages > 0 && (
+                    <div className="flex justify-between text-xs text-slate-500 dark:text-slate-300 font-bold uppercase border-t border-slate-100 dark:border-slate-850 pt-1">
+                      <span>Total Sugerido:</span>
+                      <span className="font-mono">
+                        {formatCurrency(getTotals().subtotalAdjusted, formHeader.currency)}
+                      </span>
+                    </div>
+                  )}
                   {getTotals().discount > 0 && (
                     <div className="flex justify-between text-xs text-rose-500 font-bold uppercase">
-                      <span>Descuento:</span>
+                      <span>Descuento Especial:</span>
                       <span className="font-mono">
                         -{formatCurrency(getTotals().discount, formHeader.currency)}
                       </span>
@@ -1168,7 +1303,7 @@ export default function Quotations() {
                     </>
                   )}
                   <div className="flex justify-between text-base font-extrabold text-slate-800 dark:text-slate-100 border-t border-dashed border-slate-200 dark:border-slate-800 pt-2">
-                    <span>Total:</span>
+                    <span>Total Final:</span>
                     <span className="font-mono text-brand-600 dark:text-brand-450">
                       {formatCurrency(getTotals().total, formHeader.currency)}
                     </span>

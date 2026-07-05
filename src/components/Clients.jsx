@@ -1,5 +1,6 @@
 import React, { useEffect, useState, Component } from 'react';
 import { supabase, isMock } from '../supabaseClient';
+import QuickQuoteModal from './QuickQuoteModal';
 import { formatDate, exportToCSV, syncPaymentStatus } from '../utils';
 import { 
   Plus, Search, Edit2, Trash2, Eye, X, 
@@ -107,6 +108,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [countryFilter, setCountryFilter] = useState('todos');
   const [clientTypeFilter, setClientTypeFilter] = useState('todos');
+  const [quickQuoteClient, setQuickQuoteClient] = useState(null);
   
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -2187,6 +2189,19 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
                               <DollarSign className="w-3.5 h-3.5" />
                             </button>
                           )}
+                          {!isReadOnly && (
+                            <button
+                              onClick={() => setQuickQuoteClient({
+                                id: client.id,
+                                name: client.name,
+                                currency: client.preferred_currency || 'CLP'
+                              })}
+                              className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle mr-1"
+                              title="Crear Cotización Rápida"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={() => handleOpenEditModal(client)}
                             className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle"
@@ -3618,22 +3633,47 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
               )}
             </div>
 
-            <div className="flex justify-end p-6 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex justify-end gap-3 p-6 border-t border-slate-100 dark:border-slate-800">
               {!isReadOnly && (
-                <button
-                  onClick={() => {
-                    setIsDetailOpen(false);
-                    handleOpenEditModal(selectedClient);
-                  }}
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer shadow-md shadow-brand-600/20"
-                >
-                  Editar Ficha
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      setQuickQuoteClient({
+                        id: selectedClient.id,
+                        name: selectedClient.name,
+                        currency: selectedClient.preferred_currency || 'CLP'
+                      });
+                    }}
+                    className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 dark:bg-indigo-950/20 dark:text-indigo-400 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                  >
+                    Crear cotización rápida
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsDetailOpen(false);
+                      handleOpenEditModal(selectedClient);
+                    }}
+                    className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer shadow-md shadow-brand-600/20"
+                  >
+                    Editar Ficha
+                  </button>
+                </>
               )}
             </div>
           </div>
         </div>
       )}
+
+      <QuickQuoteModal
+        isOpen={!!quickQuoteClient}
+        onClose={() => setQuickQuoteClient(null)}
+        clientId={quickQuoteClient?.id}
+        entityName={quickQuoteClient?.name}
+        preferredCurrency={quickQuoteClient?.currency}
+        onSuccess={() => {
+          alert('¡Cotización rápida guardada con éxito!');
+        }}
+      />
     </div>
   );
 }

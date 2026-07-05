@@ -306,6 +306,8 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
+  const [preselectedEntity, setPreselectedEntity] = useState(null);
+
   const [editorialSettings, setEditorialSettings] = useState({
     editorial_name: 'Somos Noveli',
     logo_url: '',

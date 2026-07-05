@@ -35,6 +35,7 @@ export default function Reports() {
     expensesTotal: 0,
     expensesNet: 0,
     expensesVat: 0,
+    taxesPaid: 0,
     utility: 0,
     vatToPay: 0,
     
@@ -136,19 +137,27 @@ export default function Reports() {
     let expensesTotal = 0;
     let expensesNet = 0;
     let expensesVat = 0;
+    let taxesPaid = 0;
     filteredExpenses.forEach(e => {
       const clpAmount = Number(e.value_converted || e.amount || 0);
       const split = calculateVatSplit(clpAmount, e.includes_vat);
+      const isTax = e.tax_payment || e.category === 'impuestos';
+
       expensesTotal += clpAmount;
-      if (e.includes_vat) {
-        if (e.deductible) {
-          expensesNet += split.net;
-          expensesVat += split.vat;
-        } else {
-          expensesNet += clpAmount; 
-        }
+
+      if (isTax) {
+        taxesPaid += clpAmount;
       } else {
-        expensesNet += clpAmount;
+        if (e.includes_vat) {
+          if (e.deductible) {
+            expensesNet += split.net;
+            expensesVat += split.vat;
+          } else {
+            expensesNet += clpAmount; 
+          }
+        } else {
+          expensesNet += clpAmount;
+        }
       }
     });
 
@@ -160,7 +169,7 @@ export default function Reports() {
       }
     });
 
-    const utility = incomesNet - expensesNet - payrollTotal;
+    const utility = incomesNet - expensesNet - payrollTotal - taxesPaid;
     const vatToPay = incomesVat - expensesVat;
 
     // 3. Active clients in period
@@ -366,6 +375,7 @@ export default function Reports() {
       expensesTotal,
       expensesNet,
       expensesVat,
+      taxesPaid,
       utility,
       vatToPay,
       activeClients,
@@ -496,7 +506,7 @@ export default function Reports() {
             <h3 className="text-xl font-bold mt-1 text-emerald-400">
               {formatCurrency(report.utility, 'CLP')}
             </h3>
-            <span className="text-[10px] text-slate-400 block mt-1">Ingresos netos - Gastos netos</span>
+            <span className="text-[10px] text-slate-400 block mt-1">Ingresos netos - Gastos netos - Personal - Impuestos pagados</span>
           </div>
           <span className="p-3 bg-brand-500/10 text-emerald-400 rounded-xl">
             <DollarSign className="w-5 h-5" />

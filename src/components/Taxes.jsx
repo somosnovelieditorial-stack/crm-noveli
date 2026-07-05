@@ -11,6 +11,7 @@ export default function Taxes() {
   const [loading, setLoading] = useState(true);
   const [incomes, setIncomes] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [payroll, setPayroll] = useState([]);
   
   // Selection
   const [period, setPeriod] = useState({
@@ -30,6 +31,8 @@ export default function Taxes() {
     vatExpensesNet: 0,    // Gastos Netos con IVA
     
     vatToPay: 0,          // IVA a pagar estimado = Débito - Crédito
+    taxesPaid: 0,         // Impuestos pagados en el periodo
+    saldoTributario: 0,   // Saldo tributario estimado
     
     noVatSales: 0,        // Ingresos sin IVA (exento/honorario)
     totalExpenses: 0,     // Gastos totales (con y sin IVA)
@@ -45,16 +48,19 @@ export default function Taxes() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [incomesRes, expensesRes] = await Promise.all([
+      const [incomesRes, expensesRes, payrollRes] = await Promise.all([
         supabase.from('incomes').select('*'),
-        supabase.from('expenses').select('*')
+        supabase.from('expenses').select('*'),
+        supabase.from('payroll_payments').select('*')
       ]);
 
       if (incomesRes.error) throw incomesRes.error;
       if (expensesRes.error) throw expensesRes.error;
+      if (payrollRes.error) throw payrollRes.error;
 
       setIncomes(incomesRes.data || []);
       setExpenses(expensesRes.data || []);
+      setPayroll(payrollRes.data || []);
     } catch (err) {
       console.error("Error loading tax data:", err);
     } finally {
@@ -64,13 +70,14 @@ export default function Taxes() {
 
   useEffect(() => {
     calculateTaxes();
-  }, [incomes, expenses, period]);
+  }, [incomes, expenses, payroll, period]);
 
   const calculateTaxes = () => {
     if (incomes.length === 0 && expenses.length === 0) return;
 
     const periodIncomes = filterByPeriod(incomes, 'date', period);
     const periodExpenses = filterByPeriod(expenses, 'date', period);
+    const periodPayroll = filterByPeriod(payroll || [], 'date', period);
 
     // 1. Incomes Math
     let vatSalesTotal = 0;
@@ -97,33 +104,48 @@ export default function Taxes() {
     let vatExpensesNet = 0;   // Net of deductible expenses with VAT
     let totalExpenses = 0;    // Absolute sum of all expenses (CLP equivalent)
     let netExpensesTotal = 0; // Cumulative net expense cost
+    let taxesPaid = 0;        // Impuestos pagados en el periodo
 
     periodExpenses.forEach(e => {
       const clpAmount = convertToClp(e.amount, e.currency);
       const split = calculateVatSplit(clpAmount, e.includes_vat);
+      const isTax = e.tax_payment || e.category === 'impuestos';
 
       totalExpenses += clpAmount;
 
-      if (e.includes_vat) {
-        if (e.deductible) {
-          vatExpensesTotal += clpAmount;
-          vatExpensesNet += split.net;
-          vatExpensesVat += split.vat;
-          netExpensesTotal += split.net; // Net cost
+      if (isTax) {
+        taxesPaid += clpAmount;
+      } else {
+        if (e.includes_vat) {
+          if (e.deductible) {
+            vatExpensesTotal += clpAmount;
+            vatExpensesNet += split.net;
+            vatExpensesVat += split.vat;
+            netExpensesTotal += split.net; // Net cost
+          } else {
+            // If it includes VAT but is not deductible:
+            // Total amount acts as the net cost (cannot claim credit)
+            netExpensesTotal += clpAmount;
+          }
         } else {
-          // If it includes VAT but is not deductible:
-          // Total amount acts as the net cost (cannot claim credit)
+          // No VAT expense:
           netExpensesTotal += clpAmount;
         }
-      } else {
-        // No VAT expense:
-        netExpensesTotal += clpAmount;
+      }
+    });
+
+    // Payroll payments math
+    let payrollTotal = 0;
+    periodPayroll.forEach(p => {
+      if (p.status === 'pagado') {
+        payrollTotal += convertToClp(p.amount, p.currency);
       }
     });
 
     const netIncomesTotal = vatSalesNet + noVatSales;
-    const estimatedUtility = netIncomesTotal - netExpensesTotal;
+    const estimatedUtility = netIncomesTotal - netExpensesTotal - payrollTotal - taxesPaid;
     const vatToPay = vatSalesVat - vatExpensesVat;
+    const saldoTributario = vatToPay + taxesPaid;
 
     setReport({
       vatSalesTotal,
@@ -133,6 +155,8 @@ export default function Taxes() {
       vatExpensesVat,
       vatExpensesNet,
       vatToPay,
+      taxesPaid,
+      saldoTributario,
       noVatSales,
       totalExpenses,
       netExpensesTotal,
@@ -346,25 +370,33 @@ export default function Taxes() {
           <div className="space-y-3">
             <h3 className="font-bold text-brand-300 text-sm uppercase tracking-wider flex items-center gap-1.5">
               <Percent className="w-4 h-4 text-brand-400" />
-              Impuestos a Pagar
+              Resumen de Impuestos
             </h3>
             
-            <div className="pt-4 space-y-3">
-              <div className="flex justify-between items-center text-xs text-slate-455 border-b border-slate-800 pb-2">
-                <span>Débito (Débito Fiscal)</span>
+            <div className="pt-2 space-y-2">
+              <div className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-800 pb-1.5">
+                <span>Débito Fiscal (IVA Ventas)</span>
                 <span>{formatCurrency(report.vatSalesVat, 'CLP')}</span>
               </div>
-              <div className="flex justify-between items-center text-xs text-slate-455 border-b border-slate-800 pb-2">
-                <span>Crédito (IVA Crédito Deducible)</span>
+              <div className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-800 pb-1.5">
+                <span>Crédito Fiscal (IVA Compras)</span>
                 <span>- {formatCurrency(report.vatExpensesVat, 'CLP')}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-800 pb-1.5">
+                <span>IVA Estimado por Pagar</span>
+                <span className="font-semibold text-amber-400">{formatCurrency(report.vatToPay, 'CLP')}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-800 pb-1.5">
+                <span>Impuestos Pagados (PPM/Otros)</span>
+                <span className="font-semibold text-rose-400">{formatCurrency(report.taxesPaid, 'CLP')}</span>
               </div>
             </div>
           </div>
 
-          <div className="pt-6 border-t border-slate-800 mt-6 flex justify-between items-center">
-            <span className="text-xs font-bold text-brand-350 uppercase">IVA Estimado a Pagar</span>
-            <span className={`text-xl font-extrabold ${report.vatToPay >= 0 ? 'text-amber-455' : 'text-emerald-400'}`}>
-              {formatCurrency(report.vatToPay, 'CLP')}
+          <div className="pt-4 border-t border-slate-800 mt-4 flex justify-between items-center">
+            <span className="text-xs font-bold text-brand-350 uppercase">Saldo Tributario Estimado</span>
+            <span className={`text-xl font-extrabold text-white`}>
+              {formatCurrency(report.saldoTributario, 'CLP')}
             </span>
           </div>
         </div>
@@ -428,6 +460,57 @@ export default function Taxes() {
             </p>
           </div>
 
+        </div>
+      </div>
+
+      {/* Detalle de Impuestos Pagados */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-6 space-y-4">
+        <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
+          <Percent className="w-5 h-5 text-brand-500" />
+          Detalle de Impuestos Pagados (Periodo Consultado)
+        </h3>
+        
+        <div className="overflow-x-auto border border-slate-100 dark:border-slate-800/80 rounded-xl">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-950 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-100 dark:border-slate-800/60">
+                <th className="p-4">Fecha</th>
+                <th className="p-4">Tipo de Impuesto</th>
+                <th className="p-4">Monto Original</th>
+                <th className="p-4">Monto (CLP)</th>
+                <th className="p-4">Origen</th>
+                <th className="p-4">Notas / Detalle</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
+              {filterByPeriod(expenses, 'date', period).filter(e => e.tax_payment || e.category === 'impuestos').length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="p-8 text-center text-slate-400">No se registran impuestos pagados en este período.</td>
+                </tr>
+              ) : (
+                filterByPeriod(expenses, 'date', period)
+                  .filter(e => e.tax_payment || e.category === 'impuestos')
+                  .map((tax) => (
+                    <tr key={tax.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20">
+                      <td className="p-4 font-medium text-slate-700 dark:text-slate-350">{tax.date}</td>
+                      <td className="p-4">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
+                          {tax.tax_type || 'Impuesto'}
+                        </span>
+                      </td>
+                      <td className="p-4 font-semibold">
+                        {formatCurrency(tax.amount, tax.currency)}
+                      </td>
+                      <td className="p-4 font-bold text-slate-800 dark:text-slate-100">
+                        {formatCurrency(tax.value_converted || convertToClp(tax.amount, tax.currency), 'CLP')}
+                      </td>
+                      <td className="p-4 font-mono text-slate-400 text-[10px]">{tax.source || 'Manual'}</td>
+                      <td className="p-4 text-slate-500">{tax.notes || '-'}</td>
+                    </tr>
+                  ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

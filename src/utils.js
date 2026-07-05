@@ -132,14 +132,21 @@ export const exportToCSV = (data, filename, headers, headerLabels = []) => {
 export const filterByPeriod = (items, dateField, config) => {
   const { mode, year, month, startDate, endDate } = config;
   return items.filter(item => {
-    if (!item[dateField]) return false;
+    // Resolve date with fallback options to normalize date filtering
+    let rawDate = null;
+    if (dateField && item[dateField]) {
+      rawDate = item[dateField];
+    } else {
+      rawDate = item.date || item.payment_date || item.created_at || item.start_date;
+    }
+    if (!rawDate) return false;
     
     // Parse item date
-    const d = new Date(item[dateField]);
+    const d = new Date(rawDate);
     if (isNaN(d.getTime())) return false;
     
     // Add timezone offset correction if it's YYYY-MM-DD
-    const isoDateStr = typeof item[dateField] === 'string' ? item[dateField] : '';
+    const isoDateStr = typeof rawDate === 'string' ? rawDate : '';
     if (isoDateStr.length === 10) {
       d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
     }

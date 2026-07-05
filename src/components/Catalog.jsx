@@ -14,6 +14,8 @@ const categoryLabels = {
   'maquetación': 'Maquetación',
   'derechos de autor': 'Derechos de Autor',
   'asesoría': 'Asesoría',
+  'legal': 'Legal',
+  'impresión': 'Impresión',
   'otro': 'Otro'
 };
 
@@ -215,6 +217,8 @@ export default function Catalog() {
       case 'maquetación': return 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-400 dark:border-violet-900';
       case 'derechos de autor': return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900';
       case 'asesoría': return 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/30 dark:text-cyan-400 dark:border-cyan-900';
+      case 'legal': return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900';
+      case 'impresión': return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-900';
       default: return 'bg-slate-50 text-slate-700 border-slate-200';
     }
   };

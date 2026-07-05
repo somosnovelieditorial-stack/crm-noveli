@@ -172,21 +172,45 @@ export default function Dashboard() {
 
       // Period Expenses
       let expensesTotal = 0;
+      let expensesDeductible = 0;
+      let expensesNoDeductible = 0;
       let expensesNet = 0;
       let expensesVat = 0;
-      let expensesDeductible = 0;
+      let expensesCash = 0;
+      let taxesPaidCash = 0;
+      let taxesPaidTotal = 0;
+
       monthExpenses.forEach(e => {
         const amt = getNormalizedAmount(e);
         const split = calculateVatSplit(amt, e.includes_vat);
         const clpTotal = convertToClp(amt, e.currency);
-        const clpNet = convertToClp(e.deductible ? split.net : amt, e.currency);
-        const clpVat = convertToClp(e.deductible ? split.vat : 0, e.currency);
-
+        
+        const isTax = e.tax_payment || e.category === 'impuestos';
+        
         expensesTotal += clpTotal;
-        expensesNet += clpNet;
-        expensesVat += clpVat;
-        if (e.deductible) {
-          expensesDeductible += clpTotal;
+
+        if (isTax) {
+          taxesPaidTotal += clpTotal;
+          if (e.affects_cashflow !== false) {
+            taxesPaidCash += clpTotal;
+          }
+        } else {
+          // Normal expense
+          const clpNet = e.deductible ? convertToClp(split.net, e.currency) : clpTotal;
+          const clpVat = e.deductible ? convertToClp(split.vat, e.currency) : 0;
+          
+          expensesNet += clpNet;
+          expensesVat += clpVat;
+
+          if (e.deductible) {
+            expensesDeductible += clpTotal;
+          } else {
+            expensesNoDeductible += clpTotal;
+          }
+
+          if (e.affects_cashflow !== false) {
+            expensesCash += clpTotal;
+          }
         }
       });
 
@@ -196,7 +220,7 @@ export default function Dashboard() {
         .reduce((sum, item) => sum + convertToClp(getNormalizedAmount(item), item.currency), 0);
 
       // Period Utility
-      const utility = incomesNet - expensesNet - payrollTotal;
+      const utility = incomesNet - expensesNet - payrollTotal - taxesPaidTotal;
 
       // Period VAT Estimate
       const vatToPay = incomesVat - expensesVat;
@@ -204,7 +228,11 @@ export default function Dashboard() {
       // Period Operational Reserve
       const allocationsVal = periodAllocations
         .filter(a => a.area === 'reserva operacional')
-        .reduce((sum, a) => sum + getNormalizedAmount(a), 0);
+        .reduce((sum, a) => {
+          const parentIncome = (incomes || []).find(inc => inc.id === a.income_id);
+          const rate = parentIncome ? Number(parentIncome.exchange_rate || 1) : 1;
+          return sum + (Number(a.calculated_amount) * rate);
+        }, 0);
 
       const movementsVal = (periodMovements || []).reduce((sum, m) => {
         const amt = getNormalizedAmount(m);
@@ -278,7 +306,7 @@ export default function Dashboard() {
       });
 
       // Period Total Available
-      const totalDisponible = utility + operationalReserve;
+      const totalDisponible = incomesTotal - expensesCash - payrollTotal - taxesPaidCash + movementsVal;
 
       // ==========================================
       // TAB 2: OPERATIONS & CLIENTS (overall total actual, independent of period)
@@ -440,6 +468,7 @@ export default function Dashboard() {
           incomesNet,
           expensesTotal,
           expensesDeductible,
+          expensesNoDeductible,
           payrollTotal,
           utility,
           vatToPay,
@@ -449,6 +478,7 @@ export default function Dashboard() {
           pendingPaymentsVal: periodPendingVal,
           pendingPaymentsCount: periodPendingCount,
           totalDisponible,
+          taxesPaidTotal,
         },
         counts: {
           activeClients,
@@ -607,30 +637,31 @@ export default function Dashboard() {
               </div>
 
               {/* Detalle Financiero Secundario */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                 {/* Ingresos del periodo */}
                 <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between">
                   <div>
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase">Ingresos Totales</span>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase">Ingresos</span>
                     <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
                       {formatCurrency(stats.financials.incomesTotal, 'CLP')}
                     </div>
                   </div>
-                  <div className="text-[10px] text-emerald-600 dark:text-emerald-500 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850">
-                    Neto: {formatCurrency(stats.financials.incomesNet, 'CLP')}
+                  <div className="text-[10px] text-emerald-600 dark:text-emerald-500 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 space-y-1">
+                    <div>Neto: {formatCurrency(stats.financials.incomesNet, 'CLP')}</div>
                   </div>
                 </div>
 
                 {/* Gastos del periodo */}
                 <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between">
                   <div>
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase">Gastos Totales</span>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase">Gastos</span>
                     <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
                       {formatCurrency(stats.financials.expensesTotal, 'CLP')}
                     </div>
                   </div>
-                  <div className="text-[10px] text-rose-500 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850">
-                    Deducible: {formatCurrency(stats.financials.expensesDeductible, 'CLP')}
+                  <div className="text-[10px] text-rose-500 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 space-y-1">
+                    <div>Ded: {formatCurrency(stats.financials.expensesDeductible, 'CLP')}</div>
+                    <div className="text-slate-500">No Ded: {formatCurrency(stats.financials.expensesNoDeductible, 'CLP')}</div>
                   </div>
                 </div>
 
@@ -642,7 +673,7 @@ export default function Dashboard() {
                       {formatCurrency(stats.financials.payrollTotal, 'CLP')}
                     </div>
                   </div>
-                  <div className="text-[10px] text-slate-400 font-medium mt-2 pt-2 border-t border-slate-50 dark:border-slate-850">
+                  <div className="text-[10px] text-slate-450 dark:text-slate-400 font-medium mt-2 pt-2 border-t border-slate-50 dark:border-slate-850">
                     Honorarios liquidados
                   </div>
                 </div>
@@ -660,6 +691,19 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                {/* Impuestos Pagados */}
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase">Impuestos Pagados</span>
+                    <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
+                      {formatCurrency(stats.financials.taxesPaidTotal, 'CLP')}
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-slate-450 dark:text-slate-400 font-medium mt-2 pt-2 border-t border-slate-50 dark:border-slate-850">
+                    PPM, patentes y otros
+                  </div>
+                </div>
+
                 {/* Por cobrar */}
                 <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between">
                   <div>
@@ -669,7 +713,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="text-[10px] text-amber-600 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850">
-                    {stats.financials.pendingPaymentsCount} cuentas pendientes
+                    {stats.financials.pendingPaymentsCount} cuentas
                   </div>
                 </div>
               </div>

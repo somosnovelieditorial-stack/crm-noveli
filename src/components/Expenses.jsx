@@ -38,7 +38,11 @@ export default function Expenses() {
     date: new Date().toISOString().split('T')[0],
     includes_vat: false,
     deductible: true,
-    notes: ''
+    notes: '',
+    tax_payment: false,
+    affects_cashflow: true,
+    tax_type: '',
+    source: 'Manual'
   });
 
   const [formError, setFormError] = useState('');
@@ -89,6 +93,15 @@ export default function Expenses() {
     }
   }, [formData.currency]);
 
+  // Sync category with tax_payment
+  useEffect(() => {
+    if (formData.category === 'impuestos') {
+      setFormData(prev => ({ ...prev, tax_payment: true, affects_cashflow: true }));
+    } else {
+      setFormData(prev => ({ ...prev, tax_payment: false }));
+    }
+  }, [formData.category]);
+
   const handleOpenAddModal = () => {
     setSelectedExpense(null);
     setFormData({
@@ -100,7 +113,11 @@ export default function Expenses() {
       date: new Date().toISOString().split('T')[0],
       includes_vat: false,
       deductible: true,
-      notes: ''
+      notes: '',
+      tax_payment: false,
+      affects_cashflow: true,
+      tax_type: '',
+      source: 'Manual'
     });
     setFormError('');
     setIsModalOpen(true);
@@ -122,7 +139,11 @@ export default function Expenses() {
       date: expense.date || new Date().toISOString().split('T')[0],
       includes_vat: expense.includes_vat || false,
       deductible: expense.deductible !== undefined ? expense.deductible : true,
-      notes: expense.notes || ''
+      notes: expense.notes || '',
+      tax_payment: expense.tax_payment !== undefined ? expense.tax_payment : (expense.category === 'impuestos'),
+      affects_cashflow: expense.affects_cashflow !== undefined ? expense.affects_cashflow : true,
+      tax_type: expense.tax_type || '',
+      source: expense.source || 'Manual'
     });
     setFormError('');
     setIsModalOpen(true);
@@ -380,15 +401,17 @@ export default function Expenses() {
     setIsSubmitting(true);
     setFormError('');
 
-    const payload = {
-      ...formData,
-      provider_id: formData.provider_id || null,
-      exchange_rate: Number(formData.exchange_rate) || 1,
-      value_converted: Number(formData.amount) * (Number(formData.exchange_rate) || 1),
-      rate_date: formData.date
-    };
-
     try {
+      const orgId = await getValidOrgId();
+      const payload = {
+        ...formData,
+        organization_id: orgId,
+        provider_id: formData.provider_id || null,
+        exchange_rate: Number(formData.exchange_rate) || 1,
+        value_converted: Number(formData.amount) * (Number(formData.exchange_rate) || 1),
+        rate_date: formData.date
+      };
+
       if (selectedExpense) {
         // Edit Mode
         const { error } = await supabase
@@ -635,6 +658,18 @@ export default function Expenses() {
                       <td className="px-6 py-4">
                         <div className="font-semibold text-slate-800 dark:text-slate-100 capitalize">{expense.category}</div>
                         <div className="text-xs text-slate-400 mt-0.5">{expense.providerName}</div>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {expense.tax_payment && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60 text-[9px] font-bold uppercase tracking-wider">
+                              Impuesto
+                            </span>
+                          )}
+                          {!expense.affects_cashflow && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-900/60 text-[9px] font-bold uppercase tracking-wider">
+                              No Caja
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 space-y-0.5">
                         <div className="font-bold text-slate-800 dark:text-slate-100 text-sm">
@@ -843,6 +878,70 @@ export default function Expenses() {
                     </select>
                   </div>
                 </div>
+
+                {/* Tax Payment & Affects Cashflow */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Is Tax Payment */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">¿Es Pago de Impuesto?</label>
+                    <select
+                      value={formData.tax_payment ? 'si' : 'no'}
+                      onChange={(e) => setFormData({...formData, tax_payment: e.target.value === 'si'})}
+                      className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
+                    >
+                      <option value="no">No (Gasto Operativo Común)</option>
+                      <option value="si">Sí (Pago de Impuesto / PPM)</option>
+                    </select>
+                  </div>
+
+                  {/* Affects Cashflow */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">¿Afecta Caja / Disponible?</label>
+                    <select
+                      value={formData.affects_cashflow ? 'si' : 'no'}
+                      onChange={(e) => setFormData({...formData, affects_cashflow: e.target.value === 'si'})}
+                      className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
+                    >
+                      <option value="si">Sí (Reduce Reserva / Disponible)</option>
+                      <option value="no">No (Gasto Virtual / No Afecta Caja)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Conditional fields for taxes */}
+                {(formData.tax_payment || formData.category === 'impuestos') && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Tax Type */}
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Tipo de Impuesto</label>
+                      <select
+                        value={formData.tax_type || ''}
+                        onChange={(e) => setFormData({...formData, tax_type: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
+                      >
+                        <option value="">-- Seleccionar Tipo --</option>
+                        <option value="IVA / F29">IVA / F29</option>
+                        <option value="PPM">PPM</option>
+                        <option value="Renta">Renta</option>
+                        <option value="Patente">Patente</option>
+                        <option value="Contabilidad / trámite">Contabilidad / trámite</option>
+                        <option value="Otro">Otro</option>
+                      </select>
+                    </div>
+
+                    {/* Source */}
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Origen / Fuente</label>
+                      <input
+                        type="text"
+                        value={formData.source || ''}
+                        onChange={(e) => setFormData({...formData, source: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
+                        placeholder="Ej: Manual, API, etc."
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Notes */}
                 <div>

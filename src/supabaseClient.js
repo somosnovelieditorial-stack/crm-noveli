@@ -498,18 +498,38 @@ const INITIAL_MOCK_DATA = {
       deductible: true,
       notes: "Dirección comercial y tributaria.",
       created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "exp-4",
+      user_id: "mock-user-123",
+      provider_id: null,
+      category: "impuestos",
+      amount: 92290,
+      currency: "CLP",
+      exchange_rate: 1.0,
+      value_converted: 92290,
+      rate_date: new Date().toISOString().split('T')[0],
+      date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      includes_vat: false,
+      deductible: false,
+      tax_payment: true,
+      affects_cashflow: true,
+      tax_type: "PPM",
+      source: "Manual",
+      notes: "Pago de PPM mensual Noveli.",
+      created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
     }
   ],
   service_catalog: [
     {
       id: "cat-1",
       user_id: "mock-user-123",
-      name: "Corrección Ortotipográfica y de Estilo",
-      description: "Revisión completa de gramática, redacción, coherencia.",
-      base_price: 350000,
+      name: "Revisión general de manuscrito",
+      description: "Evaluación inicial del texto, observaciones generales y orientación editorial del proyecto.",
+      base_price: 60000,
       currency: "CLP",
-      includes_vat: false,
-      category: "corrección",
+      includes_vat: true,
+      category: "editorial",
       active: true,
       requires_manuscript: true,
       requires_materials: false,
@@ -521,12 +541,12 @@ const INITIAL_MOCK_DATA = {
     {
       id: "cat-2",
       user_id: "mock-user-123",
-      name: "Maquetación Editorial Profesional (InDesign)",
-      description: "Diagramación interna de páginas para impresión física.",
-      base_price: 250000,
+      name: "Corrección ortográfica y de estilo",
+      description: "Corrección de errores ortográficos, gramaticales y mejoras de fluidez, coherencia, ritmo, claridad y consistencia del texto.",
+      base_price: 180000,
       currency: "CLP",
-      includes_vat: false,
-      category: "maquetación",
+      includes_vat: true,
+      category: "editorial",
       active: true,
       requires_manuscript: true,
       requires_materials: false,
@@ -538,28 +558,28 @@ const INITIAL_MOCK_DATA = {
     {
       id: "cat-3",
       user_id: "mock-user-123",
-      name: "Diseño de Portada Ilustrada",
-      description: "Diseño premium e ilustración para la tapa frontal.",
-      base_price: 300000,
+      name: "Maquetación interior impresa",
+      description: "Diseño y diagramación interior para libro físico, con estructura profesional y archivo final listo para imprenta.",
+      base_price: 150000,
       currency: "CLP",
       includes_vat: true,
-      category: "diseño",
+      category: "editorial",
       active: true,
-      requires_manuscript: false,
-      requires_materials: true,
-      requires_signed_contract: false,
-      requires_agreement_sent: true,
+      requires_manuscript: true,
+      requires_materials: false,
+      requires_signed_contract: true,
+      requires_agreement_sent: false,
       requires_duration: false,
       created_at: new Date().toISOString()
     },
     {
       id: "cat-4",
       user_id: "mock-user-123",
-      name: "Publicación Ebook (Kindle/ePUB)",
-      description: "Conversión a formato reflowable y publicación.",
-      base_price: 150000,
+      name: "Maquetación Ebook",
+      description: "Preparación y maquetación del archivo digital para lectura en formato Ebook.",
+      base_price: 90000,
       currency: "CLP",
-      includes_vat: false,
+      includes_vat: true,
       category: "editorial",
       active: true,
       requires_manuscript: true,
@@ -572,9 +592,9 @@ const INITIAL_MOCK_DATA = {
     {
       id: "cat-5",
       user_id: "mock-user-123",
-      name: "Impresión Tirada Corta (100 Copias)",
-      description: "Impresión de tapa blanda, papel bond de 80g.",
-      base_price: 650000,
+      name: "Conversión y preparación Ebook",
+      description: "Conversión técnica y revisión de archivo digital para publicación o distribución en plataformas.",
+      base_price: 90000,
       currency: "CLP",
       includes_vat: true,
       category: "editorial",
@@ -589,11 +609,62 @@ const INITIAL_MOCK_DATA = {
     {
       id: "cat-6",
       user_id: "mock-user-123",
-      name: "Sesión de Asesoría de Publicación",
-      description: "Reunión estratégica de 1 hora sobre derecho de autor.",
-      base_price: 65,
-      currency: "USD",
-      includes_vat: false,
+      name: "Diseño de portada desde cero",
+      description: "Creación de propuesta visual de portada, composición, tipografía y estilo gráfico general.",
+      base_price: 80000,
+      currency: "CLP",
+      includes_vat: true,
+      category: "diseño",
+      active: true,
+      requires_manuscript: false,
+      requires_materials: true,
+      requires_signed_contract: false,
+      requires_agreement_sent: true,
+      requires_duration: false,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: "cat-7",
+      user_id: "mock-user-123",
+      name: "Adaptación técnica de portada, contraportada y lomo",
+      description: "Ajuste técnico de portada para impresión: medidas, sangrado, resolución, contraportada, lomo y archivo final.",
+      base_price: 120000,
+      currency: "CLP",
+      includes_vat: true,
+      category: "diseño",
+      active: true,
+      requires_manuscript: false,
+      requires_materials: true,
+      requires_signed_contract: false,
+      requires_agreement_sent: true,
+      requires_duration: false,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: "cat-8",
+      user_id: "mock-user-123",
+      name: "Registro de derechos de autor + ISBN + código de barras",
+      description: "Gestión y preparación del proceso administrativo asociado al registro de la obra, ISBN y código de barras, según corresponda.",
+      base_price: 50000,
+      currency: "CLP",
+      includes_vat: true,
+      category: "legal",
+      active: true,
+      requires_manuscript: false,
+      requires_materials: false,
+      requires_signed_contract: false,
+      requires_agreement_sent: true,
+      requires_duration: false,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: "cat-9",
+      user_id: "mock-user-123",
+      name: "Asesoría de autopublicación",
+      description: "Acompañamiento para preparar la publicación del libro en plataformas digitales o de autopublicación.",
+      base_price: 80000,
+      currency: "CLP",
+      includes_vat: true,
       category: "asesoría",
       active: true,
       requires_manuscript: false,
@@ -602,19 +673,52 @@ const INITIAL_MOCK_DATA = {
       requires_agreement_sent: true,
       requires_duration: true,
       created_at: new Date().toISOString()
+    },
+    {
+      id: "cat-10",
+      user_id: "mock-user-123",
+      name: "Publicidad editorial básica",
+      description: "Difusión editorial básica para autores, obras o lanzamientos, según formato y duración acordada.",
+      base_price: 10000,
+      currency: "CLP",
+      includes_vat: false,
+      category: "publicidad",
+      active: true,
+      requires_manuscript: false,
+      requires_materials: false,
+      requires_signed_contract: false,
+      requires_agreement_sent: true,
+      requires_duration: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: "cat-11",
+      user_id: "mock-user-123",
+      name: "Impresión física",
+      description: "Se cotiza según cantidad de ejemplares, páginas finales, papel, formato, terminaciones y despacho (cotización aparte).",
+      base_price: 0,
+      currency: "CLP",
+      includes_vat: false,
+      category: "impresión",
+      active: true,
+      requires_manuscript: true,
+      requires_materials: false,
+      requires_signed_contract: true,
+      requires_agreement_sent: false,
+      requires_duration: false,
+      created_at: new Date().toISOString()
     }
   ],
   service_packs: [
     {
       id: "pack-1",
       user_id: "mock-user-123",
-      name: "Full eBook",
-      description: "Servicio completo para libro digital/eBook.",
-      price_special: 450000,
+      name: "Pack Ebook Básico",
+      description: "Incluye: Revisión general, corrección ortográfica y de estilo básica, maquetación Ebook, revisión técnica de archivos y asesoría de autopublicación. \nNo incluye: Portada desde cero, impresión física, publicidad editorial, distribución comercial y cambios extraordinarios.",
+      price_special: 190000,
       currency: "CLP",
-      includes_vat: false,
+      includes_vat: true,
       active: true,
-      category: "editorial",
       requires_manuscript: true,
       requires_materials: false,
       requires_signed_contract: true,
@@ -625,13 +729,12 @@ const INITIAL_MOCK_DATA = {
     {
       id: "pack-2",
       user_id: "mock-user-123",
-      name: "Full Físico",
-      description: "Servicio completo para libro físico.",
-      price_special: 950000,
+      name: "Pack Ebook Profesional",
+      description: "Incluye: Revisión general, corrección ortográfica y de estilo, maquetación Ebook, revisión/adaptación de portada si ya existe, asesoría de autopublicación y gestión de derechos si corresponde. \nNo incluye: Impresión física, campañas pagadas, distribución comercial, despacho, ISBN si no fue incluido expresamente y cambios extraordinarios.",
+      price_special: 280000,
       currency: "CLP",
       includes_vat: true,
       active: true,
-      category: "editorial",
       requires_manuscript: true,
       requires_materials: false,
       requires_signed_contract: true,
@@ -642,13 +745,12 @@ const INITIAL_MOCK_DATA = {
     {
       id: "pack-3",
       user_id: "mock-user-123",
-      name: "Full Total",
-      description: "Servicio completo libro físico + eBook.",
-      price_special: 1350000,
+      name: "Pack Impreso",
+      description: "Incluye: Revisión general, corrección ortográfica y de estilo, maquetación impresa, adaptación técnica de portada, archivo final listo para imprenta y gestión de derechos si corresponde. \nNo incluye: Impresión física, despacho, publicidad, distribución comercial y servicios no indicados en la cotización.",
+      price_special: 350000,
       currency: "CLP",
       includes_vat: true,
       active: true,
-      category: "editorial",
       requires_manuscript: true,
       requires_materials: false,
       requires_signed_contract: true,
@@ -659,64 +761,12 @@ const INITIAL_MOCK_DATA = {
     {
       id: "pack-4",
       user_id: "mock-user-123",
-      name: "Pack Difusión",
-      description: "Servicio de publicidad o difusión editorial.",
-      price_special: 250000,
-      currency: "CLP",
-      includes_vat: false,
-      active: true,
-      category: "publicidad",
-      requires_manuscript: false,
-      requires_materials: false,
-      requires_signed_contract: false,
-      requires_agreement_sent: true,
-      requires_duration: true,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: "pack-5",
-      user_id: "mock-user-123",
-      name: "Pack Portada",
-      description: "Diseño o adaptación de portada.",
-      price_special: 200000,
+      name: "Pack Editorial Integral",
+      description: "Incluye: Revisión general, corrección ortográfica y de estilo, maquetación Ebook, maquetación impresa, diseño o adaptación de portada, archivos finales, gestión de derechos y acompañamiento editorial. \nNo incluye: Impresión física, despacho, publicidad pagada, distribución comercial, servicios posteriores y cambios extraordinarios no contemplados.",
+      price_special: 580000,
       currency: "CLP",
       includes_vat: true,
       active: true,
-      category: "diseño",
-      requires_manuscript: false,
-      requires_materials: true,
-      requires_signed_contract: false,
-      requires_agreement_sent: true,
-      requires_duration: false,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: "pack-6",
-      user_id: "mock-user-123",
-      name: "Pack Corrección",
-      description: "Corrección de texto.",
-      price_special: 300000,
-      currency: "CLP",
-      includes_vat: false,
-      active: true,
-      category: "corrección",
-      requires_manuscript: true,
-      requires_materials: false,
-      requires_signed_contract: true,
-      requires_agreement_sent: false,
-      requires_duration: false,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: "pack-7",
-      user_id: "mock-user-123",
-      name: "Pack Maquetación",
-      description: "Maquetación interior.",
-      price_special: 220000,
-      currency: "CLP",
-      includes_vat: false,
-      active: true,
-      category: "maquetación",
       requires_manuscript: true,
       requires_materials: false,
       requires_signed_contract: true,
@@ -726,21 +776,29 @@ const INITIAL_MOCK_DATA = {
     }
   ],
   service_pack_items: [
-    { id: "pitem-1", user_id: "mock-user-123", pack_id: "pack-1", service_id: "cat-2" },
-    { id: "pitem-2", user_id: "mock-user-123", pack_id: "pack-1", service_id: "cat-3" },
+    { id: "pitem-1", user_id: "mock-user-123", pack_id: "pack-1", service_id: "cat-1" },
+    { id: "pitem-2", user_id: "mock-user-123", pack_id: "pack-1", service_id: "cat-2" },
     { id: "pitem-3", user_id: "mock-user-123", pack_id: "pack-1", service_id: "cat-4" },
-    { id: "pitem-4", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-1" },
-    { id: "pitem-5", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-2" },
-    { id: "pitem-6", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-3" },
-    { id: "pitem-7", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-5" },
-    { id: "pitem-8", user_id: "mock-user-123", pack_id: "pack-3", service_id: "cat-1" },
-    { id: "pitem-9", user_id: "mock-user-123", pack_id: "pack-3", service_id: "cat-2" },
-    { id: "pitem-10", user_id: "mock-user-123", pack_id: "pack-3", service_id: "cat-3" },
-    { id: "pitem-11", user_id: "mock-user-123", pack_id: "pack-3", service_id: "cat-4" },
-    { id: "pitem-12", user_id: "mock-user-123", pack_id: "pack-3", service_id: "cat-5" },
-    { id: "pitem-14", user_id: "mock-user-123", pack_id: "pack-5", service_id: "cat-3" },
-    { id: "pitem-15", user_id: "mock-user-123", pack_id: "pack-6", service_id: "cat-1" },
-    { id: "pitem-16", user_id: "mock-user-123", pack_id: "pack-7", service_id: "cat-2" }
+    { id: "pitem-4", user_id: "mock-user-123", pack_id: "pack-1", service_id: "cat-5" },
+    { id: "pitem-5", user_id: "mock-user-123", pack_id: "pack-1", service_id: "cat-9" },
+    { id: "pitem-6", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-1" },
+    { id: "pitem-7", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-2" },
+    { id: "pitem-8", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-4" },
+    { id: "pitem-9", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-7" },
+    { id: "pitem-10", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-8" },
+    { id: "pitem-11", user_id: "mock-user-123", pack_id: "pack-2", service_id: "cat-9" },
+    { id: "pitem-12", user_id: "mock-user-123", pack_id: "pack-3", service_id: "cat-1" },
+    { id: "pitem-13", user_id: "mock-user-123", pack_id: "pack-3", service_id: "cat-2" },
+    { id: "pitem-14", user_id: "mock-user-123", pack_id: "pack-3", service_id: "cat-3" },
+    { id: "pitem-15", user_id: "mock-user-123", pack_id: "pack-3", service_id: "cat-7" },
+    { id: "pitem-16", user_id: "mock-user-123", pack_id: "pack-3", service_id: "cat-8" },
+    { id: "pitem-17", user_id: "mock-user-123", pack_id: "pack-4", service_id: "cat-1" },
+    { id: "pitem-18", user_id: "mock-user-123", pack_id: "pack-4", service_id: "cat-2" },
+    { id: "pitem-19", user_id: "mock-user-123", pack_id: "pack-4", service_id: "cat-3" },
+    { id: "pitem-20", user_id: "mock-user-123", pack_id: "pack-4", service_id: "cat-4" },
+    { id: "pitem-21", user_id: "mock-user-123", pack_id: "pack-4", service_id: "cat-6" },
+    { id: "pitem-22", user_id: "mock-user-123", pack_id: "pack-4", service_id: "cat-8" },
+    { id: "pitem-23", user_id: "mock-user-123", pack_id: "pack-4", service_id: "cat-9" }
   ],
   quotations: [
     {
@@ -1113,6 +1171,11 @@ class MockQueryBuilder {
         mergedItem.rate_date = mergedItem.start_date || mergedItem.date || new Date().toISOString().split('T')[0];
       }
 
+      if (this.table === 'expenses' && mergedItem.category === 'impuestos') {
+        mergedItem.tax_payment = true;
+        mergedItem.affects_cashflow = true;
+      }
+
       if (existingIdx >= 0) {
         records[existingIdx] = mergedItem;
       } else {
@@ -1149,6 +1212,11 @@ class MockQueryBuilder {
         const amt = Number(newItem.value || newItem.amount || 0);
         newItem.value_converted = amt * newItem.exchange_rate;
         newItem.rate_date = newItem.start_date || newItem.date || new Date().toISOString().split('T')[0];
+      }
+
+      if (this.table === 'expenses' && newItem.category === 'impuestos') {
+        newItem.tax_payment = true;
+        newItem.affects_cashflow = true;
       }
 
       records.push(newItem);
@@ -1253,6 +1321,11 @@ class MockQueryBuilder {
           const amt = Number(updatedRow.value || updatedRow.amount || 0);
           updatedRow.value_converted = amt * updatedRow.exchange_rate;
           updatedRow.rate_date = updatedRow.start_date || updatedRow.date || new Date().toISOString().split('T')[0];
+        }
+
+        if (this.table === 'expenses' && updatedRow.category === 'impuestos') {
+          updatedRow.tax_payment = true;
+          updatedRow.affects_cashflow = true;
         }
 
         updatedRecords.push(updatedRow);

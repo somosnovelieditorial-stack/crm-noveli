@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
+import QuickQuoteModal from './QuickQuoteModal';
 import { formatDate, exportToCSV } from '../utils';
 import { 
   Plus, Search, Edit2, Trash2, X, Sparkles, Check,
@@ -11,6 +12,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
   const [prospects, setProspects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [quickQuoteProspect, setQuickQuoteProspect] = useState(null);
   const [probabilityFilter, setProbabilityFilter] = useState('todos');
   const [originFilter, setOriginFilter] = useState('todos');
   const [countryFilter, setCountryFilter] = useState('todos');
@@ -1430,6 +1432,19 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
                             >
                               <Sparkles className="w-3.5 h-3.5" />
                               <span>Convertir</span>
+                            </button>
+                          )}
+                          {!isReadOnly && !p.converted_to_client_id && (
+                            <button
+                              onClick={() => setQuickQuoteProspect({
+                                id: p.id,
+                                name: p.name,
+                                currency: p.preferred_currency || 'CLP'
+                              })}
+                              className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle"
+                              title="Crear Cotización Rápida"
+                            >
+                              <FileText className="w-4 h-4" />
                             </button>
                           )}
                           <button
@@ -3097,6 +3112,17 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
           </div>
         </div>
       )}
+
+      <QuickQuoteModal
+        isOpen={!!quickQuoteProspect}
+        onClose={() => setQuickQuoteProspect(null)}
+        prospectId={quickQuoteProspect?.id}
+        entityName={quickQuoteProspect?.name}
+        preferredCurrency={quickQuoteProspect?.currency}
+        onSuccess={() => {
+          alert('¡Cotización rápida guardada con éxito!');
+        }}
+      />
     </div>
   );
 }
