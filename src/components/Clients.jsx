@@ -1,6 +1,7 @@
 import React, { useEffect, useState, Component } from 'react';
 import { supabase, isMock } from '../supabaseClient';
 import QuickQuoteModal from './QuickQuoteModal';
+import ClientQuotesModal from './ClientQuotesModal';
 import { formatDate, exportToCSV, syncPaymentStatus } from '../utils';
 import { 
   Plus, Search, Edit2, Trash2, Eye, X, 
@@ -109,6 +110,8 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
   const [countryFilter, setCountryFilter] = useState('todos');
   const [clientTypeFilter, setClientTypeFilter] = useState('todos');
   const [quickQuoteClient, setQuickQuoteClient] = useState(null);
+  const [isQuotesHistoryOpen, setIsQuotesHistoryOpen] = useState(false);
+  const [selectedClientForQuotes, setSelectedClientForQuotes] = useState(null);
   
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -2190,17 +2193,29 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
                             </button>
                           )}
                           {!isReadOnly && (
-                            <button
-                              onClick={() => setQuickQuoteClient({
-                                id: client.id,
-                                name: client.name,
-                                currency: client.preferred_currency || 'CLP'
-                              })}
-                              className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle mr-1"
-                              title="Crear Cotización Rápida"
-                            >
-                              <FileText className="w-3.5 h-3.5" />
-                            </button>
+                            <>
+                              <button
+                                onClick={() => setQuickQuoteClient({
+                                  id: client.id,
+                                  name: client.name,
+                                  currency: client.preferred_currency || 'CLP'
+                                })}
+                                className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle"
+                                title="Crear Cotización Rápida"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedClientForQuotes(client);
+                                  setIsQuotesHistoryOpen(true);
+                                }}
+                                className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle mr-1"
+                                title="Ver Cotizaciones"
+                              >
+                                <FolderOpen className="w-3.5 h-3.5" />
+                              </button>
+                            </>
                           )}
                           <button
                             onClick={() => handleOpenEditModal(client)}
@@ -3638,6 +3653,15 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
                 <>
                   <button
                     onClick={() => {
+                      setSelectedClientForQuotes(selectedClient);
+                      setIsQuotesHistoryOpen(true);
+                    }}
+                    className="px-4 py-2 border border-slate-150 hover:bg-slate-50 text-slate-500 dark:border-slate-800 dark:hover:bg-slate-800 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                  >
+                    Ver cotizaciones
+                  </button>
+                  <button
+                    onClick={() => {
                       setQuickQuoteClient({
                         id: selectedClient.id,
                         name: selectedClient.name,
@@ -3673,6 +3697,14 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
         onSuccess={() => {
           alert('¡Cotización rápida guardada con éxito!');
         }}
+      />
+
+      <ClientQuotesModal
+        isOpen={isQuotesHistoryOpen}
+        onClose={() => setIsQuotesHistoryOpen(false)}
+        clientId={selectedClientForQuotes?.id}
+        entityName={selectedClientForQuotes?.name}
+        preferredCurrency={selectedClientForQuotes?.preferred_currency || 'CLP'}
       />
     </div>
   );

@@ -383,6 +383,10 @@ CREATE TABLE IF NOT EXISTS quotations (
     organization_id UUID REFERENCES organizations(id) DEFAULT get_user_org_id(),
     client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
     prospect_id UUID REFERENCES prospects(id) ON DELETE SET NULL,
+    quote_number TEXT,
+    issue_date DATE,
+    valid_until DATE,
+    validity_days INTEGER DEFAULT 15,
     manuscript_pages INTEGER DEFAULT 0,
     extension_adjustment_type TEXT DEFAULT 'percentage',
     extension_adjustment_value NUMERIC(12,2) DEFAULT 0.00,
@@ -392,14 +396,24 @@ CREATE TABLE IF NOT EXISTS quotations (
     total NUMERIC(12,2) DEFAULT 0.00,
     currency TEXT NOT NULL DEFAULT 'CLP' CHECK (currency IN ('CLP', 'USD')),
     includes_iva BOOLEAN NOT NULL DEFAULT FALSE,
-    status TEXT NOT NULL DEFAULT 'borrador' CHECK (status IN ('borrador', 'enviada', 'aprobada', 'rechazada', 'vencida')),
-    notes TEXT,
+    payment_terms TEXT,
+    scope_notes TEXT,
+    includes_notes TEXT,
+    excludes_notes TEXT,
+    start_conditions TEXT,
+    legal_notes TEXT,
+    status TEXT NOT NULL DEFAULT 'borrador' CHECK (status IN ('borrador', 'enviada', 'aprobada', 'rechazada', 'vencida', 'convertida')),
+    pdf_url TEXT,
+    sent_at TIMESTAMP WITH TIME ZONE,
+    approved_at TIMESTAMP WITH TIME ZONE,
     converted_to_service BOOLEAN DEFAULT FALSE,
     service_id UUID,
+    notes TEXT,
     exchange_rate NUMERIC(12,4) NOT NULL DEFAULT 1.0000,
     value_converted NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     rate_date DATE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- 12. QUOTATION_ITEMS Table
@@ -415,7 +429,8 @@ CREATE TABLE IF NOT EXISTS quotation_items (
     unit_price NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     quantity INTEGER NOT NULL DEFAULT 1,
     total NUMERIC(12,2) DEFAULT 0.00,
-    source_type TEXT
+    source_type TEXT,
+    display_order INTEGER DEFAULT 0
 );
 
 -- 13. QUICK_REPLIES Table
