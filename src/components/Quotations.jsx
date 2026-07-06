@@ -1,489 +1,299 @@
 import { useEffect, useState } from 'react';
-import { supabase, isMock, getValidOrgId } from '../supabaseClient';
-import { formatCurrency, calculateVatSplit, filterByPeriod, exportToCSV } from '../utils';
-import PeriodFilter from './PeriodFilter';
+import { supabase, getValidOrgId } from '../supabaseClient';
+import { formatCurrency, calculateVatSplit, formatDate } from '../utils';
+import { jsPDF } from 'jspdf';
 import { 
   Plus, Search, Edit2, Trash2, X, FileText, Check, AlertTriangle,
-  User, ClipboardCheck, Sparkles, Receipt, RefreshCw, Layers, Download, DollarSign,
-  UploadCloud, FileSpreadsheet, Image, File, Eye, Trash
+  User, Sparkles, Download, DollarSign, Eye, RefreshCw, Calendar, Trash, FolderOpen
 } from 'lucide-react';
 
-const getExtensionSuggestion = (pages) => {
-  if (!pages || pages <= 80) {
-    return { pct: 0, text: "Ajuste sugerido: 0% (Extensión base)", warning: false };
-  }
-  if (pages >= 81 && pages <= 150) {
-    return { pct: 20, text: "Ajuste sugerido: +15% a +25% (Aprox +20%)", warning: false };
-  }
-  if (pages >= 151 && pages <= 250) {
-    return { pct: 40, text: "Ajuste sugerido: +30% a +50% (Aprox +40%)", warning: false };
-  }
-  return { pct: 0, text: "Cotización personalizada obligatoria (libro extenso)", warning: true };
-};
-
-export default function Quotations({ preselectedEntity, clearPreselectedEntity }) {
+export default function Quotations({ isReadOnly = false, userRole = 'administrador' }) {
   const [quotations, setQuotations] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [prospects, setProspects] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [packs, setPacks] = useState([]);
-  
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
-  const [period, setPeriod] = useState({
-    mode: 'month',
-    year: new Date().getFullYear(),
-    month: new Date().getMonth() + 1
-  });
 
-  // Modals
+  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState(null);
+  
+  // Editor view split state: 'split' or 'form' or 'preview'
+  const [editorTab, setEditorTab] = useState('split'); 
+
+  // Selection states for catalog / packs in editor
+  const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [selectedPackId, setSelectedPackId] = useState('');
 
   // Form State
   const [formHeader, setFormHeader] = useState({
-    client_id: '',
-    prospect_id: '',
+    author_name: '',
+    author_email: '',
+    author_phone: '',
+    author_instagram: '',
+    country: '',
+    city: '',
+    origin: 'Instagram',
+    quote_number: '',
+    issue_date: new Date().toISOString().split('T')[0],
+    validity_days: 15,
+    valid_until: '',
+    object: 'Propuesta de publicación y servicios editoriales personalizados.',
+    status: 'borrador',
+    manuscript_pages: 0,
+    extension_adjustment_type: 'percentage',
+    extension_adjustment_value: 0,
     discount: 0,
     currency: 'CLP',
-    exchange_rate: 1,
-    status: 'borrador',
-    notes: '',
-    includes_vat: false
+    includes_iva: true,
+    payment_terms: '50% al inicio y 50% al término del servicio contra entrega.',
+    work_timeline: '8 a 10 semanas desde la entrega completa de materiales.',
+    includes_notes: '• Reuniones de seguimiento editorial y asesoría continua.\n• Entrega de archivos finales en formato digital listos para imprenta/distribución.',
+    excludes_notes: '• Costos de impresión física de ejemplares (se cotizan por separado).\n• Trámites legales de depósito legal fuera del territorio nacional.',
+    start_conditions: 'Pago del anticipo inicial, firma de contrato y envío del manuscrito definitivo.',
+    legal_notes: `• La cotización de impresión física se realizará por separado antes de la entrega del libro finalizado.
+• Editorial Noveli no comercializa directamente el libro ni administra sus ventas, salvo acuerdo distinto por escrito.
+• Los derechos de la obra pertenecen siempre al autor.
+• Esta cotización no constituye factura ni boleta.
+• Los valores indicados son referenciales hasta la aceptación formal del cliente y confirmación de pago.`,
+    other_notes: '',
+    notes: ''
   });
-  
-  // Selected items in form
-  const [formItems, setFormItems] = useState([]);
 
+  const [formItems, setFormItems] = useState([]);
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Document integration states
-  const [quotationDocuments, setQuotationDocuments] = useState([]);
-  const [loadingDocuments, setLoadingDocuments] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
-  const [newDocFile, setNewDocFile] = useState(null);
-  const [newDocTitle, setNewDocTitle] = useState('');
-  const [newDocType, setNewDocType] = useState('contrato');
-  const [newDocNotes, setNewDocNotes] = useState('');
+  // Sync valid_until date when issue_date or validity_days changes
+  useEffect(() => {
+    if (formHeader.issue_date && formHeader.validity_days) {
+      const issue = new Date(formHeader.issue_date + 'T12:00:00');
+      issue.setDate(issue.getDate() + Number(formHeader.validity_days));
+      setFormHeader(prev => ({ ...prev, valid_until: issue.toISOString().split('T')[0] }));
+    }
+  }, [formHeader.issue_date, formHeader.validity_days]);
 
   useEffect(() => {
-    fetchData();
+    fetchQuotations();
+    fetchCatalogAndPacks();
   }, []);
 
-  useEffect(() => {
-    if (preselectedEntity && !loading) {
-      setSelectedQuotation(null);
-      setFormHeader({
-        client_id: preselectedEntity.type === 'client' ? preselectedEntity.id : '',
-        prospect_id: preselectedEntity.type === 'prospect' ? preselectedEntity.id : '',
-        discount: 0,
-        currency: 'CLP',
-        exchange_rate: 1,
-        status: 'borrador',
-        notes: '',
-        includes_vat: false,
-        pages: 0,
-        extension_adjustment: 0
-      });
-      setFormItems([]);
-      setFormError('');
-      setIsModalOpen(true);
-      setNewDocFile(null);
-      setNewDocTitle('');
-      setNewDocNotes('');
-      setNewDocType('contrato');
-      setQuotationDocuments([]);
-      
-      if (clearPreselectedEntity) {
-        clearPreselectedEntity();
-      }
-    }
-  }, [preselectedEntity, loading]);
-
-  const fetchData = async () => {
+  const fetchQuotations = async () => {
     setLoading(true);
     try {
-      const [quotRes, clientsRes, prospectsRes, catalogRes, packsRes] = await Promise.all([
-        supabase.from('quotations').select('*').order('created_at', { ascending: false }),
-        supabase.from('clients').select('id, name').order('name', { ascending: true }),
-        supabase.from('prospects').select('id, name, converted_to_client_id').order('name', { ascending: true }),
-        supabase.from('service_catalog').select('*').eq('active', true).order('name', { ascending: true }),
-        supabase.from('service_packs').select('*').eq('active', true).order('name', { ascending: true })
-      ]);
+      const orgId = await getValidOrgId();
+      const { data, error } = await supabase
+        .from('quotations')
+        .select('*')
+        .eq('organization_id', orgId)
+        .order('created_at', { ascending: false });
 
-      if (quotRes.error) throw quotRes.error;
-      if (clientsRes.error) throw clientsRes.error;
-      if (prospectsRes.error) throw prospectsRes.error;
-      if (catalogRes.error) throw catalogRes.error;
-      if (packsRes.error) throw packsRes.error;
-
-      setQuotations(quotRes.data || []);
-      setClients(clientsRes.data || []);
-      setProspects((prospectsRes.data || []).filter(p => !p.converted_to_client_id));
-      setCatalog(catalogRes.data || []);
-      setPacks(packsRes.data || []);
+      if (error) throw error;
+      setQuotations(data || []);
     } catch (err) {
-      console.error("Error loading quotation data:", err);
+      console.error('Error fetching quotations:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Sync exchange rate when currency changes
-  useEffect(() => {
-    if (formHeader.currency === 'CLP') {
-      setFormHeader(prev => ({ ...prev, exchange_rate: 1 }));
-    } else if (formHeader.currency === 'USD') {
-      setFormHeader(prev => ({ ...prev, exchange_rate: 940 }));
-    } else if (formHeader.currency === 'EUR') {
-      setFormHeader(prev => ({ ...prev, exchange_rate: 1010 }));
+  const fetchCatalogAndPacks = async () => {
+    try {
+      const orgId = await getValidOrgId();
+      const [catalogRes, packsRes] = await Promise.all([
+        supabase.from('service_catalog').select('*').eq('organization_id', orgId).eq('active', true),
+        supabase.from('service_packs').select('*').eq('organization_id', orgId).eq('active', true)
+      ]);
+      if (catalogRes.error) throw catalogRes.error;
+      if (packsRes.error) throw packsRes.error;
+      setCatalog(catalogRes.data || []);
+      setPacks(packsRes.data || []);
+    } catch (err) {
+      console.error('Error loading catalog/packs:', err);
     }
-  }, [formHeader.currency]);
+  };
 
   const handleOpenAddModal = () => {
+    const randNum = Math.floor(1000 + Math.random() * 9000);
     setSelectedQuotation(null);
     setFormHeader({
-      client_id: '',
-      prospect_id: '',
+      author_name: '',
+      author_email: '',
+      author_phone: '',
+      author_instagram: '',
+      country: '',
+      city: '',
+      origin: 'Instagram',
+      quote_number: `COT-${randNum}`,
+      issue_date: new Date().toISOString().split('T')[0],
+      validity_days: 15,
+      valid_until: '',
+      object: 'Propuesta de publicación y servicios editoriales personalizados.',
+      status: 'borrador',
+      manuscript_pages: 0,
+      extension_adjustment_type: 'percentage',
+      extension_adjustment_value: 0,
       discount: 0,
       currency: 'CLP',
-      exchange_rate: 1,
-      status: 'borrador',
-      notes: '',
-      includes_vat: false,
-      pages: 0,
-      extension_adjustment: 0
+      includes_iva: true,
+      payment_terms: '50% al inicio y 50% al término del servicio contra entrega.',
+      work_timeline: '8 a 10 semanas desde la entrega completa de materiales.',
+      includes_notes: '• Reuniones de seguimiento editorial y asesoría continua.\n• Entrega de archivos finales en formato digital listos para imprenta/distribución.',
+      excludes_notes: '• Costos de impresión física de ejemplares (se cotizan por separado).\n• Trámites legales de depósito legal fuera del territorio nacional.',
+      start_conditions: 'Pago del anticipo inicial, firma de contrato y envío del manuscrito definitivo.',
+      legal_notes: `• La cotización de impresión física se realizará por separado antes de la entrega del libro finalizado.
+• Editorial Noveli no comercializa directamente el libro ni administra sus ventas, salvo acuerdo distinto por escrito.
+• Los derechos de la obra pertenecen siempre al autor.
+• Esta cotización no constituye factura ni boleta.
+• Los valores indicados son referenciales hasta la aceptación formal del cliente y confirmación de pago.`,
+      other_notes: '',
+      notes: ''
     });
     setFormItems([]);
     setFormError('');
     setIsModalOpen(true);
-    setNewDocFile(null);
-    setNewDocTitle('');
-    setNewDocNotes('');
-    setNewDocType('contrato');
-    setQuotationDocuments([]);
   };
 
-  const handleOpenEditModal = (quot) => {
-    setSelectedQuotation(quot);
+  const handleOpenEditModal = async (quote) => {
+    setSelectedQuotation(quote);
     setFormHeader({
-      client_id: quot.client_id || '',
-      prospect_id: quot.prospect_id || '',
-      discount: quot.discount || 0,
-      currency: quot.currency || 'CLP',
-      exchange_rate: quot.exchange_rate || 1,
-      status: quot.status || 'borrador',
-      notes: quot.notes || '',
-      includes_vat: quot.includes_vat || false,
-      pages: quot.pages || 0,
-      extension_adjustment: quot.extension_adjustment || 0
+      author_name: quote.author_name || '',
+      author_email: quote.author_email || '',
+      author_phone: quote.author_phone || '',
+      author_instagram: quote.author_instagram || '',
+      country: quote.country || '',
+      city: quote.city || '',
+      origin: quote.origin || 'Instagram',
+      quote_number: quote.quote_number || '',
+      issue_date: quote.issue_date || new Date().toISOString().split('T')[0],
+      validity_days: quote.validity_days || 15,
+      valid_until: quote.valid_until || '',
+      object: quote.object || '',
+      status: quote.status || 'borrador',
+      manuscript_pages: quote.manuscript_pages || 0,
+      extension_adjustment_type: quote.extension_adjustment_type || 'percentage',
+      extension_adjustment_value: quote.extension_adjustment_value || 0,
+      discount: quote.discount || 0,
+      currency: quote.currency || 'CLP',
+      includes_iva: quote.includes_iva !== undefined ? quote.includes_iva : true,
+      payment_terms: quote.payment_terms || '',
+      work_timeline: quote.work_timeline || '',
+      includes_notes: quote.includes_notes || '',
+      excludes_notes: quote.excludes_notes || '',
+      start_conditions: quote.start_conditions || '',
+      legal_notes: quote.legal_notes || '',
+      other_notes: quote.other_notes || '',
+      notes: quote.notes || ''
     });
-
-    const itemsMapped = (quot.items || []).map(item => ({
-      id: item.id,
-      service_id: item.service_id || '',
-      pack_id: item.pack_id || '',
-      custom_name: item.custom_name || (item.service ? item.service.name : item.pack ? item.pack.name : 'Ítem'),
-      price: item.price || 0,
-      quantity: item.quantity || 1,
-      type: item.service_id ? 'catalog' : 'pack'
-    }));
-
-    setFormItems(itemsMapped);
     setFormError('');
     setIsModalOpen(true);
-    setNewDocFile(null);
-    setNewDocTitle('');
-    setNewDocNotes('');
-    setNewDocType('contrato');
-    handleFetchQuotationDocuments(quot.id);
-  };
 
-  // Document integration handlers and helper functions
-  const getDocTypeColor = (type) => {
-    switch (type) {
-      case 'contrato': return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900';
-      case 'factura': return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-455 dark:border-rose-900';
-      case 'boleta': return 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/30 dark:text-cyan-400 dark:border-cyan-900';
-      case 'comprobante de pago': return 'bg-emerald-50 text-emerald-705 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-450 dark:border-emerald-900';
-      case 'manuscrito': return 'bg-amber-50 text-amber-755 border-amber-200 dark:bg-amber-955/30 dark:text-amber-400 dark:border-amber-900';
-      case 'portada': return 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-950/30 dark:text-pink-400 dark:border-pink-900';
-      case 'archivo final': return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-900';
-      case 'documento legal': return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900';
-      case 'imagen': return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-955/30 dark:text-teal-400 dark:border-teal-900';
-      default: return 'bg-slate-100 text-slate-700 border-slate-205 dark:bg-slate-800 dark:text-slate-350 dark:border-slate-700';
-    }
-  };
-
-  const getFileFormatDetails = (fileName) => {
-    const ext = fileName?.split('.').pop().toLowerCase() || '';
-    switch (ext) {
-      case 'pdf':
-        return {
-          icon: FileText,
-          bgClass: 'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-950/25 dark:text-rose-405 dark:border-rose-900/40',
-          label: 'PDF'
-        };
-      case 'doc':
-      case 'docx':
-        return {
-          icon: FileText,
-          bgClass: 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-950/25 dark:text-blue-400 dark:border-blue-900/40',
-          label: 'Word'
-        };
-      case 'xls':
-      case 'xlsx':
-        return {
-          icon: FileSpreadsheet,
-          bgClass: 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-950/25 dark:text-emerald-450 dark:border-emerald-900/40',
-          label: 'Excel'
-        };
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'webp':
-        return {
-          icon: Image,
-          bgClass: 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-955/25 dark:text-amber-400 dark:border-amber-900/40',
-          label: 'Imagen'
-        };
-      default:
-        return {
-          icon: File,
-          bgClass: 'bg-slate-50 text-slate-600 border-slate-105 dark:bg-slate-950/25 dark:text-slate-400 dark:border-slate-900/40',
-          label: 'Archivo'
-        };
-    }
-  };
-
-  const handleFetchQuotationDocuments = async (quotationId) => {
-    setLoadingDocuments(true);
+    // Fetch items
     try {
       const { data, error } = await supabase
-        .from('documents')
+        .from('quotation_items')
         .select('*')
-        .eq('quotation_id', quotationId)
-        .order('created_at', { ascending: false });
-
+        .eq('quotation_id', quote.id)
+        .order('display_order', { ascending: true });
       if (error) throw error;
-      setQuotationDocuments(data || []);
+      setFormItems(data.map((item, idx) => ({
+        id: item.id || `item-${idx}`,
+        catalog_id: item.catalog_id,
+        pack_id: item.pack_id,
+        concept: item.concept,
+        description: item.description || '',
+        unit_price: Number(item.unit_price) || 0,
+        quantity: item.quantity || 1,
+        source_type: item.source_type
+      })));
     } catch (err) {
-      console.error('Error fetching quotation documents:', err);
-      setQuotationDocuments([]);
-    } finally {
-      setLoadingDocuments(false);
-    }
-  };
-
-  const handleUploadQuotationDocument = async (file, docType, notes, docTitle, quotationId, clientId, prospectId) => {
-    if (!file || !docTitle || !quotationId) return;
-    
-    setIsUploading(true);
-    setUploadProgress(10);
-    
-    try {
-      const orgId = await getValidOrgId();
-
-      const fileName = file.name;
-      const sanitizedFileName = fileName.replace(/\s+/g, '_');
-      
-      const folderName = clientId ? `clientes/${clientId}` : prospectId ? `prospectos/${prospectId}` : 'general';
-      const storagePath = `${orgId}/${folderName}/cotizaciones/${quotationId}/${docType}/${sanitizedFileName}`;
-
-      setUploadProgress(50);
-
-      const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
-
-      let fileUrl = '';
-      if (!isMockVal) {
-        const { error: uploadErr } = await supabase.storage
-          .from('documents')
-          .upload(storagePath, file, { upsert: true });
-
-        if (uploadErr) throw uploadErr;
-
-        const { data: publicUrlData } = supabase.storage
-          .from('documents')
-          .getPublicUrl(storagePath);
-        
-        fileUrl = publicUrlData?.publicUrl || '';
-      } else {
-        fileUrl = `mock://documents/${storagePath}`;
-      }
-
-      setUploadProgress(80);
-
-      let userId = 'mock-user-123';
-      if (!isMockVal) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) userId = user.id;
-      }
-
-      const dbPayload = {
-        title: docTitle.trim(),
-        document_type: docType,
-        file_name: fileName,
-        file_path: storagePath,
-        file_url: fileUrl,
-        mime_type: file.type || 'application/octet-stream',
-        file_size: file.size || 0,
-        notes: notes || '',
-        organization_id: orgId,
-        user_id: userId,
-        client_id: clientId || null,
-        quotation_id: quotationId
-      };
-
-      const { error: dbErr } = await supabase
-        .from('documents')
-        .insert([dbPayload]);
-
-      if (dbErr) throw dbErr;
-
-      setUploadProgress(100);
-      setNewDocFile(null);
-      setNewDocTitle('');
-      setNewDocNotes('');
-      
-      // Refresh documents
-      await handleFetchQuotationDocuments(quotationId);
-    } catch (err) {
-      console.error('Error uploading quotation document:', err);
-      alert(err.message || 'Error al subir el archivo.');
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(0);
-    }
-  };
-
-  const handleDeleteQuotationDocument = async (doc) => {
-    const docName = doc.title || doc.name || doc.file_name || 'Documento';
-    if (window.confirm(`¿Estás seguro de que deseas eliminar el documento "${docName}"?`)) {
-      try {
-        const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
-        if (!isMockVal) {
-          const { error: storageErr } = await supabase.storage
-            .from('documents')
-            .remove([doc.file_path]);
-          if (storageErr) {
-            console.warn("Storage warning:", storageErr);
-          }
-        }
-
-        const { error: dbErr } = await supabase
-          .from('documents')
-          .delete()
-          .eq('id', doc.id);
-
-        if (dbErr) throw dbErr;
-
-        setQuotationDocuments(prev => prev.filter(d => d.id !== doc.id));
-      } catch (err) {
-        console.error("Error deleting document:", err);
-        alert("Error al eliminar el documento.");
-      }
-    }
-  };
-
-  const handleDownloadQuotationFile = (doc) => {
-    const docName = doc.title || doc.name || doc.file_name || 'Documento';
-    const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
-    if (isMockVal) {
-      alert(`Simulación de descarga en Modo Demo: descargando archivo "${docName}"`);
-    } else {
-      if (doc.file_url) {
-        window.open(doc.file_url, '_blank');
-      } else {
-        const { data } = supabase.storage
-          .from('documents')
-          .getPublicUrl(doc.file_path);
-        if (data?.publicUrl) {
-          window.open(data.publicUrl, '_blank');
-        } else {
-          alert('No se pudo generar el enlace de descarga');
-        }
-      }
-    }
-  };
-
-  const handleViewQuotationFile = (doc) => {
-    const docName = doc.title || doc.name || doc.file_name || 'Documento';
-    const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
-    if (isMockVal) {
-      alert(`Simulación de visualización en Modo Demo: viendo archivo "${docName}"`);
-    } else {
-      if (doc.file_url) {
-        window.open(doc.file_url, '_blank');
-      } else {
-        const { data } = supabase.storage
-          .from('documents')
-          .getPublicUrl(doc.file_path);
-        if (data?.publicUrl) {
-          window.open(data.publicUrl, '_blank');
-        } else {
-          alert('No se pudo generar el enlace de visualización');
-        }
-      }
+      console.error('Error fetching quotation items:', err);
     }
   };
 
   const handleDeleteQuotation = async (id) => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar esta cotización?')) {
-      try {
-        const { error } = await supabase
-          .from('quotations')
-          .delete()
-          .eq('id', id);
-
-        if (error) throw error;
-        setQuotations(quotations.filter(q => q.id !== id));
-      } catch (err) {
-        console.error('Error deleting quotation:', err);
-        alert('Error al eliminar la cotización');
-      }
+    if (!window.confirm('¿Estás seguro de que deseas eliminar esta propuesta comercial?')) return;
+    try {
+      const { error } = await supabase.from('quotations').delete().eq('id', id);
+      if (error) throw error;
+      setQuotations(quotations.filter(q => q.id !== id));
+    } catch (err) {
+      console.error('Error deleting quotation:', err);
+      alert('Error al eliminar propuesta.');
     }
   };
 
-  const handleAddCatalogItem = (serviceId) => {
-    const service = catalog.find(c => c.id === serviceId);
-    if (!service) return;
-
-    const newItems = [...formItems, {
-      id: `new-${Date.now()}`,
-      service_id: service.id,
-      pack_id: '',
-      custom_name: service.name,
-      price: Number(service.base_price),
-      quantity: 1,
-      type: 'catalog'
-    }];
-    setFormItems(newItems);
+  const getExtensionSuggestion = (pages) => {
+    if (!pages || pages <= 80) return { pct: 0, text: "Ajuste sugerido: 0% (Extensión base)", warning: false };
+    if (pages >= 81 && pages <= 150) return { pct: 20, text: "Ajuste sugerido: +15% a +25% (Aprox +20%)", warning: false };
+    if (pages >= 151 && pages <= 250) return { pct: 40, text: "Ajuste sugerido: +30% a +50% (Aprox +40%)", warning: false };
+    return { pct: 0, text: "Cotización personalizada obligatoria (libro extenso)", warning: true };
   };
 
-  const handleAddPackItem = (packId) => {
-    const pack = packs.find(p => p.id === packId);
+  const handlePagesChange = (pagesVal) => {
+    const suggestion = getExtensionSuggestion(pagesVal);
+    setFormHeader(prev => ({
+      ...prev,
+      manuscript_pages: pagesVal,
+      extension_adjustment_value: (prev.extension_adjustment_type === 'percentage' && !suggestion.warning) 
+        ? suggestion.pct 
+        : prev.extension_adjustment_value
+    }));
+  };
+
+  const handleAddCatalogItem = () => {
+    if (!selectedServiceId) return;
+    const service = catalog.find(c => c.id === selectedServiceId);
+    if (!service) return;
+
+    setFormItems([...formItems, {
+      id: `service-${Date.now()}`,
+      catalog_id: service.id,
+      pack_id: null,
+      concept: service.name || service.title,
+      description: service.description || '',
+      unit_price: Number(service.price_from || service.base_price) || 0,
+      quantity: 1,
+      source_type: 'catalog'
+    }]);
+    setSelectedServiceId('');
+  };
+
+  const handleAddPackItem = () => {
+    if (!selectedPackId) return;
+    const pack = packs.find(p => p.id === selectedPackId);
     if (!pack) return;
 
-    const newItems = [...formItems, {
-      id: `new-${Date.now()}`,
-      service_id: '',
+    setFormItems([...formItems, {
+      id: `pack-${Date.now()}`,
+      catalog_id: null,
       pack_id: pack.id,
-      custom_name: pack.name,
-      price: Number(pack.price_special),
+      concept: pack.name,
+      description: pack.description || '',
+      unit_price: Number(pack.price_special) || 0,
       quantity: 1,
-      type: 'pack'
-    }];
-    setFormItems(newItems);
+      source_type: 'pack'
+    }]);
+    setSelectedPackId('');
+  };
+
+  const handleAddManualItem = () => {
+    setFormItems([...formItems, {
+      id: `manual-${Date.now()}`,
+      catalog_id: null,
+      pack_id: null,
+      concept: 'Concepto Personalizado',
+      description: '',
+      unit_price: 0,
+      quantity: 1,
+      source_type: 'manual'
+    }]);
   };
 
   const handleUpdateItemField = (itemId, field, value) => {
     setFormItems(formItems.map(item => {
-      if (item.id === itemId) {
-        return { ...item, [field]: value };
-      }
+      if (item.id === itemId) return { ...item, [field]: value };
       return item;
     }));
   };
@@ -492,23 +302,27 @@ export default function Quotations({ preselectedEntity, clearPreselectedEntity }
     setFormItems(formItems.filter(item => item.id !== itemId));
   };
 
-  const getSubtotal = (items) => {
-    return items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
-  };
-
   const getTotals = () => {
-    const subtotal = getSubtotal(formItems);
-    const adjPct = Number(formHeader.extension_adjustment) || 0;
-    const extensionAmount = Math.round(subtotal * (adjPct / 100));
-    const subtotalAdjusted = subtotal + extensionAmount;
+    const subtotal = formItems.reduce((sum, item) => sum + (Number(item.unit_price) * Number(item.quantity)), 0);
+    const adjType = formHeader.extension_adjustment_type;
+    const adjVal = Number(formHeader.extension_adjustment_value) || 0;
     
+    let adjustmentAmount = 0;
+    if (adjType === 'percentage') {
+      adjustmentAmount = Math.round(subtotal * (adjVal / 100));
+    } else {
+      adjustmentAmount = adjVal;
+    }
+
+    const subtotalAdjusted = subtotal + adjustmentAmount;
     const discount = Number(formHeader.discount) || 0;
     const total = Math.max(0, subtotalAdjusted - discount);
-    
-    const split = calculateVatSplit(total, formHeader.includes_vat);
+
+    const split = calculateVatSplit(total, formHeader.includes_iva);
+
     return {
       subtotal,
-      extensionAmount,
+      adjustmentAmount,
       subtotalAdjusted,
       discount,
       net: split.net,
@@ -519,12 +333,12 @@ export default function Quotations({ preselectedEntity, clearPreselectedEntity }
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
-    if (!formHeader.client_id && !formHeader.prospect_id) {
-      setFormError('Debe seleccionar un Cliente o un Prospecto.');
+    if (formItems.length === 0) {
+      setFormError('Debe agregar al menos un servicio o ítem.');
       return;
     }
-    if (formItems.length === 0) {
-      setFormError('Debe agregar al menos un ítem a la cotización.');
+    if (!formHeader.author_name.trim()) {
+      setFormError('El nombre del autor o destinatario es requerido.');
       return;
     }
 
@@ -532,269 +346,426 @@ export default function Quotations({ preselectedEntity, clearPreselectedEntity }
     setFormError('');
 
     try {
-      let quotId = selectedQuotation?.id;
-      const { discount, total } = getTotals();
+      const orgId = await getValidOrgId();
+      const totals = getTotals();
 
-      const quotPayload = {
-        client_id: formHeader.client_id || null,
-        prospect_id: formHeader.prospect_id || null,
-        discount,
+      const payload = {
+        organization_id: orgId,
+        author_name: formHeader.author_name,
+        author_email: formHeader.author_email,
+        author_phone: formHeader.author_phone,
+        author_instagram: formHeader.author_instagram,
+        origin: formHeader.origin,
+        country: formHeader.country,
+        city: formHeader.city,
+        object: formHeader.object,
+        quote_number: formHeader.quote_number,
+        issue_date: formHeader.issue_date,
+        valid_until: formHeader.valid_until,
+        validity_days: Number(formHeader.validity_days) || 15,
+        manuscript_pages: Number(formHeader.manuscript_pages) || 0,
+        extension_adjustment_type: formHeader.extension_adjustment_type,
+        extension_adjustment_value: Number(formHeader.extension_adjustment_value) || 0,
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        tax_amount: totals.vat,
+        total: totals.total,
         currency: formHeader.currency,
-        exchange_rate: Number(formHeader.exchange_rate) || 1,
-        amount: total,
-        value_converted: total * (Number(formHeader.exchange_rate) || 1),
-        rate_date: new Date().toISOString().split('T')[0],
-        status: formHeader.status,
+        includes_iva: formHeader.includes_iva,
+        payment_terms: formHeader.payment_terms,
+        work_timeline: formHeader.work_timeline,
+        includes_notes: formHeader.includes_notes,
+        excludes_notes: formHeader.excludes_notes,
+        start_conditions: formHeader.start_conditions,
+        legal_notes: formHeader.legal_notes,
+        other_notes: formHeader.other_notes,
         notes: formHeader.notes,
-        includes_vat: formHeader.includes_vat,
-        pages: Number(formHeader.pages) || 0,
-        extension_adjustment: Number(formHeader.extension_adjustment) || 0
+        status: formHeader.status,
+        accepted_at: formHeader.status === 'aceptada' ? new Date().toISOString() : selectedQuotation?.accepted_at || null,
+        rejected_at: formHeader.status === 'rechazada' ? new Date().toISOString() : selectedQuotation?.rejected_at || null
       };
 
+      let quoteId = '';
       if (selectedQuotation) {
-        // Edit mode
-        const { error } = await supabase
-          .from('quotations')
-          .update(quotPayload)
-          .eq('id', quotId);
-
+        quoteId = selectedQuotation.id;
+        const { error } = await supabase.from('quotations').update(payload).eq('id', quoteId);
         if (error) throw error;
 
-        // Delete items
-        const { error: delErr } = await supabase
-          .from('quotation_items')
-          .delete()
-          .eq('quotation_id', quotId);
-
-        if (delErr) throw delErr;
+        // Delete and replace items
+        await supabase.from('quotation_items').delete().eq('quotation_id', quoteId);
       } else {
-        // Add mode
-        const { data, error } = await supabase
-          .from('quotations')
-          .insert([quotPayload])
-          .select()
-          .single();
-
+        const { data, error } = await supabase.from('quotations').insert([payload]).select().single();
         if (error) throw error;
-        quotId = data.id;
+        quoteId = data.id;
       }
 
-      // Add items
-      const itemsPayload = formItems.map(item => ({
-        quotation_id: quotId,
-        service_id: item.service_id || null,
-        pack_id: item.pack_id || null,
-        custom_name: item.custom_name,
-        price: item.price,
-        quantity: item.quantity
+      const itemsPayload = formItems.map((item, index) => ({
+        organization_id: orgId,
+        quotation_id: quoteId,
+        catalog_id: item.catalog_id,
+        pack_id: item.pack_id,
+        concept: item.concept,
+        description: item.description,
+        unit_price: item.unit_price,
+        quantity: item.quantity,
+        total: item.unit_price * item.quantity,
+        source_type: item.source_type,
+        display_order: index
       }));
 
-      const { error: insErr } = await supabase
-        .from('quotation_items')
-        .insert(itemsPayload);
+      const { error: itemsErr } = await supabase.from('quotation_items').insert(itemsPayload);
+      if (itemsErr) throw itemsErr;
 
-      if (insErr) throw insErr;
-
-      if (!selectedQuotation && newDocFile) {
-        await handleUploadQuotationDocument(newDocFile, newDocType, newDocNotes, newDocTitle, quotId, formHeader.client_id, formHeader.prospect_id);
-      }
-
-      await fetchData();
       setIsModalOpen(false);
+      fetchQuotations();
+      alert('¡Propuesta comercial guardada con éxito!');
     } catch (err) {
-      console.error("Error saving quotation:", err);
-      setFormError(err.message || 'Error al guardar la cotización.');
+      console.error(err);
+      setFormError(err.message || 'Error al guardar la propuesta.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleConvertToContract = async (quot) => {
-    if (!quot.client_id) {
-      alert('Esta cotización está asociada a un Prospecto. Por favor, primero convierte el prospecto en Cliente en la sección de Prospectos.');
-      return;
-    }
-
-    const bookTitlePrompt = window.prompt('Introduce el Título del Libro para los nuevos servicios contratados:', 'Título Tentativo del Libro');
-    if (!bookTitlePrompt || !bookTitlePrompt.trim()) {
-      alert('Operación cancelada. El título del libro es obligatorio.');
-      return;
-    }
-
-    setLoading(true);
+  const convertToProspect = async (quote) => {
+    if (!window.confirm(`¿Convertir propuesta ${quote.quote_number} a Prospecto?`)) return;
     try {
-      const items = quot.items || [];
-      const subtotal = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
-      const adjPct = Number(quot.extension_adjustment) || 0;
-      const subtotalAdjusted = subtotal * (1 + adjPct / 100);
-      const discount = quot.discount || 0;
-      const totalAmount = Math.max(0, subtotalAdjusted - discount);
+      const orgId = await getValidOrgId();
 
-      // Loop through each quotation item and insert a contracted service
-      for (const item of items) {
-        let serviceType = 'otro';
-        if (item.service) {
-          serviceType = item.service.category;
-        } else if (item.pack) {
-          serviceType = 'maquetación';
-        }
+      // Retrieve items to serialize services
+      const { data: items, error: itemsErr } = await supabase
+        .from('quotation_items')
+        .select('*')
+        .eq('quotation_id', quote.id);
 
-        const adjustedValue = (Number(item.price) * Number(item.quantity)) * (1 + adjPct / 100);
+      if (itemsErr) throw itemsErr;
 
-        const { error: serviceErr } = await supabase
-          .from('services')
-          .insert([{
-            client_id: quot.client_id,
-            type: serviceType,
-            book_title: bookTitlePrompt,
-            status: 'recibido',
-            value: adjustedValue,
-            currency: quot.currency,
-            exchange_rate: quot.exchange_rate || 1,
-            value_converted: adjustedValue * (quot.exchange_rate || 1),
-            rate_date: new Date().toISOString().split('T')[0],
-            notes: `Creado desde cotización aceptada. Descripción del ítem: ${item.custom_name || ''}`
-          }]);
-        
-        if (serviceErr) throw serviceErr;
-      }
+      const prospectPayload = {
+        organization_id: orgId,
+        name: quote.author_name,
+        email: quote.author_email,
+        phone: quote.author_phone,
+        instagram: quote.author_instagram,
+        country: quote.country,
+        city: quote.city,
+        origin: quote.origin || 'Instagram',
+        interest_service: items?.[0]?.concept || 'Editorial',
+        amount: quote.total,
+        currency: quote.currency,
+        notes: `Convertido desde Propuesta Comercial N° ${quote.quote_number}. Notas propuesta: ${quote.notes || ''}`,
+        status: 'acuerdo enviado',
+        selected_services: items ? items.map(it => ({
+          name: it.concept,
+          price: it.unit_price * it.quantity,
+          category: it.source_type === 'catalog' ? 'editorial' : 'otro'
+        })) : []
+      };
 
-      // Create a pending Income (Invoice record) for the total amount of the quotation
-      const { error: incomeErr } = await supabase
-        .from('incomes')
-        .insert([{
-          client_id: quot.client_id,
-          amount: totalAmount,
-          currency: quot.currency,
-          exchange_rate: quot.exchange_rate || 1,
-          value_converted: totalAmount * (quot.exchange_rate || 1),
-          rate_date: new Date().toISOString().split('T')[0],
-          date: new Date().toISOString().split('T')[0],
-          payment_method: 'transferencia',
-          includes_vat: quot.includes_vat,
-          status: 'pendiente',
-          notes: `Generado automáticamente por aceptación de cotización.`
-        }]);
+      const { data: newProspect, error: prErr } = await supabase
+        .from('prospects')
+        .insert([prospectPayload])
+        .select()
+        .single();
 
-      if (incomeErr) throw incomeErr;
+      if (prErr) throw prErr;
 
-      // Update quotation status to accepted
-      const { error: quotErr } = await supabase
+      // Update proposal state
+      const { error: quoteUpdateErr } = await supabase
         .from('quotations')
-        .update({ status: 'aceptada' })
-        .eq('id', quot.id);
+        .update({
+          converted_to_prospect: true,
+          converted_prospect_id: newProspect.id,
+          converted_at: new Date().toISOString(),
+          status: 'convertida a prospecto'
+        })
+        .eq('id', quote.id);
 
-      if (quotErr) throw quotErr;
+      if (quoteUpdateErr) throw quoteUpdateErr;
 
-      alert('¡Excelente! La cotización ha sido aprobada. Se crearon los servicios contratados y una cuenta por cobrar (ingreso pendiente) de forma exitosa.');
-      await fetchData();
+      alert(`¡Convertido a Prospecto exitosamente! Nombre: ${newProspect.name}`);
+      fetchQuotations();
     } catch (err) {
-      console.error("Error converting quotation:", err);
-      alert('Ocurrió un error al procesar la conversión: ' + err.message);
-      await fetchData();
+      console.error('Error converting to prospect:', err);
+      alert('Error en la conversión: ' + err.message);
     }
   };
 
-  // Filters logic
-  const mappedQuotations = quotations.map(quot => {
-    const client = clients.find(c => c.id === quot.client_id);
-    const prospect = prospects.find(p => p.id === quot.prospect_id);
-    return {
-      ...quot,
-      contactName: client ? client.name : prospect ? `${prospect.name} (Prospecto)` : 'Contacto no definido'
-    };
-  });
+  const handleDownloadPDF = async (quote) => {
+    try {
+      const { data: items, error: itemsErr } = await supabase
+        .from('quotation_items')
+        .select('*')
+        .eq('quotation_id', quote.id)
+        .order('display_order', { ascending: true });
 
-  const periodFilteredQuotations = filterByPeriod(mappedQuotations, 'created_at', period);
+      if (itemsErr) throw itemsErr;
 
-  const filteredQuotations = periodFilteredQuotations.filter(q => {
-    if (!q) return false;
-    const contactName = String(q.contactName || '').toLowerCase();
-    const query = String(searchQuery || '').toLowerCase();
-    const matchesSearch = contactName.includes(query);
+      // PDF styling settings
+      const primaryColor = [79, 70, 229]; // Indigo-600
+      const secondaryColor = [30, 41, 59]; // Slate-800
+      const lightBg = [248, 250, 252]; // Slate-50
+
+      const doc = new jsPDF();
+      
+      // Top Stripe
+      doc.setFillColor(...primaryColor);
+      doc.rect(0, 0, 210, 8, 'F');
+
+      // Brand Title
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(22);
+      doc.setTextColor(...primaryColor);
+      doc.text('SOMOS NOVELI EDITORIAL', 20, 25);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text('Correo: contacto@somosnoveli.cl', 20, 31);
+      doc.text('Web: www.somosnoveli.cl', 20, 36);
+
+      // Proposal details
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(...secondaryColor);
+      doc.text('PROPUESTA EDITORIAL Y COMERCIAL', 115, 25);
+      
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text(`Número: ${quote.quote_number || 'S/N'}`, 115, 32);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Emisión: ${quote.issue_date || ''}`, 115, 38);
+      doc.text(`Validez: ${quote.valid_until || ''} (${quote.validity_days || 15} días)`, 115, 43);
+
+      // Recipient Box
+      doc.setFillColor(...lightBg);
+      doc.rect(20, 52, 170, 32, 'F');
+      doc.setDrawColor(226, 232, 240);
+      doc.rect(20, 52, 170, 32, 'D');
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(...secondaryColor);
+      doc.text('INFORMACIÓN DE LA PROPUESTA', 25, 58);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Dirigido a: ${quote.author_name || 'Nuevo Autor'}`, 25, 64);
+      doc.text(`Email: ${quote.author_email || 'Sin registrar'}`, 25, 70);
+      doc.text(`Ubicación: ${quote.city || ''}${quote.city && quote.country ? ', ' : ''}${quote.country || ''}`, 25, 76);
+
+      doc.text(`Objeto: ${quote.object || 'Propuesta de servicios editoriales.'}`, 110, 64, { maxWidth: 75 });
+      if (quote.manuscript_pages > 0) {
+        doc.text(`Manuscrito: ${quote.manuscript_pages} páginas`, 110, 76);
+      }
+
+      // Table Header
+      let y = 92;
+      doc.setFillColor(...secondaryColor);
+      doc.rect(20, y, 170, 8, 'F');
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(255, 255, 255);
+      doc.text('SERVICIOS INCLUIDOS', 23, y + 5.5);
+      doc.text('CANT.', 125, y + 5.5);
+      doc.text('PRECIO UNIT.', 143, y + 5.5);
+      doc.text('TOTAL', 173, y + 5.5);
+
+      // Table Items
+      doc.setFont('Helvetica', 'normal');
+      doc.setTextColor(51, 65, 85);
+      doc.setDrawColor(241, 245, 249);
+      
+      y += 8;
+      (items || []).forEach((item, index) => {
+        doc.line(20, y + 13, 190, y + 13);
+        
+        doc.setFont('Helvetica', 'bold');
+        doc.text(`${index + 1}. ${item.concept}`, 23, y + 5.5);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(item.description || 'Sin descripción adicional.', 23, y + 10, { maxWidth: 90 });
+        doc.setFontSize(9);
+        doc.setTextColor(51, 65, 85);
+
+        doc.text(String(item.quantity || 1), 128, y + 7);
+        doc.text(formatCurrency(item.unit_price || 0, quote.currency), 143, y + 7);
+        doc.text(formatCurrency((item.unit_price || 0) * (item.quantity || 1), quote.currency), 173, y + 7);
+        
+        y += 13;
+      });
+
+      // Totals
+      y += 4;
+      doc.setFont('Helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      
+      doc.text('Subtotal Base:', 125, y + 4);
+      doc.text(formatCurrency(quote.subtotal || 0, quote.currency), 173, y + 4);
+
+      y += 5;
+      const adjustmentAmount = quote.extension_adjustment_type === 'percentage'
+        ? Math.round(Number(quote.subtotal || 0) * (Number(quote.extension_adjustment_value || 0) / 100))
+        : Number(quote.extension_adjustment_value || 0);
+
+      if (adjustmentAmount > 0) {
+        doc.text('Ajuste Extensión:', 125, y + 4);
+        doc.text(`+${formatCurrency(adjustmentAmount, quote.currency)}`, 173, y + 4);
+        y += 5;
+      }
+
+      if (Number(quote.discount) > 0) {
+        doc.text('Descuento Especial:', 125, y + 4);
+        doc.text(`-${formatCurrency(quote.discount, quote.currency)}`, 173, y + 4);
+        y += 5;
+      }
+
+      if (quote.includes_iva) {
+        const net = Math.round(Number(quote.total) / 1.19);
+        const vat = Number(quote.total) - net;
+        
+        doc.text('Neto:', 125, y + 4);
+        doc.text(formatCurrency(net, quote.currency), 173, y + 4);
+        y += 5;
+        doc.text('IVA (19%):', 125, y + 4);
+        doc.text(formatCurrency(vat, quote.currency), 173, y + 4);
+        y += 5;
+      }
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setTextColor(...primaryColor);
+      doc.setFontSize(10.5);
+      doc.text('TOTAL DE LA PROPUESTA:', 110, y + 5);
+      doc.text(formatCurrency(quote.total || 0, quote.currency), 173, y + 5);
+
+      // Terms
+      y += 18;
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(...secondaryColor);
+      doc.text('TÉRMINOS Y CONDICIONES', 20, y);
+      
+      doc.setDrawColor(...primaryColor);
+      doc.line(20, y + 2, 70, y + 2);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(71, 85, 105);
+
+      y += 7;
+      doc.setFont('Helvetica', 'bold');
+      doc.text('Plazo Estimado:', 20, y);
+      doc.setFont('Helvetica', 'normal');
+      doc.text(quote.work_timeline || 'A convenir.', 48, y);
+
+      y += 5.5;
+      doc.setFont('Helvetica', 'bold');
+      doc.text('Forma de Pago:', 20, y);
+      doc.setFont('Helvetica', 'normal');
+      doc.text(quote.payment_terms || 'Estándar.', 53, y);
+
+      y += 5.5;
+      doc.setFont('Helvetica', 'bold');
+      doc.text('Requisitos de Inicio:', 20, y);
+      doc.setFont('Helvetica', 'normal');
+      doc.text(quote.start_conditions || 'Aceptación formal.', 53, y);
+
+      // Notes
+      y += 10;
+      doc.setFillColor(...lightBg);
+      doc.rect(20, y, 170, 32, 'F');
+      doc.setDrawColor(226, 232, 240);
+      doc.rect(20, y, 170, 32, 'D');
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+
+      const splitLegal = doc.splitTextToSize(quote.legal_notes || '', 162);
+      doc.text(splitLegal, 24, y + 5);
+
+      // Signatures
+      y += 42;
+      doc.setDrawColor(203, 213, 225);
+      doc.line(20, y, 80, y);
+      doc.line(130, y, 190, y);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      doc.text('Javier Román González', 32, y + 4);
+      doc.text('Representante Noveli Editorial', 27, y + 8);
+      
+      doc.text('Aceptación de Propuesta', 142, y + 4);
+      doc.text(quote.author_name || 'Firma Autor / Cliente', 142, y + 8);
+
+      // Footer
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text('Somos Noveli Editorial - Los derechos de la obra pertenecen siempre al autor.', 45, 287);
+
+      doc.save(`Propuesta_${quote.quote_number || 'S_N'}_${quote.author_name.replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert('Error generando PDF.');
+    }
+  };
+
+  const getStatusBadgeColor = (status) => {
+    switch (status) {
+      case 'borrador': return 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/60 dark:text-slate-400 dark:border-slate-800';
+      case 'enviada': return 'bg-blue-50 text-blue-750 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/40';
+      case 'aceptada': return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-455 dark:border-emerald-900/40';
+      case 'rechazada': return 'bg-rose-50 text-rose-700 border-rose-250 dark:bg-rose-950/20 dark:text-rose-455 dark:border-rose-900/40';
+      case 'vencida': return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/40';
+      case 'convertida a prospecto': return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/20 dark:text-indigo-400 dark:border-indigo-900/40';
+      default: return 'bg-slate-50 text-slate-655 border-slate-200';
+    }
+  };
+
+  const filteredQuotes = quotations.filter(q => {
+    const name = String(q.author_name || '').toLowerCase();
+    const email = String(q.author_email || '').toLowerCase();
+    const number = String(q.quote_number || '').toLowerCase();
+    const query = searchQuery.toLowerCase();
+    const matchesSearch = name.includes(query) || email.includes(query) || number.includes(query);
     const matchesStatus = statusFilter === 'todos' || q.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const handleExportCSV = () => {
-    const csvData = filteredQuotations.map(q => {
-      const items = q.items || [];
-      const subtotal = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
-      const discount = q.discount || 0;
-      const total = Math.max(0, subtotal - discount);
-      const split = calculateVatSplit(total, q.includes_vat);
-      
-      const itemsStr = items.map(item => `${item.custom_name} (x${item.quantity})`).join('; ');
-
-      return {
-        Fecha: q.created_at ? q.created_at.split('T')[0] : '',
-        Destinatario: q.contactName,
-        'Conceptos Cotizados': itemsStr,
-        Moneda: q.currency,
-        'Tasa Cambio': q.exchange_rate || 1,
-        Subtotal: subtotal,
-        Descuento: discount,
-        Neto: q.includes_vat ? split.net : total,
-        IVA: q.includes_vat ? split.vat : 0,
-        Total: total,
-        'Total CLP': q.value_converted || total,
-        Estado: q.status,
-        Notas: q.notes || ''
-      };
-    });
-
-    exportToCSV(
-      csvData,
-      `cotizaciones_${period.mode}_${period.year || ''}_${period.month || ''}`,
-      ['Fecha', 'Destinatario', 'Conceptos Cotizados', 'Moneda', 'Tasa Cambio', 'Subtotal', 'Descuento', 'Neto', 'IVA', 'Total', 'Total CLP', 'Estado', 'Notas']
-    );
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'borrador': return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-350 dark:border-slate-700';
-      case 'enviada': return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900';
-      case 'aceptada': return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-450 dark:border-emerald-900';
-      case 'rechazada': return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-455 dark:border-rose-900';
-      case 'vencida': return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900';
-      default: return 'bg-slate-50 text-slate-700 border-slate-200';
-    }
-  };
+  const totals = getTotals();
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in text-slate-800 dark:text-slate-100">
+      
+      {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100 font-sans tracking-tight">
-            Cotizaciones
+          <h1 className="text-3xl font-bold text-slate-805 dark:text-slate-100 font-sans tracking-tight">
+            Propuestas Comerciales
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">
-            Estructura presupuestos para clientes o prospectos, aplica descuentos y genera órdenes automáticas.
+            Redacción, control de tarifas, previsualización interactiva y descarga de cotizaciones editoriales.
           </p>
         </div>
-        <div className="flex gap-2 shrink-0">
-          <button
-            onClick={handleExportCSV}
-            disabled={filteredQuotations.length === 0}
-            className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer disabled:opacity-50"
-          >
-            <Download className="w-4 h-4" />
-            Exportar CSV
-          </button>
+        {!isReadOnly && (
           <button
             onClick={handleOpenAddModal}
             className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-sm transition-all shadow-md shadow-brand-600/20 cursor-pointer w-fit"
           >
             <Plus className="w-4 h-4" />
-            Nueva Cotización
+            Nueva Propuesta
           </button>
-        </div>
+        )}
       </div>
 
-      {/* Period Filter Component */}
-      <PeriodFilter onChange={setPeriod} />
-
-      {/* Filters */}
+      {/* Filter and Search Bar */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative w-full md:w-80">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -802,19 +773,19 @@ export default function Quotations({ preselectedEntity, clearPreselectedEntity }
           </div>
           <input
             type="text"
-            placeholder="Buscar por cliente o prospecto..."
+            placeholder="Buscar por autor, N° o email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="block w-full pl-9 pr-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder:text-slate-400"
+            className="block w-full pl-9 pr-3 py-2 border border-slate-205 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <span className="text-xs text-slate-400 font-semibold whitespace-nowrap">Estado:</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400 font-bold uppercase whitespace-nowrap">Estado:</span>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="block w-full md:w-44 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-200 text-sm focus:outline-none capitalize"
+            className="block px-2.5 py-1.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 text-slate-707 dark:text-slate-200 text-xs font-semibold focus:outline-none"
           >
             <option value="todos">Todos</option>
             <option value="borrador">Borrador</option>
@@ -822,134 +793,134 @@ export default function Quotations({ preselectedEntity, clearPreselectedEntity }
             <option value="aceptada">Aceptada</option>
             <option value="rechazada">Rechazada</option>
             <option value="vencida">Vencida</option>
+            <option value="convertida a prospecto">Convertida a Prospecto</option>
           </select>
         </div>
       </div>
 
-      {/* Quotations List */}
+      {/* List Table */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-650"></div>
         </div>
-      ) : filteredQuotations.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-12 text-center text-slate-400">
-          No se encontraron cotizaciones registradas.
+      ) : filteredQuotes.length === 0 ? (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-12 text-center text-slate-400 italic">
+          No se encontraron propuestas comerciales registradas.
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden animate-fade-in">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+            <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 text-slate-400 font-semibold">
-                  <th className="px-6 py-4">Destinatario</th>
-                  <th className="px-6 py-4">Ítems Cotizados</th>
-                  <th className="px-6 py-4">Descuento</th>
-                  <th className="px-6 py-4">Total</th>
-                  <th className="px-6 py-4">Estado</th>
-                  <th className="px-6 py-4 text-right">Acciones</th>
+                <tr className="bg-slate-55 dark:bg-slate-950/70 border-b border-slate-100 dark:border-slate-800 text-slate-405 font-bold uppercase tracking-wider">
+                  <th className="p-4">Propuesta N°</th>
+                  <th className="p-4">Autor / Contacto</th>
+                  <th className="p-4">Objeto</th>
+                  <th className="p-4">Emisión / Vigencia</th>
+                  <th className="p-4 text-right">Total</th>
+                  <th className="p-4 text-center">Estado</th>
+                  <th className="p-4 text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                {filteredQuotations.map((quot) => {
-                  const items = quot.items || [];
-                  const subtotal = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
-                  const adjPct = Number(quot.extension_adjustment) || 0;
-                  const subtotalAdjusted = subtotal * (1 + adjPct / 100);
-                  const discount = quot.discount || 0;
-                  const total = Math.max(0, subtotalAdjusted - discount);
-                  const showConverted = quot.currency !== 'CLP';
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-855 font-medium">
+                {filteredQuotes.map((quote) => (
+                  <tr key={quote.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10">
+                    <td className="p-4 font-bold text-slate-900 dark:text-slate-100">{quote.quote_number}</td>
+                    <td className="p-4">
+                      <span className="font-bold text-slate-800 dark:text-slate-200 block">{quote.author_name}</span>
+                      <span className="text-[10px] text-slate-450">{quote.author_email || quote.author_phone || 'Sin contacto'}</span>
+                    </td>
+                    <td className="p-4 text-slate-500 truncate max-w-xs">{quote.object}</td>
+                    <td className="p-4 text-slate-450">
+                      <span>{formatDate(quote.issue_date)}</span>
+                      <span className="block text-[10px] text-slate-400 font-bold">Vence: {formatDate(quote.valid_until)}</span>
+                    </td>
+                    <td className="p-4 text-right font-extrabold text-slate-705 dark:text-slate-205">{formatCurrency(quote.total, quote.currency)}</td>
+                    <td className="p-4 text-center">
+                      <span className={`inline-block px-2 py-0.5 rounded border uppercase text-[9px] font-bold tracking-wide ${getStatusBadgeColor(quote.status)}`}>
+                        {quote.status}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right space-x-1 whitespace-nowrap">
+                      <button
+                        onClick={() => handleDownloadPDF(quote)}
+                        className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-450 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 cursor-pointer align-middle"
+                        title="Descargar PDF"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                      
+                      {/* Convert to Prospect Action */}
+                      {!isReadOnly && quote.status === 'aceptada' && !quote.converted_to_prospect && (
+                        <button
+                          onClick={() => convertToProspect(quote)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 dark:bg-indigo-950/20 dark:text-indigo-400 rounded-lg text-[10px] font-extrabold cursor-pointer border border-indigo-100 dark:border-indigo-900"
+                          title="Convertir a Prospecto"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          <span>Convertir a Prospecto</span>
+                        </button>
+                      )}
 
-                  return (
-                    <tr key={quot.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all">
-                      <td className="px-6 py-4">
-                        <div className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                          <User className="w-4 h-4 text-slate-400" />
-                          {quot.contactName}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="space-y-1">
-                          {items.map((item, idx) => (
-                            <div key={idx} className="text-xs text-slate-550 dark:text-slate-400 font-medium">
-                              • {item.custom_name || (item.service ? item.service.name : item.pack ? item.pack.name : 'Ítem')} (x{item.quantity})
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-slate-405 font-medium">
-                        {discount > 0 ? formatCurrency(discount, quot.currency) : '-'}
-                      </td>
-                      <td className="px-6 py-4 space-y-0.5">
-                        <div className="font-bold text-slate-800 dark:text-slate-100 text-sm">
-                          {formatCurrency(total, quot.currency)}
-                        </div>
-                        {showConverted && (
-                          <div className="text-[10px] text-brand-600 dark:text-brand-400 font-bold">
-                            ≈ {formatCurrency(quot.value_converted || (total * (quot.exchange_rate || 1)), 'CLP')}
-                            <span className="text-slate-400 dark:text-slate-500 font-semibold text-[9px] ml-1">
-                              (tasa: {quot.exchange_rate || 1})
-                            </span>
-                          </div>
-                        )}
-                        <div className="text-[10px] text-slate-400">
-                          {quot.includes_vat ? 'Impuesto IVA incluido' : 'Exento de IVA'}
-                        </div>
-                        {Number(quot.pages) > 0 && (
-                          <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">
-                            {quot.pages} págs (+{quot.extension_adjustment || 0}%)
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border uppercase tracking-wider ${getStatusColor(quot.status)}`}>
-                          {quot.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-1.5 whitespace-nowrap">
-                        {/* Convert to services flow */}
-                        {quot.status !== 'aceptada' && (
+                      {!isReadOnly && (
+                        <>
                           <button
-                            onClick={() => handleConvertToContract(quot)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-all shadow-sm shadow-emerald-600/10 cursor-pointer"
-                            title="Aprobar y Generar Servicios + Factura"
+                            onClick={() => handleOpenEditModal(quote)}
+                            className="inline-flex p-1.5 rounded-lg border border-slate-105 dark:border-slate-800 text-slate-450 hover:text-indigo-655 hover:bg-indigo-55 dark:hover:bg-indigo-950/20 cursor-pointer align-middle"
+                            title="Editar"
                           >
-                            <ClipboardCheck className="w-3.5 h-3.5" />
-                            <span>Contratar</span>
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleOpenEditModal(quot)}
-                          className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-                          title="Editar"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteQuotation(quot.id)}
-                          className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                          <button
+                            onClick={() => handleDeleteQuotation(quote.id)}
+                            className="inline-flex p-1.5 rounded-lg border border-slate-105 dark:border-slate-800 text-slate-455 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer align-middle"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* Add/Edit Modal */}
+      {/* Proposal Editor Split modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-up">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-brand-500" />
-                {selectedQuotation ? 'Editar Cotización' : 'Nueva Cotización'}
-              </h3>
+        <div className="fixed inset-0 bg-slate-955/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className={`bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl ${editorTab === 'split' ? 'max-w-7xl' : 'max-w-3xl'} w-full max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col transition-all`}>
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10">
+              <div>
+                <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-indigo-500" />
+                  {selectedQuotation ? 'Editar Propuesta Editorial' : 'Crear Propuesta Comercial / Cotización'}
+                </h3>
+              </div>
+
+              {/* View options */}
+              <div className="flex items-center gap-2 mr-6">
+                <button
+                  type="button"
+                  onClick={() => setEditorTab('form')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${editorTab === 'form' ? 'bg-indigo-50 text-indigo-655 dark:bg-indigo-950/30 dark:text-indigo-400' : 'text-slate-455 hover:text-slate-655'}`}
+                >
+                  Formulario
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditorTab('split')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${editorTab === 'split' ? 'bg-indigo-50 text-indigo-655 dark:bg-indigo-950/30 dark:text-indigo-400' : 'text-slate-455 hover:text-slate-655'}`}
+                >
+                  Pantalla Dividida (Vista Previa)
+                </button>
+              </div>
+
               <button 
                 onClick={() => setIsModalOpen(false)}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-655 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
@@ -957,573 +928,635 @@ export default function Quotations({ preselectedEntity, clearPreselectedEntity }
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
-            <form onSubmit={handleFormSubmit} className="p-6 space-y-5">
-              {formError && (
-                <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-xl text-xs text-rose-600 dark:text-rose-400">
-                  {formError}
-                </div>
-              )}
 
-              {/* Selection row (Client OR Prospect) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Client Link */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Enviar a Cliente Registrado</label>
-                  <select
-                    value={formHeader.client_id}
-                    disabled={!!formHeader.prospect_id}
-                    onChange={(e) => setFormHeader({...formHeader, client_id: e.target.value})}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
-                  >
-                    <option value="">-- Seleccionar Cliente --</option>
-                    {clients.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Prospect Link */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Enviar a Prospecto (Lead)</label>
-                  <select
-                    value={formHeader.prospect_id}
-                    disabled={!!formHeader.client_id}
-                    onChange={(e) => setFormHeader({...formHeader, prospect_id: e.target.value})}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
-                  >
-                    <option value="">-- Seleccionar Prospecto --</option>
-                    {prospects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Add item triggers */}
-              <div className="space-y-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Construcción de Ítems</span>
-                <div className="flex flex-wrap gap-2">
-                  <select
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        handleAddCatalogItem(e.target.value);
-                        e.target.value = '';
-                      }
-                    }}
-                    className="px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-200 text-xs focus:outline-none"
-                  >
-                    <option value="">+ Agregar del Catálogo...</option>
-                    {catalog.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} ({formatCurrency(c.base_price, c.currency)})</option>
-                    ))}
-                  </select>
-
-                  <select
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        handleAddPackItem(e.target.value);
-                        e.target.value = '';
-                      }
-                    }}
-                    className="px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-200 text-xs focus:outline-none"
-                  >
-                    <option value="">+ Agregar Pack Editorial...</option>
-                    {packs.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} ({formatCurrency(p.price_special, p.currency)})</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Items List Table */}
-              <div className="border border-slate-100 dark:border-slate-850 rounded-xl overflow-hidden bg-slate-50/30 dark:bg-slate-950/30">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800 text-slate-400 font-bold uppercase tracking-wider">
-                      <th className="px-4 py-2.5">Concepto</th>
-                      <th className="px-4 py-2.5 w-28">Precio Unitario</th>
-                      <th className="px-4 py-2.5 w-16 text-center">Cant</th>
-                      <th className="px-4 py-2.5 w-24 text-right">Total</th>
-                      <th className="px-4 py-2.5 w-12 text-center">Eliminar</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-slate-700 dark:text-slate-350">
-                    {formItems.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="px-4 py-8 text-center text-slate-400">
-                          No has agregado ítems a esta cotización. Usa los selectores superiores.
-                        </td>
-                      </tr>
-                    ) : (
-                      formItems.map(item => (
-                        <tr key={item.id} className="hover:bg-slate-50/20 dark:hover:bg-slate-855/10">
-                          <td className="px-4 py-2">
-                            <input
-                              type="text"
-                              value={item.custom_name}
-                              onChange={(e) => handleUpdateItemField(item.id, 'custom_name', e.target.value)}
-                              className="w-full bg-transparent border-b border-transparent focus:border-brand-500 focus:outline-none py-1 font-semibold"
-                            />
-                            <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 block mt-0.5">
-                              {item.type === 'catalog' ? 'catálogo' : 'pack editorial'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2">
-                            <input
-                              type="number"
-                              min="0"
-                              value={item.price}
-                              onChange={(e) => handleUpdateItemField(item.id, 'price', Number(e.target.value))}
-                              className="w-full px-2 py-1 border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 focus:outline-none"
-                            />
-                          </td>
-                          <td className="px-4 py-2 text-center">
-                            <input
-                              type="number"
-                              min="1"
-                              value={item.quantity}
-                              onChange={(e) => handleUpdateItemField(item.id, 'quantity', Number(e.target.value))}
-                              className="w-12 px-1.5 py-1 border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 text-center focus:outline-none"
-                            />
-                          </td>
-                          <td className="px-4 py-2 text-right font-bold text-slate-800 dark:text-slate-200">
-                            {formatCurrency(item.price * item.quantity, formHeader.currency)}
-                          </td>
-                          <td className="px-4 py-2 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(item.id)}
-                              className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 p-1 rounded cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Currency & Tax configs */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Currency */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Moneda Cotización</label>
-                  <select
-                    value={formHeader.currency}
-                    onChange={(e) => setFormHeader({...formHeader, currency: e.target.value})}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
-                  >
-                    <option value="CLP">CLP ($)</option>
-                    <option value="USD">USD ($)</option>
-                    <option value="EUR">EUR (€)</option>
-                  </select>
-                </div>
-
-                {/* VAT includes toggle */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">¿Aplica Cobro IVA (19%)?</label>
-                  <select
-                    value={formHeader.includes_vat ? 'si' : 'no'}
-                    onChange={(e) => setFormHeader({...formHeader, includes_vat: e.target.value === 'si'})}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
-                  >
-                    <option value="no">No (Exento de Impuestos)</option>
-                    <option value="si">Sí (Impuestos IVA Incluidos)</option>
-                  </select>
-                </div>
-
-                {/* Status selection */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Estado Cotización</label>
-                  <select
-                    value={formHeader.status}
-                    onChange={(e) => setFormHeader({...formHeader, status: e.target.value})}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none capitalize"
-                  >
-                    <option value="borrador">Borrador</option>
-                    <option value="enviada">Enviada</option>
-                    <option value="aceptada">Aceptada</option>
-                    <option value="rechazada">Rechazada</option>
-                    <option value="vencida">Vencida</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Ajuste por Extensión */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                    Páginas del Manuscrito
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Ej. 120"
-                    value={formHeader.pages || ''}
-                    onChange={(e) => {
-                      const pagesVal = Number(e.target.value);
-                      const suggestion = getExtensionSuggestion(pagesVal);
-                      setFormHeader(prev => ({
-                        ...prev,
-                        pages: pagesVal,
-                        extension_adjustment: suggestion.warning ? prev.extension_adjustment : suggestion.pct
-                      }));
-                    }}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                    Ajuste por Extensión (%)
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      min="0"
-                      value={formHeader.extension_adjustment || 0}
-                      onChange={(e) => setFormHeader({...formHeader, extension_adjustment: Number(e.target.value)})}
-                      className="block w-full px-3 py-2 pr-8 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    />
-                    <span className="absolute right-3 top-2.5 text-xs text-slate-400">%</span>
+            {/* Split panel Content */}
+            <div className="flex flex-col md:flex-row overflow-y-auto flex-1 min-h-0 divide-x divide-slate-100 dark:divide-slate-800">
+              
+              {/* Form columns (left) */}
+              <div className={`p-6 space-y-6 overflow-y-auto ${editorTab === 'preview' ? 'hidden' : editorTab === 'split' ? 'w-full md:w-1/2' : 'w-full'}`}>
+                {formError && (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-955/20 border border-rose-100 dark:border-rose-900/40 rounded-xl text-rose-600 dark:text-rose-455 text-xs font-semibold flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>{formError}</span>
                   </div>
-                </div>
+                )}
 
-                <div className="flex flex-col justify-end">
-                  {formHeader.pages > 0 && (
-                    <div className={`text-[11px] font-semibold p-2 rounded-lg border ${
-                      getExtensionSuggestion(formHeader.pages).warning 
-                        ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/40' 
-                        : 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/20 dark:text-indigo-400 dark:border-indigo-900/40'
-                    }`}>
-                      {getExtensionSuggestion(formHeader.pages).text}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Multicurrency Exchange Rate Input (Conditional) */}
-              {formHeader.currency !== 'CLP' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-xl border border-brand-100 dark:border-brand-900 bg-brand-50/10">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-brand-600 dark:text-brand-400 mb-1.5">Tasa de Cambio Estimada</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      min="0.01"
-                      value={formHeader.exchange_rate}
-                      onChange={(e) => setFormHeader({...formHeader, exchange_rate: Number(e.target.value)})}
-                      className="block w-full px-3 py-2 border border-brand-200 dark:border-brand-800 bg-white dark:bg-slate-900 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono font-bold"
-                    />
-                  </div>
-                  <div className="flex flex-col justify-center">
-                    <span className="text-[10px] uppercase font-bold text-slate-400">Total CLP Estimado</span>
-                    <span className="text-base font-extrabold text-slate-850 dark:text-slate-100 mt-1">
-                      {formatCurrency(getTotals().total * formHeader.exchange_rate, 'CLP')}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Discount & Notes */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Descuento Especial</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formHeader.discount}
-                    onChange={(e) => setFormHeader({...formHeader, discount: Number(e.target.value)})}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Notas Internas</label>
-                  <input
-                    type="text"
-                    value={formHeader.notes}
-                    onChange={(e) => setFormHeader({...formHeader, notes: e.target.value})}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    placeholder="Validez, referencias de cobro, notas adicionales..."
-                  />
-                </div>
-              </div>
-
-              {/* Totals Summary */}
-              <div className="pt-4 border-t border-slate-150 dark:border-slate-800 flex justify-end">
-                <div className="w-72 space-y-2 text-right">
-                  <div className="flex justify-between text-xs text-slate-400 font-bold uppercase">
-                    <span>Subtotal Base:</span>
-                    <span className="font-mono text-slate-750 dark:text-slate-200">
-                      {formatCurrency(getTotals().subtotal, formHeader.currency)}
-                    </span>
-                  </div>
-                  {getTotals().extensionAmount > 0 && (
-                    <div className="flex justify-between text-xs text-indigo-600 dark:text-indigo-400 font-bold uppercase">
-                      <span>Recargo Extensión (+{formHeader.extension_adjustment}%):</span>
-                      <span className="font-mono">
-                        +{formatCurrency(getTotals().extensionAmount, formHeader.currency)}
-                      </span>
-                    </div>
-                  )}
-                  {formHeader.pages > 0 && (
-                    <div className="flex justify-between text-xs text-slate-500 dark:text-slate-300 font-bold uppercase border-t border-slate-100 dark:border-slate-850 pt-1">
-                      <span>Total Sugerido:</span>
-                      <span className="font-mono">
-                        {formatCurrency(getTotals().subtotalAdjusted, formHeader.currency)}
-                      </span>
-                    </div>
-                  )}
-                  {getTotals().discount > 0 && (
-                    <div className="flex justify-between text-xs text-rose-500 font-bold uppercase">
-                      <span>Descuento Especial:</span>
-                      <span className="font-mono">
-                        -{formatCurrency(getTotals().discount, formHeader.currency)}
-                      </span>
-                    </div>
-                  )}
-                  {formHeader.includes_vat && (
-                    <>
-                      <div className="flex justify-between text-[11px] text-slate-455">
-                        <span>Neto (Base):</span>
-                        <span className="font-mono">
-                          {formatCurrency(getTotals().net, formHeader.currency)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-[11px] text-slate-455">
-                        <span>IVA (19%):</span>
-                        <span className="font-mono">
-                          {formatCurrency(getTotals().vat, formHeader.currency)}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                  <div className="flex justify-between text-base font-extrabold text-slate-800 dark:text-slate-100 border-t border-dashed border-slate-200 dark:border-slate-800 pt-2">
-                    <span>Total Final:</span>
-                    <span className="font-mono text-brand-600 dark:text-brand-450">
-                      {formatCurrency(getTotals().total, formHeader.currency)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Document Attachment Integration */}
-              {selectedQuotation ? (
-                <div className="border-t border-slate-100 dark:border-slate-800/80 pt-4 space-y-3">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase text-left">Contrato / Documentos Adjuntos ({quotationDocuments.length})</h4>
-                  {loadingDocuments ? (
-                    <div className="flex justify-center py-2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-600"></div>
-                    </div>
-                  ) : quotationDocuments.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic bg-slate-50 dark:bg-slate-950/20 p-3 rounded-xl border border-slate-100 dark:border-slate-850 text-center">
-                      No hay contratos o documentos adjuntos a esta cotización.
-                    </p>
-                  ) : (
-                    <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
-                      {quotationDocuments.map(doc => {
-                        const fileFormat = getFileFormatDetails(doc.file_name);
-                        const FormatIcon = fileFormat.icon;
-                        const docName = doc.title || doc.name || doc.file_name || 'Sin título';
-                        const docTypeVal = doc.document_type || doc.file_type || 'otro';
-                        return (
-                          <div key={doc.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/80 text-xs gap-3">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={`p-1.5 rounded-lg border shrink-0 ${fileFormat.bgClass}`}>
-                                <FormatIcon className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="min-w-0 text-left">
-                                <h6 className="font-bold text-[11px] text-slate-800 dark:text-slate-100 truncate" title={docName}>{docName}</h6>
-                                <span className="text-[9px] font-mono text-slate-455 truncate block">{doc.file_name}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0 text-right">
-                              <span className={`inline-flex items-center px-1.5 py-0.2 rounded-full text-[8px] font-bold border uppercase tracking-wider mr-1 ${getDocTypeColor(docTypeVal)}`}>
-                                {docTypeVal}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleViewQuotationFile(doc)}
-                                className="p-1 rounded border border-slate-205 dark:border-slate-800 text-slate-550 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-white dark:hover:bg-slate-900 cursor-pointer mr-0.5"
-                                title="Ver"
-                              >
-                                <Eye className="w-3 h-3" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDownloadQuotationFile(doc)}
-                                className="p-1 rounded border border-slate-205 dark:border-slate-800 text-slate-550 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-white dark:hover:bg-slate-900 cursor-pointer mr-0.5"
-                                title="Descargar"
-                              >
-                                <Download className="w-3 h-3" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteQuotationDocument(doc)}
-                                className="p-1 rounded border border-slate-205 dark:border-slate-800 text-slate-400 hover:text-rose-600 hover:bg-white dark:hover:bg-slate-900 cursor-pointer"
-                                title="Eliminar"
-                              >
-                                <Trash className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Upload button/form for existing quotation */}
-                  <div className="space-y-3 bg-slate-50 dark:bg-slate-950/20 p-3 rounded-xl border border-slate-100 dark:border-slate-850 text-xs text-left">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Archivo *</label>
-                        <input
-                          type="file"
-                          onChange={(e) => {
-                            const file = e.target.files[0];
-                            if (file) {
-                              setNewDocFile(file);
-                              setNewDocTitle(file.name);
-                            }
-                          }}
-                          className="block w-full text-[10px] text-slate-505 border border-slate-200 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Nombre Visual *</label>
-                        <input
-                          type="text"
-                          value={newDocTitle}
-                          onChange={(e) => setNewDocTitle(e.target.value)}
-                          placeholder="Título del documento"
-                          className="block w-full text-[10px] border border-slate-200 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Categoría</label>
-                        <select
-                          value={newDocType}
-                          onChange={(e) => setNewDocType(e.target.value)}
-                          className="block w-full text-[10px] border border-slate-205 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
-                        >
-                          {['contrato', 'portada', 'manuscrito', 'otro'].map(t => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Notas</label>
-                        <input
-                          type="text"
-                          value={newDocNotes}
-                          onChange={(e) => setNewDocNotes(e.target.value)}
-                          placeholder="Observaciones..."
-                          className="block w-full text-[10px] border border-slate-205 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
-                        />
-                      </div>
-                    </div>
-
-                    {isUploading && (
-                      <div className="space-y-1 pt-1">
-                        <div className="flex justify-between text-[10px] text-slate-455 font-bold">
-                          <span>Subiendo archivo...</span>
-                          <span>{uploadProgress}%</span>
-                        </div>
-                        <div className="w-full bg-slate-200 dark:bg-slate-850 h-1 rounded-full overflow-hidden">
-                          <div className="bg-brand-500 h-full transition-all" style={{ width: `${uploadProgress}%` }}></div>
-                        </div>
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      disabled={isUploading || !newDocFile || !newDocTitle}
-                      onClick={() => handleUploadQuotationDocument(newDocFile, newDocType, newDocNotes, newDocTitle, selectedQuotation.id, formHeader.client_id, formHeader.prospect_id)}
-                      className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold text-[11px] cursor-pointer transition-all disabled:opacity-50"
-                    >
-                      <UploadCloud className="w-3.5 h-3.5" />
-                      Subir Documento
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="border-t border-slate-100 dark:border-slate-800/80 pt-4 space-y-3">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase text-left">Adjuntar Contrato o Archivo Relacionado</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs bg-slate-50 dark:bg-slate-955/20 p-3 rounded-xl border border-slate-100 dark:border-slate-850 text-left">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Archivo</label>
-                      <input
-                        type="file"
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file) {
-                            setNewDocFile(file);
-                            setNewDocTitle(file.name);
-                          }
-                        }}
-                        className="block w-full text-[10px] text-slate-550 border border-slate-200 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Nombre Visual</label>
+                {/* Section A: Datos del autor */}
+                <div className="space-y-4">
+                  <h4 className="font-bold text-xs text-indigo-655 dark:text-indigo-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-850 pb-1.5">A. Datos del Autor / Interesado</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-450">Nombre Autor</label>
                       <input
                         type="text"
-                        value={newDocTitle}
-                        onChange={(e) => setNewDocTitle(e.target.value)}
-                        placeholder="Título del documento"
-                        className="block w-full text-[10px] border border-slate-200 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                        value={formHeader.author_name}
+                        onChange={(e) => setFormHeader({...formHeader, author_name: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs font-bold"
+                        placeholder="Nombre completo"
                       />
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Categoría</label>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-450">Email</label>
+                      <input
+                        type="email"
+                        value={formHeader.author_email}
+                        onChange={(e) => setFormHeader({...formHeader, author_email: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs"
+                        placeholder="correo@ejemplo.com"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Teléfono</label>
+                      <input
+                        type="text"
+                        value={formHeader.author_phone}
+                        onChange={(e) => setFormHeader({...formHeader, author_phone: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs"
+                        placeholder="+56 9..."
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Instagram</label>
+                      <input
+                        type="text"
+                        value={formHeader.author_instagram}
+                        onChange={(e) => setFormHeader({...formHeader, author_instagram: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs"
+                        placeholder="@cuenta"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-450">País</label>
+                        <input
+                          type="text"
+                          value={formHeader.country}
+                          onChange={(e) => setFormHeader({...formHeader, country: e.target.value})}
+                          className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-450">Ciudad</label>
+                        <input
+                          type="text"
+                          value={formHeader.city}
+                          onChange={(e) => setFormHeader({...formHeader, city: e.target.value})}
+                          className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-450">Origen de Contacto</label>
                       <select
-                        value={newDocType}
-                        onChange={(e) => setNewDocType(e.target.value)}
-                        className="block w-full text-[10px] border border-slate-205 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                        value={formHeader.origin}
+                        onChange={(e) => setFormHeader({...formHeader, origin: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs"
                       >
-                        {['contrato', 'portada', 'manuscrito', 'otro'].map(t => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
+                        <option value="Instagram">Instagram</option>
+                        <option value="web">Sitio Web</option>
+                        <option value="referido">Referido</option>
+                        <option value="correo">Correo</option>
+                        <option value="otro">Otro</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-455 uppercase mb-1">Notas</label>
-                      <input
-                        type="text"
-                        value={newDocNotes}
-                        onChange={(e) => setNewDocNotes(e.target.value)}
-                        placeholder="Observaciones..."
-                        className="block w-full text-[10px] border border-slate-205 dark:border-slate-850 rounded-lg p-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                    <div className="md:col-span-2 space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-450">Notas Internas</label>
+                      <textarea
+                        rows="2"
+                        value={formHeader.notes}
+                        onChange={(e) => setFormHeader({...formHeader, notes: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs"
+                        placeholder="Observaciones de contacto inicial..."
                       />
                     </div>
                   </div>
                 </div>
-              )}
 
-              <div className="flex gap-3 justify-end pt-4 border-t border-slate-100 dark:border-slate-800 mt-6">
+                {/* Section B: Datos de la propuesta */}
+                <div className="space-y-4">
+                  <h4 className="font-bold text-xs text-indigo-655 dark:text-indigo-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-850 pb-1.5">B. Datos de la Propuesta</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-450">Número Propuesta</label>
+                      <input
+                        type="text"
+                        value={formHeader.quote_number}
+                        onChange={(e) => setFormHeader({...formHeader, quote_number: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-450">Vigencia (Días)</label>
+                      <input
+                        type="number"
+                        value={formHeader.validity_days}
+                        onChange={(e) => setFormHeader({...formHeader, validity_days: Number(e.target.value)})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1 col-span-2">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-450">Objeto de la Propuesta</label>
+                      <input
+                        type="text"
+                        value={formHeader.object}
+                        onChange={(e) => setFormHeader({...formHeader, object: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section C: Servicios propuestos */}
+                <div className="space-y-4">
+                  <h4 className="font-bold text-xs text-indigo-655 dark:text-indigo-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-850 pb-1.5">C. Servicios Propuestos</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="space-y-1 col-span-2">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-450">Catálogo de Servicios</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={selectedServiceId}
+                          onChange={(e) => setSelectedServiceId(e.target.value)}
+                          className="block w-full px-3 py-1.5 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-xs"
+                        >
+                          <option value="">-- Seleccionar servicio --</option>
+                          {catalog.map(c => (
+                            <option key={c.id} value={c.id}>{c.name || c.title} ({formatCurrency(c.price_from || c.base_price, c.currency)})</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={handleAddCatalogItem}
+                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-655 rounded-xl text-xs font-bold cursor-pointer"
+                        >
+                          Añadir
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Otras Acciones</label>
+                      <button
+                        type="button"
+                        onClick={handleAddManualItem}
+                        className="w-full py-1.5 border border-dashed border-slate-300 dark:border-slate-700 text-slate-550 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold cursor-pointer"
+                      >
+                        Añadir Ítem Manual
+                      </button>
+                    </div>
+
+                    <div className="space-y-1 col-span-2">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Packs Editoriales</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={selectedPackId}
+                          onChange={(e) => setSelectedPackId(e.target.value)}
+                          className="block w-full px-3 py-1.5 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-xs"
+                        >
+                          <option value="">-- Seleccionar pack --</option>
+                          {packs.map(p => (
+                            <option key={p.id} value={p.id}>{p.name} ({formatCurrency(p.price_special, p.currency)})</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={handleAddPackItem}
+                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-655 rounded-xl text-xs font-bold cursor-pointer"
+                        >
+                          Añadir
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* List of items */}
+                  <div className="border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden text-xs">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-55 dark:bg-slate-950 font-bold uppercase text-[10px] text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                          <th className="p-2">Concepto</th>
+                          <th className="p-2 w-24">Precio</th>
+                          <th className="p-2 w-16 text-center">Cant.</th>
+                          <th className="p-2 w-20 text-right">Total</th>
+                          <th className="p-2 w-8"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {formItems.map(item => (
+                          <tr key={item.id} className="border-b border-slate-50 dark:border-slate-850">
+                            <td className="p-2">
+                              <input
+                                type="text"
+                                value={item.concept}
+                                onChange={(e) => handleUpdateItemField(item.id, 'concept', e.target.value)}
+                                className="w-full font-bold bg-transparent text-slate-700 dark:text-slate-200 border-none focus:outline-none"
+                              />
+                              <textarea
+                                rows="1"
+                                value={item.description}
+                                placeholder="Descripción..."
+                                onChange={(e) => handleUpdateItemField(item.id, 'description', e.target.value)}
+                                className="w-full bg-transparent text-[10px] text-slate-400 border-none focus:outline-none resize-none"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                type="number"
+                                value={item.unit_price}
+                                onChange={(e) => handleUpdateItemField(item.id, 'unit_price', Number(e.target.value))}
+                                className="w-full px-1.5 py-0.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-955 rounded"
+                              />
+                            </td>
+                            <td className="p-2 text-center">
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => handleUpdateItemField(item.id, 'quantity', Number(e.target.value))}
+                                className="w-12 text-center px-1 py-0.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-955 rounded"
+                              />
+                            </td>
+                            <td className="p-2 text-right font-bold text-slate-600 dark:text-slate-350">
+                              {formatCurrency(item.unit_price * item.quantity, formHeader.currency)}
+                            </td>
+                            <td className="p-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(item.id)}
+                                className="text-rose-500 hover:bg-rose-50 p-1 rounded"
+                              >
+                                <Trash className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Section D: Ajuste por extensión */}
+                <div className="space-y-4">
+                  <h4 className="font-bold text-xs text-indigo-655 dark:text-indigo-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-850 pb-1.5">D. Ajuste por Extensión</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Páginas Manuscrito</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formHeader.manuscript_pages || ''}
+                        onChange={(e) => handlePagesChange(Number(e.target.value))}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Tipo de Ajuste</label>
+                      <select
+                        value={formHeader.extension_adjustment_type}
+                        onChange={(e) => setFormHeader({...formHeader, extension_adjustment_type: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      >
+                        <option value="percentage">Ajuste Porcentaje (%)</option>
+                        <option value="fixed">Ajuste Monto Fijo ($)</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Valor de Ajuste</label>
+                      <input
+                        type="number"
+                        value={formHeader.extension_adjustment_value}
+                        onChange={(e) => setFormHeader({...formHeader, extension_adjustment_value: Number(e.target.value)})}
+                        className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section E: Totales */}
+                <div className="space-y-4">
+                  <h4 className="font-bold text-xs text-indigo-655 dark:text-indigo-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-850 pb-1.5">E. Totales y Moneda</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Moneda</label>
+                      <select
+                        value={formHeader.currency}
+                        onChange={(e) => setFormHeader({...formHeader, currency: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs font-bold"
+                      >
+                        <option value="CLP">CLP</option>
+                        <option value="USD">USD</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">IVA (19%)</label>
+                      <select
+                        value={formHeader.includes_iva ? 'si' : 'no'}
+                        onChange={(e) => setFormHeader({...formHeader, includes_iva: e.target.value === 'si'})}
+                        className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      >
+                        <option value="si">IVA Incluido</option>
+                        <option value="no">Exento de IVA</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Descuento</label>
+                      <input
+                        type="number"
+                        value={formHeader.discount}
+                        onChange={(e) => setFormHeader({...formHeader, discount: Number(e.target.value)})}
+                        className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Estado Propuesta</label>
+                      <select
+                        value={formHeader.status}
+                        onChange={(e) => setFormHeader({...formHeader, status: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-indigo-650 font-bold text-xs"
+                      >
+                        <option value="borrador">Borrador</option>
+                        <option value="enviada">Enviada</option>
+                        <option value="aceptada">Aceptada</option>
+                        <option value="rechazada">Rechazada</option>
+                        <option value="vencida">Vencida</option>
+                        <option value="convertida a prospecto">Convertida a Prospecto</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section F: Condiciones y legal */}
+                <div className="space-y-4">
+                  <h4 className="font-bold text-xs text-indigo-655 dark:text-indigo-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-850 pb-1.5">F. Plazo, Inclusiones y Condiciones</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Plazo de Trabajo</label>
+                      <input
+                        type="text"
+                        value={formHeader.work_timeline}
+                        onChange={(e) => setFormHeader({...formHeader, work_timeline: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Forma de Pago Sugerida</label>
+                      <input
+                        type="text"
+                        value={formHeader.payment_terms}
+                        onChange={(e) => setFormHeader({...formHeader, payment_terms: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Qué Incluye</label>
+                      <textarea
+                        rows="3"
+                        value={formHeader.includes_notes}
+                        onChange={(e) => setFormHeader({...formHeader, includes_notes: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Qué NO Incluye</label>
+                      <textarea
+                        rows="3"
+                        value={formHeader.excludes_notes}
+                        onChange={(e) => setFormHeader({...formHeader, excludes_notes: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Requisitos para Iniciar</label>
+                      <input
+                        type="text"
+                        value={formHeader.start_conditions}
+                        onChange={(e) => setFormHeader({...formHeader, start_conditions: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Nota Legal e Incompatibilidad</label>
+                      <textarea
+                        rows="4"
+                        value={formHeader.legal_notes}
+                        onChange={(e) => setFormHeader({...formHeader, legal_notes: e.target.value})}
+                        className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Preview (right panel) */}
+              <div className={`bg-slate-50/60 dark:bg-slate-950/20 p-6 overflow-y-auto ${editorTab === 'form' ? 'hidden' : editorTab === 'split' ? 'w-full md:w-1/2' : 'w-full'}`}>
+                <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 max-w-[800px] mx-auto text-slate-800 dark:text-slate-250 text-xs space-y-6">
+                  
+                  {/* Logo Brand Header */}
+                  <div className="border-b pb-6 flex justify-between items-start">
+                    <div>
+                      <h2 className="font-extrabold text-xl text-indigo-600 dark:text-indigo-400 tracking-wider">NOVELI EDITORIAL</h2>
+                      <p className="text-[10px] text-slate-450 mt-1 font-bold">SOMOS NOVELI EDITORIAL</p>
+                      <p className="text-[10px] text-slate-400">contacto@somosnoveli.cl | www.somosnoveli.cl</p>
+                    </div>
+                    <div className="text-right text-[10px] text-slate-500 font-medium">
+                      <span className="font-bold text-slate-705 dark:text-slate-300 text-xs block">PROPUESTA COMERCIAL PRELIMINAR</span>
+                      <span className="font-bold text-indigo-650 block mt-0.5">{formHeader.quote_number}</span>
+                      <span className="block mt-1">Fecha Emisión: {formHeader.issue_date}</span>
+                      <span>Válida hasta: {formHeader.valid_until}</span>
+                    </div>
+                  </div>
+
+                  {/* Recipient box */}
+                  <div className="grid grid-cols-2 gap-4 bg-slate-50/40 dark:bg-slate-950/20 p-3 rounded-lg border border-slate-100">
+                    <div>
+                      <span className="text-[9px] uppercase tracking-widest font-bold text-slate-400 block mb-0.5">Dirigido a:</span>
+                      <span className="font-extrabold text-slate-800 dark:text-slate-205 text-[11px]">{formHeader.author_name || 'Nuevo Autor'}</span>
+                      {formHeader.author_email && <span className="block text-[10px] text-slate-500 mt-0.5">{formHeader.author_email}</span>}
+                      {formHeader.author_phone && <span className="block text-[10px] text-slate-505">{formHeader.author_phone}</span>}
+                      {(formHeader.city || formHeader.country) && (
+                        <span className="block text-[10px] text-slate-450 mt-0.5">
+                          {formHeader.city || ''}{formHeader.city && formHeader.country ? ', ' : ''}{formHeader.country || ''}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase tracking-widest font-bold text-slate-400 block mb-0.5">Objeto de la propuesta:</span>
+                      <p className="text-[10px] text-slate-655 dark:text-slate-350 leading-relaxed font-semibold">{formHeader.object}</p>
+                      {formHeader.manuscript_pages > 0 && (
+                        <span className="block text-[10px] text-slate-450 mt-1 font-bold">Extensión: {formHeader.manuscript_pages} páginas</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Items list */}
+                  <div className="space-y-3">
+                    <h5 className="font-bold text-slate-700 dark:text-slate-300 border-b pb-1">SERVICIOS INCLUIDOS</h5>
+                    <div className="space-y-3">
+                      {formItems.length === 0 ? (
+                        <p className="text-slate-400 italic">No se han añadido conceptos.</p>
+                      ) : (
+                        formItems.map((item, index) => (
+                          <div key={item.id} className="flex justify-between items-start text-[11px] py-0.5">
+                            <div className="space-y-0.5 pr-4">
+                              <span className="font-bold text-slate-805 dark:text-slate-200">
+                                {index + 1}. {item.concept}
+                              </span>
+                              {item.description && (
+                                <p className="text-[10px] text-slate-400 max-w-[450px]">
+                                  {item.description}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right whitespace-nowrap">
+                              <span className="font-bold text-slate-705 dark:text-slate-300">
+                                {formatCurrency(item.unit_price * item.quantity, formHeader.currency)}
+                              </span>
+                              {item.quantity > 1 && (
+                                <span className="block text-[9px] text-slate-400">
+                                  {item.quantity} x {formatCurrency(item.unit_price, formHeader.currency)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Values Block */}
+                  <div className="flex justify-end pt-2 border-t">
+                    <div className="w-64 space-y-1.5 text-right text-[11px]">
+                      <div className="flex justify-between text-slate-400">
+                        <span>Subtotal Base:</span>
+                        <span className="font-mono">{formatCurrency(totals.subtotal, formHeader.currency)}</span>
+                      </div>
+                      {totals.adjustmentAmount > 0 && (
+                        <div className="flex justify-between text-indigo-655 dark:text-indigo-400">
+                          <span>Ajuste por Extensión:</span>
+                          <span className="font-mono">+{formatCurrency(totals.adjustmentAmount, formHeader.currency)}</span>
+                        </div>
+                      )}
+                      {totals.discount > 0 && (
+                        <div className="flex justify-between text-rose-500">
+                          <span>Descuento Comercial:</span>
+                          <span className="font-mono">-{formatCurrency(totals.discount, formHeader.currency)}</span>
+                        </div>
+                      )}
+                      {formHeader.includes_iva && (
+                        <>
+                          <div className="flex justify-between text-slate-400 text-[10px]">
+                            <span>Neto:</span>
+                            <span className="font-mono">{formatCurrency(totals.net, formHeader.currency)}</span>
+                          </div>
+                          <div className="flex justify-between text-slate-400 text-[10px]">
+                            <span>IVA (19%):</span>
+                            <span className="font-mono">{formatCurrency(totals.vat, formHeader.currency)}</span>
+                          </div>
+                        </>
+                      )}
+                      <div className="flex justify-between font-extrabold text-xs text-indigo-650 dark:text-indigo-400 border-t pt-1.5">
+                        <span>VALOR DEL SERVICIO:</span>
+                        <span className="font-mono text-sm">{formatCurrency(totals.total, formHeader.currency)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Conditions & Scope */}
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-105 text-[9.5px]">
+                    <div className="space-y-1">
+                      <span className="font-bold text-slate-700 dark:text-slate-350">Qué Incluye:</span>
+                      <p className="text-slate-500 whitespace-pre-line leading-relaxed">{formHeader.includes_notes}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="font-bold text-slate-700 dark:text-slate-350">Qué NO Incluye:</span>
+                      <p className="text-slate-500 whitespace-pre-line leading-relaxed">{formHeader.excludes_notes}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t text-[10px]">
+                    <div className="flex gap-2">
+                      <span className="font-bold text-slate-700 dark:text-slate-350 min-w-[110px]">Plazo de Trabajo:</span>
+                      <span className="text-slate-655 dark:text-slate-300">{formHeader.work_timeline}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="font-bold text-slate-700 dark:text-slate-350 min-w-[110px]">Forma de Pago:</span>
+                      <span className="text-slate-655 dark:text-slate-300">{formHeader.payment_terms}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="font-bold text-slate-700 dark:text-slate-350 min-w-[110px]">Requisitos de Inicio:</span>
+                      <span className="text-slate-655 dark:text-slate-300">{formHeader.start_conditions}</span>
+                    </div>
+                  </div>
+
+                  {/* Legal block */}
+                  <div className="bg-slate-50/50 dark:bg-slate-950/20 p-3 rounded-lg border text-[8px] text-slate-400 space-y-1 italic leading-relaxed">
+                    {formHeader.legal_notes.split('\n').map((line, i) => (
+                      <p key={i}>{line}</p>
+                    ))}
+                  </div>
+
+                  {/* Signatures block */}
+                  <div className="pt-8 flex justify-between text-[9px] text-slate-450 text-center">
+                    <div className="w-40 border-t pt-2">
+                      <span className="font-bold text-slate-755 dark:text-slate-300 block">Javier Román González</span>
+                      <span>Representante Noveli Editorial</span>
+                    </div>
+                    <div className="w-40 border-t pt-2">
+                      <span className="font-bold text-slate-755 dark:text-slate-300 block">Aceptación de Propuesta</span>
+                      <span>{formHeader.author_name || 'Firma Autor / Cliente'}</span>
+                    </div>
+                  </div>
+
+                  <div className="text-center text-[9px] text-slate-400 font-bold border-t pt-3">
+                    Somos Noveli Editorial - Los derechos de la obra pertenecen siempre al autor.
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 sticky bottom-0 z-10">
+              <div>
+                {formItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPDF({
+                      ...formHeader,
+                      subtotal: totals.subtotal,
+                      total: totals.total
+                    })}
+                    className="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Descargar Propuesta PDF</span>
+                  </button>
+                )}
+              </div>
+              
+              <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 text-slate-655 dark:text-slate-350 rounded-xl text-sm font-semibold hover:bg-slate-55 cursor-pointer"
+                  className="px-4 py-2 border border-slate-150 dark:border-slate-800 text-slate-505 rounded-xl text-xs font-bold cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-50 cursor-pointer"
+                  onClick={handleFormSubmit}
+                  className="px-4 py-2 bg-brand-600 hover:bg-brand-500 disabled:bg-indigo-400 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-indigo-650/10 cursor-pointer"
                 >
-                  {isSubmitting ? 'Guardando...' : 'Guardar Cotización'}
+                  <Check className="w-4 h-4" />
+                  <span>{isSubmitting ? 'Guardando...' : 'Guardar Propuesta'}</span>
                 </button>
               </div>
-            </form>
+            </div>
+
           </div>
         </div>
       )}
+
     </div>
   );
 }

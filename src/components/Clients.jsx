@@ -1,6 +1,5 @@
 import React, { useEffect, useState, Component } from 'react';
 import { supabase, isMock } from '../supabaseClient';
-import QuickQuoteModal from './QuickQuoteModal';
 import ClientQuotesModal from './ClientQuotesModal';
 import { formatDate, exportToCSV, syncPaymentStatus } from '../utils';
 import { 
@@ -109,7 +108,6 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [countryFilter, setCountryFilter] = useState('todos');
   const [clientTypeFilter, setClientTypeFilter] = useState('todos');
-  const [quickQuoteClient, setQuickQuoteClient] = useState(null);
   const [isQuotesHistoryOpen, setIsQuotesHistoryOpen] = useState(false);
   const [selectedClientForQuotes, setSelectedClientForQuotes] = useState(null);
   
@@ -2193,29 +2191,16 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
                             </button>
                           )}
                           {!isReadOnly && (
-                            <>
-                              <button
-                                onClick={() => setQuickQuoteClient({
-                                  id: client.id,
-                                  name: client.name,
-                                  currency: client.preferred_currency || 'CLP'
-                                })}
-                                className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle"
-                                title="Crear Propuesta Comercial"
-                              >
-                                <FileText className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedClientForQuotes(client);
-                                  setIsQuotesHistoryOpen(true);
-                                }}
-                                className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle mr-1"
-                                title="Ver Propuestas"
-                              >
-                                <FolderOpen className="w-3.5 h-3.5" />
-                              </button>
-                            </>
+                            <button
+                              onClick={() => {
+                                setSelectedClientForQuotes(client);
+                                setIsQuotesHistoryOpen(true);
+                              }}
+                              className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-450 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle mr-1"
+                              title="Ver Propuestas"
+                            >
+                              <FolderOpen className="w-3.5 h-3.5" />
+                            </button>
                           )}
                           <button
                             onClick={() => handleOpenEditModal(client)}
@@ -3662,18 +3647,6 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
                   </button>
                   <button
                     onClick={() => {
-                      setQuickQuoteClient({
-                        id: selectedClient.id,
-                        name: selectedClient.name,
-                        currency: selectedClient.preferred_currency || 'CLP'
-                      });
-                    }}
-                    className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 dark:bg-indigo-950/20 dark:text-indigo-400 rounded-xl text-sm font-semibold transition-all cursor-pointer"
-                  >
-                    Crear propuesta comercial
-                  </button>
-                  <button
-                    onClick={() => {
                       setIsDetailOpen(false);
                       handleOpenEditModal(selectedClient);
                     }}
@@ -3687,17 +3660,6 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
           </div>
         </div>
       )}
-
-      <QuickQuoteModal
-        isOpen={!!quickQuoteClient}
-        onClose={() => setQuickQuoteClient(null)}
-        clientId={quickQuoteClient?.id}
-        entityName={quickQuoteClient?.name}
-        preferredCurrency={quickQuoteClient?.currency}
-        onSuccess={() => {
-          alert('¡Propuesta comercial guardada con éxito!');
-        }}
-      />
 
       <ClientQuotesModal
         isOpen={isQuotesHistoryOpen}

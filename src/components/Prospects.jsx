@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import QuickQuoteModal from './QuickQuoteModal';
-import ClientQuotesModal from './ClientQuotesModal';
 import { formatDate, exportToCSV } from '../utils';
 import { 
   Plus, Search, Edit2, Trash2, X, Sparkles, Check,
@@ -13,9 +11,6 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
   const [prospects, setProspects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [quickQuoteProspect, setQuickQuoteProspect] = useState(null);
-  const [isQuotesHistoryOpen, setIsQuotesHistoryOpen] = useState(false);
-  const [selectedProspectForQuotes, setSelectedProspectForQuotes] = useState(null);
   const [probabilityFilter, setProbabilityFilter] = useState('todos');
   const [originFilter, setOriginFilter] = useState('todos');
   const [countryFilter, setCountryFilter] = useState('todos');
@@ -1490,31 +1485,6 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
                               <Sparkles className="w-3.5 h-3.5" />
                               <span>Convertir</span>
                             </button>
-                          )}
-                          {!isReadOnly && !(p.converted_to_client_id || p.converted_to_client || p.status === 'convertido') && (
-                            <>
-                              <button
-                                onClick={() => setQuickQuoteProspect({
-                                  id: p.id,
-                                  name: p.name,
-                                  currency: p.preferred_currency || 'CLP'
-                                })}
-                                className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle"
-                                title="Crear Propuesta Comercial"
-                              >
-                                <FileText className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedProspectForQuotes(p);
-                                  setIsQuotesHistoryOpen(true);
-                                }}
-                                className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle mr-0.5"
-                                title="Ver Propuestas"
-                              >
-                                <FolderOpen className="w-4 h-4" />
-                              </button>
-                            </>
                           )}
                           <button
                             onClick={() => handleOpenEditModal(p)}
@@ -3182,24 +3152,6 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
         </div>
       )}
 
-      <QuickQuoteModal
-        isOpen={!!quickQuoteProspect}
-        onClose={() => setQuickQuoteProspect(null)}
-        prospectId={quickQuoteProspect?.id}
-        entityName={quickQuoteProspect?.name}
-        preferredCurrency={quickQuoteProspect?.currency}
-        onSuccess={() => {
-          alert('¡Propuesta comercial guardada con éxito!');
-        }}
-      />
-
-      <ClientQuotesModal
-        isOpen={isQuotesHistoryOpen}
-        onClose={() => setIsQuotesHistoryOpen(false)}
-        prospectId={selectedProspectForQuotes?.id}
-        entityName={selectedProspectForQuotes?.name}
-        preferredCurrency={selectedProspectForQuotes?.preferred_currency || 'CLP'}
-      />
     </div>
   );
 }

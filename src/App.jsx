@@ -19,6 +19,7 @@ import Documents from './components/Documents';
 import Reports from './components/Reports';
 import Integrations from './components/Integrations';
 import CompletedSales from './components/CompletedSales';
+import Quotations from './components/Quotations';
 
 // New Phase Components
 import CurrencyRates from './components/CurrencyRates';
@@ -59,6 +60,7 @@ const menuGroups = [
     label: 'Clientes y Prospectos',
     icon: <Users className="w-4 h-4" />,
     items: [
+      { id: 'quotations', label: 'Propuestas Comerciales', tab: 'quotations' },
       { id: 'clients', label: 'Clientes', tab: 'clients' },
       { id: 'prospects', label: 'Prospectos', tab: 'prospects' },
       { id: 'seguimientos', label: 'Seguimientos', tab: 'seguimientos' }
@@ -873,6 +875,7 @@ export default function App() {
   // Expanded Tab definitions
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: <Library className="w-4.5 h-4.5" /> },
+    { id: 'quotations', label: 'Propuestas Comerciales', icon: <FileText className="w-4.5 h-4.5" /> },
     { id: 'clients', label: 'Clientes', icon: <Users className="w-4.5 h-4.5" /> },
     { id: 'prospects', label: 'Prospectos', icon: <UserCheck className="w-4.5 h-4.5" /> },
     { id: 'services', label: 'Servicios Contratados', icon: <BookOpen className="w-4.5 h-4.5" /> },
@@ -914,6 +917,7 @@ export default function App() {
 
     switch (activeTab) {
       case 'dashboard': return <Dashboard {...commonProps} />;
+      case 'quotations': return <Quotations {...commonProps} />;
       case 'clients': return <Clients {...commonProps} />;
       case 'prospects': return <Prospects {...commonProps} />;
       case 'services': return <Services {...commonProps} />;
