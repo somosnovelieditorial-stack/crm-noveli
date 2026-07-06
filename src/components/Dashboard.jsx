@@ -71,45 +71,58 @@ export default function Dashboard({ organizationId }) {
     try {
       const orgId = await getValidOrgId();
 
-      // Safe fetch helper to handle missing tables or RLS gracefully
-      const safeQuery = async (tableName) => {
+      // Fetch helper to capture missing tables or RLS errors
+      const fetchWithErrors = async (tableName) => {
         try {
           let query = supabase.from(tableName).select('*');
           if (!isMock && orgId) {
             query = query.eq('organization_id', orgId);
           }
           const { data, error } = await query;
-          if (error) {
-            console.warn(`[Dashboard Debug] Error querying ${tableName}:`, error);
-            return [];
-          }
-          return data || [];
+          return { data: data || [], error };
         } catch (err) {
-          console.warn(`[Dashboard Debug] Exception querying ${tableName}:`, err);
-          return [];
+          return { data: [], error: err };
         }
       };
 
-      // Fetch everything in parallel safely
+      // Fetch everything in parallel
       const [
-        clients,
-        prospects,
-        services,
-        incomes,
-        expenses,
-        payroll,
-        allocations,
-        reserveMovements
+        clientsRes,
+        prospectsRes,
+        servicesRes,
+        incomesRes,
+        expensesRes,
+        payrollRes,
+        allocationsRes,
+        reserveMovementsRes
       ] = await Promise.all([
-        safeQuery('clients'),
-        safeQuery('prospects'),
-        safeQuery('services'),
-        safeQuery('incomes'),
-        safeQuery('expenses'),
-        safeQuery('payroll_payments'),
-        safeQuery('income_allocations'),
-        safeQuery('operational_reserve_movements')
+        fetchWithErrors('clients'),
+        fetchWithErrors('prospects'),
+        fetchWithErrors('services'),
+        fetchWithErrors('incomes'),
+        fetchWithErrors('expenses'),
+        fetchWithErrors('payroll_payments'),
+        fetchWithErrors('income_allocations'),
+        fetchWithErrors('operational_reserve_movements')
       ]);
+
+      const clients = clientsRes.data;
+      const clientsError = clientsRes.error;
+      const prospects = prospectsRes.data;
+      const services = servicesRes.data;
+      const servicesError = servicesRes.error;
+      const incomes = incomesRes.data;
+      const incomesError = incomesRes.error;
+      const expenses = expensesRes.data;
+      const expensesError = expensesRes.error;
+      const payroll = payrollRes.data;
+      const allocations = allocationsRes.data;
+      const reserveMovements = reserveMovementsRes.data;
+
+      if (clientsError) console.error('error clients', clientsError);
+      if (incomesError) console.error('error incomes', incomesError);
+      if (expensesError) console.error('error expenses', expensesError);
+      if (servicesError) console.error('error services', servicesError);
 
       // Temporary development logs
       let currentUserEmail = 'unknown';
