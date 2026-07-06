@@ -674,7 +674,7 @@ DROP POLICY IF EXISTS "Users can manage their own agenda_events" ON agenda_event
 CREATE POLICY "Select organization" ON organizations FOR SELECT USING (id = get_user_org_id());
 CREATE POLICY "Manage organization" ON organizations FOR ALL USING (id = get_user_org_id() AND get_user_role() = 'administrador');
 
-CREATE POLICY "Select members" ON organization_members FOR SELECT USING (organization_id = get_user_org_id());
+CREATE POLICY "Select members" ON organization_members FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
 CREATE POLICY "Manage members" ON organization_members FOR ALL USING (organization_id = get_user_org_id() AND get_user_role() = 'administrador');
 
 CREATE POLICY "Select profile" ON user_profiles FOR SELECT USING (true);

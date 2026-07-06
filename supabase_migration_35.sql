@@ -53,3 +53,7 @@ UPDATE website_books SET organization_id = '11111111-1111-1111-1111-111111111111
 UPDATE website_settings SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL OR organization_id != '11111111-1111-1111-1111-111111111111';
 UPDATE website_links SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL OR organization_id != '11111111-1111-1111-1111-111111111111';
 UPDATE website_sections SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL OR organization_id != '11111111-1111-1111-1111-111111111111';
+
+-- Recreate Select members policy to avoid loop
+DROP POLICY IF EXISTS "Select members" ON organization_members;
+CREATE POLICY "Select members" ON organization_members FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());

@@ -74,11 +74,10 @@ export default function Dashboard({ organizationId }) {
       // Fetch helper to capture missing tables or RLS errors
       const fetchWithErrors = async (tableName) => {
         try {
-          let query = supabase.from(tableName).select('*');
-          if (!isMock && orgId) {
-            query = query.eq('organization_id', orgId);
-          }
-          const { data, error } = await query;
+          const { data, error } = await supabase
+            .from(tableName)
+            .select('*')
+            .eq('organization_id', orgId);
           return { data: data || [], error };
         } catch (err) {
           return { data: [], error: err };
@@ -119,10 +118,15 @@ export default function Dashboard({ organizationId }) {
       const allocations = allocationsRes.data;
       const reserveMovements = reserveMovementsRes.data;
 
-      if (clientsError) console.error('error clients', clientsError);
-      if (incomesError) console.error('error incomes', incomesError);
-      if (expensesError) console.error('error expenses', expensesError);
-      if (servicesError) console.error('error services', servicesError);
+      console.error('clientsError', clientsError);
+      console.error('incomesError', incomesError);
+      console.error('expensesError', expensesError);
+      console.error('servicesError', servicesError);
+
+      console.log('clients data', clients);
+      console.log('incomes data', incomes);
+      console.log('expenses data', expenses);
+      console.log('services data', services);
 
       // Temporary development logs
       let currentUserEmail = 'unknown';
