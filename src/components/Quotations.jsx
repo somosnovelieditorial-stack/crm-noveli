@@ -17,20 +17,29 @@ const loadImage = (url) => {
   });
 };
 
+const parseBulletsToList = (text) => {
+  if (!text) return [];
+  return text
+    .split('\n')
+    .map(line => line.replace(/^[•\-\*\d\.\s]+/g, '').trim())
+    .filter(line => line.length > 0);
+};
+
 const parsePaymentTerms = (terms) => {
-  const t = String(terms || '').toLowerCase().trim();
-  if (t === 'pago del 100% al inicio del servicio.') {
+  const t = String(terms || '').trim();
+  const lower = t.toLowerCase();
+  if (lower === 'pago del 100% al inicio del servicio.' || lower === '100% al inicio') {
     return { type: '100_inicio', pct: 100, installments: 1, customText: '' };
   }
-  if (t === '50% de anticipo al inicio y 50% al término del servicio.') {
+  if (lower === '50% al inicio y 50% al término del servicio.' || lower === '50% de anticipo al inicio y 50% al término del servicio.') {
     return { type: '50_inicio_50_termino', pct: 50, installments: 2, customText: '' };
   }
-  if (t === '50% de anticipo al inicio y 50% contra entrega de archivos finales.') {
+  if (lower === '50% al inicio y 50% contra entrega de archivos finales.' || lower === '50% de anticipo al inicio y 50% contra entrega de archivos finales.') {
     return { type: '50_inicio_50_entrega', pct: 50, installments: 2, customText: '' };
   }
-  if (t.includes('cuotas')) {
-    const matchCuotas = t.match(/(\d+)\s+cuotas/);
-    const matchPct = t.match(/(\d+)%\s+de\s+anticipo/);
+  if (lower.includes('cuotas')) {
+    const matchCuotas = lower.match(/(\d+)\s+cuotas/);
+    const matchPct = lower.match(/(\d+)%\s+de\s+anticipo/);
     return {
       type: 'cuotas',
       pct: matchPct ? parseInt(matchPct[1], 10) : 50,
@@ -94,6 +103,13 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
   const [paymentAdvancePct, setPaymentAdvancePct] = useState(50);
   const [paymentInstallments, setPaymentInstallments] = useState(3);
   const [paymentCustomText, setPaymentCustomText] = useState('');
+  const [isPaymentTermsEditedManually, setIsPaymentTermsEditedManually] = useState(false);
+
+  const [includedItems, setIncludedItems] = useState([]);
+  const [excludedItems, setExcludedItems] = useState([]);
+  const [packItems, setPackItems] = useState([]);
+  const [manualIncludeText, setManualIncludeText] = useState('');
+  const [manualExcludeText, setManualExcludeText] = useState('');
   
   const [startRequirements, setStartRequirements] = useState({
     aceptacion: true,
@@ -104,16 +120,115 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
     datos: false
   });
 
+  const updateIncludesExcludesNotes = (newInc, newExc) => {
+    setFormHeader(prev => ({
+      ...prev,
+      includes_notes: newInc.map(i => `• ${i}`).join('\n'),
+      excludes_notes: newExc.map(e => `• ${e}`).join('\n')
+    }));
+  };
+
+  const handleAddInclude = (item) => {
+    if (!item) return;
+    const trimmed = item.trim();
+    if (!trimmed || includedItems.includes(trimmed) || excludedItems.includes(trimmed)) return;
+    const newInc = [...includedItems, trimmed];
+    setIncludedItems(newInc);
+    updateIncludesExcludesNotes(newInc, excludedItems);
+  };
+
+  const handleRemoveInclude = (index) => {
+    const newInc = includedItems.filter((_, idx) => idx !== index);
+    setIncludedItems(newInc);
+    updateIncludesExcludesNotes(newInc, excludedItems);
+  };
+
+  const handleAddExclude = (item) => {
+    if (!item) return;
+    const trimmed = item.trim();
+    if (!trimmed || excludedItems.includes(trimmed) || includedItems.includes(trimmed)) return;
+    const newExc = [...excludedItems, trimmed];
+    setExcludedItems(newExc);
+    updateIncludesExcludesNotes(includedItems, newExc);
+  };
+
+  const handleRemoveExclude = (index) => {
+    const newExc = excludedItems.filter((_, idx) => idx !== index);
+    setExcludedItems(newExc);
+    updateIncludesExcludesNotes(includedItems, newExc);
+  };
+
+  const getSuggestedInclusions = () => {
+    const list = new Set([
+      'Revisión general del manuscrito',
+      'Corrección ortográfica y de estilo',
+      'Maquetación interior para libro físico',
+      'Maquetación Ebook',
+      'Conversión y preparación Ebook',
+      'Adaptación técnica de portada',
+      'Diseño de portada desde cero',
+      'Gestión de registro de derechos de autor',
+      'ISBN y código de barras',
+      'Asesoría de autopublicación',
+      'Acompañamiento editorial',
+      'Entrega de archivos finales digitales',
+      'Revisión técnica de archivos'
+    ]);
+    catalog.forEach(s => {
+      if (s.includes_text) {
+        parseBulletsToList(s.includes_text).forEach(item => list.add(item));
+      }
+    });
+    packs.forEach(p => {
+      if (p.includes_text) {
+        parseBulletsToList(p.includes_text).forEach(item => list.add(item));
+      }
+    });
+    return Array.from(list).filter(item => !includedItems.includes(item) && !excludedItems.includes(item));
+  };
+
+  const getSuggestedExclusions = () => {
+    const list = new Set([
+      'Impresión física de ejemplares',
+      'Costos de despacho',
+      'Publicidad editorial pagada',
+      'Campañas en redes sociales',
+      'Distribución comercial en librerías',
+      'Comercialización directa del libro',
+      'Administración de ventas del autor',
+      'Cambios extraordinarios fuera del alcance inicial',
+      'Nuevas versiones no contempladas',
+      'Correcciones posteriores a la aprobación final',
+      'Trámites legales no indicados expresamente'
+    ]);
+    catalog.forEach(s => {
+      if (s.excludes_text) {
+        parseBulletsToList(s.excludes_text).forEach(item => list.add(item));
+      }
+    });
+    packs.forEach(p => {
+      if (p.excludes_text) {
+        parseBulletsToList(p.excludes_text).forEach(item => list.add(item));
+      }
+    });
+    return Array.from(list).filter(item => !includedItems.includes(item) && !excludedItems.includes(item));
+  };
+
   useEffect(() => {
+    if (isPaymentTermsEditedManually) return;
     let text = '';
+    const total = getTotals().total;
     if (paymentType === '100_inicio') {
       text = 'Pago del 100% al inicio del servicio.';
     } else if (paymentType === '50_inicio_50_termino') {
-      text = '50% de anticipo al inicio y 50% al término del servicio.';
+      text = '50% al inicio y 50% al término del servicio.';
     } else if (paymentType === '50_inicio_50_entrega') {
-      text = '50% de anticipo al inicio y 50% contra entrega de archivos finales.';
+      text = '50% al inicio y 50% contra entrega de archivos finales.';
     } else if (paymentType === 'cuotas') {
-      text = `Pago financiado en ${paymentInstallments} cuotas con ${paymentAdvancePct}% de anticipo.`;
+      const advanceAmt = Math.round(total * (paymentAdvancePct / 100));
+      const remainingAmt = total - advanceAmt;
+      const installmentAmt = paymentInstallments > 0 ? Math.round(remainingAmt / paymentInstallments) : 0;
+      text = `${paymentAdvancePct}% de anticipo al inicio (${formatCurrency(advanceAmt, formHeader.currency)}) y el saldo en ${paymentInstallments} cuotas de ${formatCurrency(installmentAmt, formHeader.currency)}.`;
     } else if (paymentType === 'personalizado') {
       text = paymentCustomText;
     }
@@ -123,7 +238,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       }
       return prev;
     });
-  }, [paymentType, paymentAdvancePct, paymentInstallments, paymentCustomText]);
+  }, [paymentType, paymentAdvancePct, paymentInstallments, paymentCustomText, formItems, formHeader.discount, formHeader.extension_adjustment_value, formHeader.extension_adjustment_type, formHeader.iva_mode, formHeader.tax_rate, formHeader.currency, isPaymentTermsEditedManually]);
 
   useEffect(() => {
     const text = formatStartConditions(startRequirements);
@@ -344,16 +459,19 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
   const fetchCatalogAndPacks = async () => {
     try {
       const orgId = await getValidOrgId();
-      const [catalogRes, packsRes] = await Promise.all([
+      const [catalogRes, packsRes, packItemsRes] = await Promise.all([
         supabase.from('service_catalog').select('*').eq('organization_id', orgId).eq('active', true),
-        supabase.from('service_packs').select('*').eq('organization_id', orgId).eq('active', true)
+        supabase.from('service_packs').select('*').eq('organization_id', orgId).eq('active', true),
+        supabase.from('service_pack_items').select('*, service_catalog(*)').eq('organization_id', orgId)
       ]);
       if (catalogRes.error) throw catalogRes.error;
       if (packsRes.error) throw packsRes.error;
+      if (packItemsRes.error) throw packItemsRes.error;
       setCatalog(catalogRes.data || []);
       setPacks(packsRes.data || []);
+      setPackItems(packItemsRes.data || []);
     } catch (err) {
-      console.error('Error loading catalog/packs:', err);
+      console.error('Error loading catalog/packs/pack-items:', err);
     }
   };
 
@@ -364,6 +482,17 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
     setPaymentAdvancePct(50);
     setPaymentInstallments(3);
     setPaymentCustomText('');
+    setIsPaymentTermsEditedManually(false);
+    
+    setIncludedItems([
+      'Reuniones de seguimiento editorial y asesoría continua',
+      'Entrega de archivos finales en formato digital listos para imprenta/distribución'
+    ]);
+    setExcludedItems([
+      'Costos de impresión física de ejemplares',
+      'Trámites legales de depósito legal fuera del territorio nacional'
+    ]);
+
     setStartRequirements({
       aceptacion: true,
       firma: true,
@@ -392,7 +521,16 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       discount: 0,
       currency: 'CLP',
       includes_iva: true,
-      payment_terms: '50% al inicio y 50% al término del servicio contra entrega.',
+      iva_mode: 'IVA incluido',
+      tax_rate: 19,
+      net_amount: 0,
+      payment_plan_type: '50_inicio_50_entrega',
+      upfront_percentage: 50,
+      installments: 3,
+      proposal_format: 'Formal completo',
+      show_signatures: true,
+      has_alternatives: false,
+      payment_terms: '50% al inicio y 50% contra entrega de archivos finales.',
       work_timeline: '8 a 10 semanas desde la entrega completa de materiales.',
       includes_notes: '• Reuniones de seguimiento editorial y asesoría continua.\n• Entrega de archivos finales en formato digital listos para imprenta/distribución.',
       excludes_notes: '• Costos de impresión física de ejemplares (se cotizan por separado).\n• Trámites legales de depósito legal fuera del territorio nacional.',
@@ -413,10 +551,20 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
   const handleOpenEditModal = async (quote) => {
     setSelectedQuotation(quote);
     const parsedPayment = parsePaymentTerms(quote.payment_terms || '');
-    setPaymentType(parsedPayment.type);
-    setPaymentAdvancePct(parsedPayment.pct);
-    setPaymentInstallments(parsedPayment.installments);
-    setPaymentCustomText(parsedPayment.customText || '');
+    setPaymentType(quote.payment_plan_type || parsedPayment.type);
+    setPaymentAdvancePct(quote.upfront_percentage !== undefined ? quote.upfront_percentage : parsedPayment.pct);
+    setPaymentInstallments(quote.installments || parsedPayment.installments);
+    setPaymentCustomText(quote.payment_plan_type === 'personalizado' ? quote.payment_terms : parsedPayment.customText);
+    setIsPaymentTermsEditedManually(true); // lock auto-regeneration of payment terms unless they change options
+
+    const inc = quote.included_items && Array.isArray(quote.included_items)
+      ? quote.included_items
+      : parseBulletsToList(quote.includes_notes || '');
+    const exc = quote.excluded_items && Array.isArray(quote.excluded_items)
+      ? quote.excluded_items
+      : parseBulletsToList(quote.excludes_notes || '');
+    setIncludedItems(inc);
+    setExcludedItems(exc);
 
     const parsedRequirements = parseStartConditions(quote.start_conditions || '');
     setStartRequirements(parsedRequirements);
@@ -441,6 +589,15 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       discount: quote.discount || 0,
       currency: quote.currency || 'CLP',
       includes_iva: quote.includes_iva !== undefined ? quote.includes_iva : true,
+      iva_mode: quote.iva_mode || (quote.includes_iva ? 'IVA incluido' : 'Exento / sin IVA'),
+      tax_rate: quote.tax_rate !== undefined ? quote.tax_rate : 19,
+      net_amount: quote.net_amount !== undefined ? quote.net_amount : (quote.includes_iva ? Math.round((quote.total || 0) / 1.19) : (quote.total || 0)),
+      payment_plan_type: quote.payment_plan_type || parsedPayment.type,
+      upfront_percentage: quote.upfront_percentage !== undefined ? quote.upfront_percentage : parsedPayment.pct,
+      installments: quote.installments || parsedPayment.installments,
+      proposal_format: quote.proposal_format || 'Formal completo',
+      show_signatures: quote.show_signatures !== undefined ? quote.show_signatures : true,
+      has_alternatives: quote.has_alternatives !== undefined ? quote.has_alternatives : (quote.proposal_format === 'Con alternativas'),
       payment_terms: quote.payment_terms || '',
       work_timeline: quote.work_timeline || '',
       includes_notes: quote.includes_notes || '',
@@ -510,101 +667,158 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
     setFormItems(newItems);
     if (newItems.length === 0) return;
 
-    const inclusions = new Set();
-    const exclusions = new Set();
+    const inclusions = new Set(includedItems);
+    const exclusions = new Set(excludedItems);
     let maxPlazoWeeks = 0;
     
-    const reqs = {
-      aceptacion: true,
-      firma: true,
-      pago: false,
-      manuscrito: false,
-      materiales: false,
-      datos: false
-    };
-
-    let suggestedPayment = '50_inicio_50_entrega';
+    const reqs = { ...startRequirements };
+    let suggestedPayment = paymentType;
+    let customTimeline = null;
+    let customPayment = null;
 
     newItems.forEach(item => {
       if (item.pack_id) {
         const p = packs.find(pk => pk.id === item.pack_id);
         if (p) {
-          inclusions.add('Corrección de estilo y ortotipográfica del manuscrito.');
-          inclusions.add('Diseño y maquetación interior para formato digital y papel.');
-          inclusions.add('Diseño de portada, contraportada y lomo personalizado.');
-          inclusions.add('Asesoría en distribución en Amazon e IngramSpark.');
-          exclusions.add('Costos de impresión física de ejemplares.');
-          exclusions.add('Campañas publicitarias pagadas.');
-          maxPlazoWeeks = Math.max(maxPlazoWeeks, 10);
-          reqs.pago = true;
-          reqs.manuscrito = true;
-          reqs.firma = true;
-          suggestedPayment = '50_inicio_50_entrega';
+          if (p.includes_text) {
+            parseBulletsToList(p.includes_text).forEach(i => inclusions.add(i));
+          } else {
+            inclusions.add('Corrección de estilo y ortotipográfica del manuscrito.');
+            inclusions.add('Diseño y maquetación interior para formato digital y papel.');
+            inclusions.add('Diseño de portada, contraportada y lomo personalizado.');
+            inclusions.add('Asesoría en distribución en Amazon e IngramSpark.');
+          }
+
+          if (p.excludes_text) {
+            parseBulletsToList(p.excludes_text).forEach(e => exclusions.add(e));
+          } else {
+            exclusions.add('Costos de impresión física de ejemplares.');
+            exclusions.add('Campañas publicitarias pagadas.');
+          }
+
+          if (p.default_work_timeline) {
+            customTimeline = p.default_work_timeline;
+          } else {
+            maxPlazoWeeks = Math.max(maxPlazoWeeks, 10);
+          }
+
+          if (p.default_payment_terms) {
+            customPayment = p.default_payment_terms;
+          } else {
+            suggestedPayment = '50_inicio_50_entrega';
+          }
+
+          if (p.default_start_conditions) {
+            const parsed = parseStartConditions(p.default_start_conditions);
+            Object.keys(parsed).forEach(k => { if (parsed[k]) reqs[k] = true; });
+          } else {
+            reqs.pago = true;
+            reqs.manuscrito = true;
+            reqs.firma = true;
+          }
         }
       } else if (item.catalog_id) {
         const s = catalog.find(c => c.id === item.catalog_id);
         if (s) {
-          const category = String(s.category || '').toLowerCase();
-          const name = String(s.name || '').toLowerCase();
+          if (s.includes_text) {
+            parseBulletsToList(s.includes_text).forEach(i => inclusions.add(i));
+          }
+          if (s.excludes_text) {
+            parseBulletsToList(s.excludes_text).forEach(e => exclusions.add(e));
+          }
+          if (s.default_work_timeline) {
+            customTimeline = s.default_work_timeline;
+          }
+          if (s.default_payment_terms) {
+            customPayment = s.default_payment_terms;
+          }
+          if (s.default_start_conditions) {
+            const parsed = parseStartConditions(s.default_start_conditions);
+            Object.keys(parsed).forEach(k => { if (parsed[k]) reqs[k] = true; });
+          }
 
-          if (category.includes('corrección') || name.includes('corrección') || name.includes('estilo')) {
-            inclusions.add('Corrección de estilo y ortotipográfica del manuscrito.');
-            exclusions.add('Maquetación de páginas interiores.');
-            exclusions.add('Diseño de portada.');
-            maxPlazoWeeks = Math.max(maxPlazoWeeks, 4);
-            reqs.manuscrito = true;
-            reqs.pago = true;
-          } else if (category.includes('maquetación') || name.includes('maquetación') || name.includes('interior')) {
-            inclusions.add('Diseño y maquetación interior para formato digital y papel.');
-            exclusions.add('Corrección de textos.');
-            exclusions.add('Diseño de portada.');
-            maxPlazoWeeks = Math.max(maxPlazoWeeks, 3);
-            reqs.manuscrito = true;
-            reqs.pago = true;
-          } else if (category.includes('diseño') || name.includes('portada') || name.includes('diseño')) {
-            inclusions.add('Diseño de portada, contraportada y lomo personalizado.');
-            exclusions.add('Corrección de textos.');
-            exclusions.add('Maquetación de páginas interiores.');
-            maxPlazoWeeks = Math.max(maxPlazoWeeks, 2);
-            reqs.materiales = true;
-            reqs.pago = true;
-          } else if (category.includes('legal') || name.includes('derecho') || name.includes('isbn')) {
-            inclusions.add('Tramitación de código ISBN y registro de propiedad intelectual.');
-            exclusions.add('Pago de tasas especiales fuera de lo contemplado.');
-            maxPlazoWeeks = Math.max(maxPlazoWeeks, 2);
-            reqs.datos = true;
-          } else if (category.includes('publicidad') || name.includes('difusión') || name.includes('marketing')) {
-            inclusions.add('Promoción en canales de la editorial y diseño de kit de prensa.');
-            exclusions.add('Contratación de publicidad pagada o anuncios digitales.');
-            maxPlazoWeeks = Math.max(maxPlazoWeeks, 3);
-            reqs.materiales = true;
-          } else {
-            inclusions.add(`Servicio de ${s.name} según requerimientos del autor.`);
-            exclusions.add('Servicios adicionales no especificados en esta propuesta.');
-            maxPlazoWeeks = Math.max(maxPlazoWeeks, 2);
+          if (!s.includes_text || !s.excludes_text) {
+            const category = String(s.category || '').toLowerCase();
+            const name = String(s.name || '').toLowerCase();
+
+            if (category.includes('corrección') || name.includes('corrección') || name.includes('estilo')) {
+              if (!s.includes_text) inclusions.add('Corrección de estilo y ortotipográfica del manuscrito.');
+              if (!s.excludes_text) {
+                exclusions.add('Maquetación de páginas interiores.');
+                exclusions.add('Diseño de portada.');
+              }
+              if (!s.default_work_timeline) maxPlazoWeeks = Math.max(maxPlazoWeeks, 4);
+              reqs.manuscrito = true;
+              reqs.pago = true;
+            } else if (category.includes('maquetación') || name.includes('maquetación') || name.includes('interior')) {
+              if (!s.includes_text) inclusions.add('Diseño y maquetación interior para formato digital y papel.');
+              if (!s.excludes_text) {
+                exclusions.add('Corrección de textos.');
+                exclusions.add('Diseño de portada.');
+              }
+              if (!s.default_work_timeline) maxPlazoWeeks = Math.max(maxPlazoWeeks, 3);
+              reqs.manuscrito = true;
+              reqs.pago = true;
+            } else if (category.includes('diseño') || name.includes('portada') || name.includes('diseño')) {
+              if (!s.includes_text) inclusions.add('Diseño de portada, contraportada y lomo personalizado.');
+              if (!s.excludes_text) {
+                exclusions.add('Corrección de textos.');
+                exclusions.add('Maquetación de páginas interiores.');
+              }
+              if (!s.default_work_timeline) maxPlazoWeeks = Math.max(maxPlazoWeeks, 2);
+              reqs.materiales = true;
+              reqs.pago = true;
+            } else if (category.includes('legal') || name.includes('derecho') || name.includes('isbn')) {
+              if (!s.includes_text) inclusions.add('Tramitación de código ISBN y registro de propiedad intelectual.');
+              if (!s.excludes_text) exclusions.add('Pago de tasas especiales fuera de lo contemplado.');
+              if (!s.default_work_timeline) maxPlazoWeeks = Math.max(maxPlazoWeeks, 2);
+              reqs.datos = true;
+            } else if (category.includes('publicidad') || name.includes('difusión') || name.includes('marketing')) {
+              if (!s.includes_text) inclusions.add('Promoción en canales de la editorial y diseño de kit de prensa.');
+              if (!s.excludes_text) exclusions.add('Contratación de publicidad pagada o anuncios digitales.');
+              if (!s.default_work_timeline) maxPlazoWeeks = Math.max(maxPlazoWeeks, 3);
+              reqs.materiales = true;
+            } else {
+              if (!s.includes_text) inclusions.add(`Servicio de ${s.name} según requerimientos del autor.`);
+              if (!s.excludes_text) exclusions.add('Servicios adicionales no especificados en esta propuesta.');
+              if (!s.default_work_timeline) maxPlazoWeeks = Math.max(maxPlazoWeeks, 2);
+            }
           }
         }
       }
     });
 
-    if (inclusions.size > 0) {
-      const incText = Array.from(inclusions).map(i => `• ${i}`).join('\n');
-      const excText = Array.from(exclusions).map(e => `• ${e}`).join('\n');
-      const weeksText = maxPlazoWeeks > 0 ? `${maxPlazoWeeks - 1} a ${maxPlazoWeeks + 1} semanas desde la entrega completa de materiales.` : 'A convenir.';
+    const newInc = Array.from(inclusions);
+    const newExc = Array.from(exclusions);
+    setIncludedItems(newInc);
+    setExcludedItems(newExc);
 
-      setFormHeader(prev => ({
-        ...prev,
-        includes_notes: incText,
-        excludes_notes: excText,
-        work_timeline: weeksText
-      }));
-    }
+    const incText = newInc.map(i => `• ${i}`).join('\n');
+    const excText = newExc.map(e => `• ${e}`).join('\n');
+    const weeksText = customTimeline || (maxPlazoWeeks > 0 ? `${maxPlazoWeeks - 1} a ${maxPlazoWeeks + 1} semanas desde la entrega completa de materiales.` : 'A convenir.');
+
+    setFormHeader(prev => ({
+      ...prev,
+      includes_notes: incText,
+      excludes_notes: excText,
+      work_timeline: weeksText,
+      payment_terms: customPayment || prev.payment_terms
+    }));
 
     setStartRequirements(prev => ({
       ...prev,
       ...reqs
     }));
-    setPaymentType(suggestedPayment);
+    
+    if (customPayment) {
+      const parsed = parsePaymentTerms(customPayment);
+      setPaymentType(parsed.type);
+      setPaymentAdvancePct(parsed.pct);
+      setPaymentInstallments(parsed.installments);
+      setPaymentCustomText(parsed.customText);
+    } else {
+      setPaymentType(suggestedPayment);
+    }
   };
 
   const handleAddCatalogItem = () => {
@@ -686,17 +900,34 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
 
     const subtotalAdjusted = subtotal + adjustmentAmount;
     const discount = Number(formHeader.discount) || 0;
-    const total = Math.max(0, subtotalAdjusted - discount);
+    const totalRaw = Math.max(0, subtotalAdjusted - discount);
 
-    const split = calculateVatSplit(total, formHeader.includes_iva);
+    let net = 0;
+    let vat = 0;
+    let total = 0;
+    const rate = (Number(formHeader.tax_rate) || 19) / 100;
+
+    if (formHeader.iva_mode === 'IVA incluido') {
+      total = totalRaw;
+      net = Math.round(total / (1 + rate));
+      vat = total - net;
+    } else if (formHeader.iva_mode === '+ IVA') {
+      net = totalRaw;
+      vat = Math.round(net * rate);
+      total = net + vat;
+    } else { // 'Exento / sin IVA'
+      net = totalRaw;
+      vat = 0;
+      total = totalRaw;
+    }
 
     return {
       subtotal,
       adjustmentAmount,
       subtotalAdjusted,
       discount,
-      net: split.net,
-      vat: split.vat,
+      net,
+      vat,
       total
     };
   };
@@ -718,6 +949,20 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
     try {
       const orgId = await getValidOrgId();
       const totals = getTotals();
+
+      const startConditionItems = Object.keys(startRequirements)
+        .filter(k => startRequirements[k])
+        .map(k => {
+          const optionsMap = {
+            aceptacion: 'Aceptación propuesta',
+            firma: 'Firma de contrato',
+            pago: 'Pago inicial',
+            manuscrito: 'Recepción manuscrito',
+            materiales: 'Recepción portada/archivos',
+            datos: 'Datos del autor'
+          };
+          return optionsMap[k];
+        });
 
       const payload = {
         organization_id: orgId,
@@ -741,7 +986,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         tax_amount: totals.vat,
         total: totals.total,
         currency: formHeader.currency,
-        includes_iva: formHeader.includes_iva,
+        includes_iva: formHeader.iva_mode === 'IVA incluido',
         payment_terms: formHeader.payment_terms,
         work_timeline: formHeader.work_timeline,
         includes_notes: formHeader.includes_notes,
@@ -752,7 +997,21 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         notes: formHeader.notes,
         status: formHeader.status,
         accepted_at: formHeader.status === 'aceptada' ? new Date().toISOString() : selectedQuotation?.accepted_at || null,
-        rejected_at: formHeader.status === 'rechazada' ? new Date().toISOString() : selectedQuotation?.rejected_at || null
+        rejected_at: formHeader.status === 'rechazada' ? new Date().toISOString() : selectedQuotation?.rejected_at || null,
+        
+        // NEW COLUMNS
+        iva_mode: formHeader.iva_mode,
+        tax_rate: Number(formHeader.tax_rate) || 19,
+        net_amount: totals.net,
+        payment_plan_type: paymentType,
+        upfront_percentage: Number(paymentAdvancePct),
+        installments: Number(paymentInstallments),
+        included_items: includedItems,
+        excluded_items: excludedItems,
+        start_condition_items: startConditionItems,
+        proposal_format: formHeader.proposal_format,
+        show_signatures: formHeader.show_signatures,
+        has_alternatives: formHeader.has_alternatives
       };
 
       let quoteId = '';
@@ -884,14 +1143,32 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       const secondaryColor = [30, 41, 59]; // Slate-800
       const lightBg = [248, 250, 252]; // Slate-50
 
-      // PAGE 1: OBJETO & SERVICIOS INCLUIDOS
-      // Encabezado
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.setTextColor(148, 163, 184);
-      doc.text('Noveli Editorial / Propuesta comercial preliminar', 20, 12);
-      doc.setDrawColor(226, 232, 240);
-      doc.line(20, 14, 190, 14);
+      const format = quote.proposal_format || 'Formal completo';
+      const showSigs = quote.show_signatures !== false;
+      const isExec = format === 'Resumen ejecutivo';
+      const hasAlts = quote.has_alternatives || format === 'Con alternativas';
+
+      const writeHeader = (pageNumber) => {
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text('Noveli Editorial / Propuesta comercial preliminar', 20, 12);
+        doc.setDrawColor(226, 232, 240);
+        doc.line(20, 14, 190, 14);
+        
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`Página ${pageNumber}`, 180, 12);
+      };
+
+      const writeFooter = () => {
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.text(companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.', 45, 287);
+      };
+
+      // PAGE 1
+      writeHeader(1);
 
       let nextY = 32;
       let imgH = 0;
@@ -912,13 +1189,13 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
           imgW = maxH_mm * ratio;
         }
         
-        let format = 'PNG';
+        let formatExt = 'PNG';
         const urlLower = String(companySettings.logo_url).toLowerCase();
-        if (urlLower.includes('.jpg') || urlLower.includes('.jpeg')) format = 'JPEG';
-        else if (urlLower.includes('.webp')) format = 'WEBP';
-        else if (urlLower.includes('.svg')) format = 'SVG';
+        if (urlLower.includes('.jpg') || urlLower.includes('.jpeg')) formatExt = 'JPEG';
+        else if (urlLower.includes('.webp')) formatExt = 'WEBP';
+        else if (urlLower.includes('.svg')) formatExt = 'SVG';
 
-        doc.addImage(logoImg, format, 20, 18, imgW, imgH);
+        doc.addImage(logoImg, formatExt, 20, 18, imgW, imgH);
         nextY = 18 + imgH + 5;
       } else {
         doc.setFont('Helvetica', 'bold');
@@ -946,9 +1223,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.setDrawColor(203, 213, 225);
       doc.setFillColor(248, 250, 252);
       doc.rect(20, tableY, 170, 20, 'FD');
-      // vertical separator line
       doc.line(105, tableY, 105, tableY + 20);
-      // horizontal separator line
       doc.line(20, tableY + 10, 190, tableY + 10);
 
       doc.setFont('Helvetica', 'bold');
@@ -966,80 +1241,74 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.text(quote.issue_date || '', 131, tableY + 6);
       doc.text('Propuesta Comercial', 133, tableY + 16);
 
-      // Sección 1: OBJETO
-      let s1Y = tableY + 26;
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(...primaryColor);
-      doc.text('1. OBJETO', 20, s1Y);
-      doc.setDrawColor(...primaryColor);
-      doc.line(20, s1Y + 1.5, 35, s1Y + 1.5);
+      let currentY = tableY + 25;
 
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor(51, 65, 85);
-      const objetoText = `La presente propuesta tiene como objeto detallar la prestación de servicios editoriales y de producción para la obra "${quote.object || 'Proyecto del Autor'}". El objetivo es lograr un producto editorial de la más alta calidad bajo la marca Noveli Editorial.`;
-      const splitObjeto = doc.splitTextToSize(objetoText, 170);
-      doc.text(splitObjeto, 20, s1Y + 6);
-
-      // Sección 2: SERVICIOS INCLUIDOS
-      let s2Y = s1Y + 22;
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(...primaryColor);
-      doc.text('2. SERVICIOS INCLUIDOS', 20, s2Y);
-      doc.line(20, s2Y + 1.5, 55, s2Y + 1.5);
-
-      let itemsY = s2Y + 7;
-      (items || []).forEach((item, idx) => {
-        if (itemsY > 265) {
-          doc.addPage();
-          itemsY = 20; // reset on new page if it overflows
-        }
+      if (!isExec) {
+        // Sección 1: OBJETO
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.setTextColor(30, 41, 59);
-        doc.text(`${idx + 1}. ${item.concept}`, 20, itemsY);
-        
+        doc.setFontSize(10);
+        doc.setTextColor(...primaryColor);
+        doc.text('1. OBJETO', 20, currentY);
+        doc.setDrawColor(...primaryColor);
+        doc.line(20, currentY + 1.5, 35, currentY + 1.5);
+
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(100, 116, 139);
-        const splitDesc = doc.splitTextToSize(item.description || 'Sin descripción adicional.', 160);
-        doc.text(splitDesc, 24, itemsY + 4.5);
-        itemsY += 6 + (splitDesc.length * 3.5);
-      });
+        doc.setFontSize(8.5);
+        doc.setTextColor(51, 65, 85);
+        const objetoText = `La presente propuesta tiene como objeto detallar la prestación de servicios editoriales y de producción para la obra "${quote.object || 'Proyecto del Autor'}". El objetivo es lograr un producto editorial de la más alta calidad bajo la marca Noveli Editorial.`;
+        const splitObjeto = doc.splitTextToSize(objetoText, 170);
+        doc.text(splitObjeto, 20, currentY + 6);
 
-      // PAGE 2: VALORES, PAGOS, PLAZOS Y EXCLUSIONES
-      doc.addPage();
+        currentY += 22;
 
-      // Top header page 2
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.setTextColor(148, 163, 184);
-      doc.text('Noveli Editorial / Propuesta comercial preliminar', 20, 12);
-      doc.setDrawColor(226, 232, 240);
-      doc.line(20, 14, 190, 14);
+        // Sección 2: SERVICIOS INCLUIDOS
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(...primaryColor);
+        doc.text('2. SERVICIOS INCLUIDOS', 20, currentY);
+        doc.line(20, currentY + 1.5, 55, currentY + 1.5);
 
-      // Sección 3: ALTERNATIVAS Y VALOR DEL SERVICIO
-      let s3Y = 22;
+        let itemsY = currentY + 7;
+        const pdfIncludes = (quote.included_items && Array.isArray(quote.included_items) && quote.included_items.length > 0)
+          ? quote.included_items
+          : parseBulletsToList(quote.includes_notes || '');
+
+        pdfIncludes.forEach((itemText, idx) => {
+          if (itemsY > 265) {
+            doc.addPage();
+            writeHeader(1.5);
+            itemsY = 25;
+          }
+          doc.setFont('Helvetica', 'normal');
+          doc.setFontSize(8.5);
+          doc.setTextColor(30, 41, 59);
+          doc.text(`${idx + 1}. ${itemText}`, 20, itemsY);
+          itemsY += 6;
+        });
+
+        doc.addPage();
+        writeHeader(2);
+        currentY = 22;
+      }
+
+      // Sección 3: VALORES DEL SERVICIO
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(10);
       doc.setTextColor(...primaryColor);
-      doc.text('3. ALTERNATIVAS Y VALOR DEL SERVICIO', 20, s3Y);
+      doc.text(isExec ? '1. VALORES Y SERVICIOS' : '3. ALTERNATIVAS Y VALOR DEL SERVICIO', 20, currentY);
       doc.setDrawColor(...primaryColor);
-      doc.line(20, s3Y + 1.5, 80, s3Y + 1.5);
+      doc.line(20, currentY + 1.5, isExec ? 55 : 80, currentY + 1.5);
 
-      // Draw table for items
-      let tableValY = s3Y + 6;
+      let tableValY = currentY + 6;
       doc.setFillColor(248, 250, 252);
       doc.rect(20, tableValY, 170, 7, 'F');
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(71, 85, 105);
-      doc.text('Servicio / Concepto', 23, tableValY + 4.5);
+      doc.text(hasAlts ? 'Alternativa / Servicio' : 'Servicio / Concepto', 23, tableValY + 4.5);
       doc.text('Cant.', 105, tableValY + 4.5);
       doc.text('Valor Neto', 120, tableValY + 4.5);
-      doc.text('IVA 19%', 145, tableValY + 4.5);
+      doc.text(quote.iva_mode === 'Exento / sin IVA' ? 'IVA (Exento)' : 'IVA 19%', 145, tableValY + 4.5);
       doc.text('Total', 170, tableValY + 4.5);
 
       let rowY = tableValY + 7;
@@ -1047,32 +1316,52 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.setTextColor(30, 41, 59);
       doc.setDrawColor(241, 245, 249);
 
+      const ivaMode = quote.iva_mode || (quote.includes_iva ? 'IVA incluido' : 'Exento / sin IVA');
+      const taxRate = Number(quote.tax_rate) || 19;
+
       (items || []).forEach(item => {
         const total = Number(item.unit_price) * Number(item.quantity);
-        const net = quote.includes_iva ? Math.round(total / 1.19) : total;
-        const vat = quote.includes_iva ? (total - net) : 0;
+        let net = 0;
+        let vat = 0;
+        if (ivaMode === 'IVA incluido') {
+          net = Math.round(total / (1 + taxRate / 100));
+          vat = total - net;
+        } else if (ivaMode === '+ IVA') {
+          net = total;
+          vat = Math.round(net * (taxRate / 100));
+        } else { // Exento
+          net = total;
+          vat = 0;
+        }
 
         doc.line(20, rowY + 6, 190, rowY + 6);
         doc.text(String(item.concept).substring(0, 45), 23, rowY + 4);
         doc.text(String(item.quantity || 1), 107, rowY + 4);
         doc.text(formatCurrency(net, quote.currency), 120, rowY + 4);
-        doc.text(formatCurrency(vat, quote.currency), 145, rowY + 4);
-        doc.text(formatCurrency(total, quote.currency), 170, rowY + 4);
+        doc.text(ivaMode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, quote.currency), 145, rowY + 4);
+        doc.text(formatCurrency(ivaMode === '+ IVA' ? (net + vat) : total, quote.currency), 170, rowY + 4);
         rowY += 6;
       });
 
       // Totals display
-      doc.setFont('Helvetica', 'bold');
-      doc.text('TOTAL GENERAL CON IVA:', 110, rowY + 5);
-      doc.text(formatCurrency(quote.total, quote.currency), 170, rowY + 5);
-      rowY += 10;
+      if (!hasAlts) {
+        doc.setFont('Helvetica', 'bold');
+        doc.text('TOTAL GENERAL:', 110, rowY + 5);
+        doc.text(formatCurrency(quote.total, quote.currency), 170, rowY + 5);
+        rowY += 10;
+      } else {
+        doc.setFont('Helvetica', 'italic');
+        doc.setFontSize(7.5);
+        doc.text('* Valores unitarios por alternativa independiente.', 23, rowY + 5);
+        rowY += 10;
+      }
 
       // Sección 4: FORMA DE PAGO
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(10);
       doc.setTextColor(...primaryColor);
-      doc.text('4. FORMA DE PAGO', 20, rowY);
-      doc.line(20, rowY + 1.5, 50, rowY + 1.5);
+      doc.text(isExec ? '2. CONDICIONES DE PAGO' : '4. FORMA DE PAGO', 20, rowY);
+      doc.line(20, rowY + 1.5, isExec ? 60 : 50, rowY + 1.5);
 
       let payTableY = rowY + 6;
       doc.setFillColor(248, 250, 252);
@@ -1081,28 +1370,48 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.setFontSize(8);
       doc.setTextColor(71, 85, 105);
       doc.text('Alternativa', 23, payTableY + 4.5);
-      doc.text('Total con IVA', 60, payTableY + 4.5);
+      doc.text('Total', 60, payTableY + 4.5);
       doc.text('% Anticipo', 95, payTableY + 4.5);
       doc.text('Condición de pago', 120, payTableY + 4.5);
 
       doc.setFont('Helvetica', 'normal');
       doc.setTextColor(30, 41, 59);
-      doc.line(20, payTableY + 7 + 10, 190, payTableY + 7 + 10);
-      doc.text('Propuesta Sugerida', 23, payTableY + 13);
-      doc.text(formatCurrency(quote.total, quote.currency), 60, payTableY + 13);
-      // Assuming a default advance or deriving from terms if needed
-      const paymentAdvancePct = 50; 
-      doc.text(`${paymentAdvancePct}%`, 97, payTableY + 13);
-      const splitPayTerms = doc.splitTextToSize(quote.payment_terms || '', 68);
-      doc.text(splitPayTerms, 120, payTableY + 11);
 
-      rowY = payTableY + 7 + 16;
+      const upfrontPct = quote.upfront_percentage !== undefined ? quote.upfront_percentage : 50;
+
+      if (hasAlts) {
+        let pRowY = payTableY + 7;
+        (items || []).forEach(item => {
+          const itemTotal = Number(item.unit_price) * Number(item.quantity);
+          const finalItemTotal = ivaMode === '+ IVA' ? Math.round(itemTotal * (1 + taxRate/100)) : itemTotal;
+          doc.line(20, pRowY + 6, 190, pRowY + 6);
+          doc.text(String(item.concept).substring(0, 20), 23, pRowY + 4);
+          doc.text(formatCurrency(finalItemTotal, quote.currency), 60, pRowY + 4);
+          doc.text(`${upfrontPct}%`, 97, pRowY + 4);
+          const displayTerms = quote.payment_plan_type === '100_inicio' ? '100% al inicio' :
+                               quote.payment_plan_type === '50_inicio_50_termino' ? '50% inicio / 50% término' :
+                               quote.payment_plan_type === '50_inicio_50_entrega' ? '50% inicio / 50% contra entrega' :
+                               quote.payment_plan_type === 'cuotas' ? `${upfrontPct}% anticipo, saldo en ${quote.installments} cuotas` :
+                               String(quote.payment_terms).substring(0, 35);
+          doc.text(displayTerms, 120, pRowY + 4);
+          pRowY += 6;
+        });
+        rowY = pRowY + 4;
+      } else {
+        doc.line(20, payTableY + 7 + 10, 190, payTableY + 7 + 10);
+        doc.text('Propuesta Sugerida', 23, payTableY + 13);
+        doc.text(formatCurrency(quote.total, quote.currency), 60, payTableY + 13);
+        doc.text(`${upfrontPct}%`, 97, payTableY + 13);
+        const splitPayTerms = doc.splitTextToSize(quote.payment_terms || '', 68);
+        doc.text(splitPayTerms, 120, payTableY + 11);
+        rowY = payTableY + 7 + 16;
+      }
 
       // Sección 5: PLAZO DE TRABAJO
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(10);
       doc.setTextColor(...primaryColor);
-      doc.text('5. PLAZO DE TRABAJO', 20, rowY);
+      doc.text(isExec ? '3. PLAZO DE TRABAJO' : '5. PLAZO DE TRABAJO', 20, rowY);
       doc.line(20, rowY + 1.5, 55, rowY + 1.5);
 
       doc.setFont('Helvetica', 'normal');
@@ -1112,83 +1421,108 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
 
       rowY += 13;
 
-      // Sección 6: SERVICIOS NO INCLUIDOS Y CONDICIONES
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(...primaryColor);
-      doc.text('6. SERVICIOS NO INCLUIDOS Y CONDICIONES', 20, rowY);
-      doc.line(20, rowY + 1.5, 90, rowY + 1.5);
+      if (!isExec) {
+        // Sección 6: SERVICIOS NO INCLUIDOS Y CONDICIONES
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(...primaryColor);
+        doc.text('6. SERVICIOS NO INCLUIDOS Y CONDICIONES', 20, rowY);
+        doc.line(20, rowY + 1.5, 90, rowY + 1.5);
 
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(71, 85, 105);
-      doc.text('Qué no incluye:', 20, rowY + 6);
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      const splitExcludes = doc.splitTextToSize(quote.excludes_notes || '• Exclusiones estándar.', 75);
-      doc.text(splitExcludes, 20, rowY + 10);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(71, 85, 105);
+        doc.text('Qué no incluye:', 20, rowY + 6);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        const pdfExcludes = (quote.excluded_items && Array.isArray(quote.excluded_items) && quote.excluded_items.length > 0)
+          ? quote.excluded_items
+          : parseBulletsToList(quote.excludes_notes || '');
+        const excludesText = pdfExcludes.map(e => `• ${e}`).join('\n');
+        const splitExcludes = doc.splitTextToSize(excludesText || '• Exclusiones estándar.', 75);
+        doc.text(splitExcludes, 20, rowY + 10);
 
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(71, 85, 105);
-      doc.text('Requisitos para iniciar:', 105, rowY + 6);
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      const splitReqs = doc.splitTextToSize(quote.start_conditions || '• Aceptación formal de la propuesta.', 80);
-      doc.text(splitReqs, 105, rowY + 10);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(71, 85, 105);
+        doc.text('Requisitos para iniciar:', 105, rowY + 6);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        const splitReqs = doc.splitTextToSize(quote.start_conditions || '• Aceptación de la propuesta.', 80);
+        doc.text(splitReqs, 105, rowY + 10);
 
-      rowY += 26 + Math.max(splitExcludes.length, splitReqs.length) * 3.5;
+        rowY += 26 + Math.max(splitExcludes.length, splitReqs.length) * 3.5;
 
-      // Sección 7: VIGENCIA
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(...primaryColor);
-      doc.text('7. VIGENCIA', 20, rowY);
-      doc.line(20, rowY + 1.5, 38, rowY + 1.5);
+        // Sección 7: VIGENCIA
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(...primaryColor);
+        doc.text('7. VIGENCIA', 20, rowY);
+        doc.line(20, rowY + 1.5, 38, rowY + 1.5);
 
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(51, 65, 85);
-      doc.text(`Esta propuesta tiene una validez de ${quote.validity_days || 15} días corridos a contar del ${quote.issue_date || 'su emisión'}.`, 20, rowY + 6);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        doc.text(`Esta propuesta tiene una validez de ${quote.validity_days || 15} días corridos a contar del ${quote.issue_date || 'su emisión'}.`, 20, rowY + 6);
 
-      rowY += 15;
+        rowY += 15;
 
-      // Nota Legal (small)
-      doc.setFillColor(248, 250, 252);
-      doc.rect(20, rowY, 170, 18, 'F');
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(6.5);
-      doc.setTextColor(148, 163, 184);
-      const splitLegal = doc.splitTextToSize(quote.legal_notes || '', 162);
-      doc.text(splitLegal, 23, rowY + 4);
+        // Legal note
+        doc.setFillColor(248, 250, 252);
+        doc.rect(20, rowY, 170, 18, 'F');
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(6.5);
+        doc.setTextColor(148, 163, 184);
+        const splitLegal = doc.splitTextToSize(quote.legal_notes || '', 162);
+        doc.text(splitLegal, 23, rowY + 4);
 
-      rowY += 25;
+        rowY += 25;
+      } else {
+        // Compact requirements & validity for Executive Summary
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(71, 85, 105);
+        doc.text('Requisitos para iniciar:', 20, rowY + 3);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        doc.text(quote.start_conditions || 'Aceptación propuesta.', 55, rowY + 3);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.text('Vigencia:', 130, rowY + 3);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`${quote.validity_days || 15} días corridos.`, 145, rowY + 3);
+
+        rowY += 15;
+      }
 
       // Firmas
-      doc.setDrawColor(203, 213, 225);
-      doc.line(20, rowY, 80, rowY);
-      doc.line(130, rowY, 190, rowY);
+      if (showSigs) {
+        if (rowY > 260) {
+          doc.addPage();
+          writeHeader(3);
+          rowY = 30;
+        }
+        doc.setDrawColor(203, 213, 225);
+        doc.line(20, rowY, 80, rowY);
+        doc.line(130, rowY, 190, rowY);
 
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(71, 85, 105);
-      doc.text('Firma Autor/a', 147, rowY + 4);
-      doc.text(companySettings.representative_name || 'Javier Román González', 23, rowY + 4);
-      
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(100, 116, 139);
-      doc.text(companySettings.representative_role || 'Representante Noveli Editorial', 23, rowY + 8);
-      doc.text('Aceptación de Propuesta', 142, rowY + 8);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(71, 85, 105);
+        doc.text(companySettings.representative_name || 'Javier Román González', 23, rowY + 4);
+        doc.text('Firma Autor/a', 147, rowY + 4);
 
-      // Footer
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(148, 163, 184);
-      doc.text(companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.', 45, 287);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(companySettings.representative_role || 'Representante Noveli Editorial', 23, rowY + 8);
+        doc.text('Aceptación de Propuesta', 142, rowY + 8);
+      }
 
+      writeFooter();
       doc.save(`Propuesta_${quote.quote_number || 'S_N'}_${quote.author_name.replace(/\s+/g, '_')}.pdf`);
     } catch (err) {
       console.error(err);
@@ -1712,8 +2046,8 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
 
                 {/* Section E: Totales */}
                 <div className="space-y-4">
-                  <h4 className="font-bold text-xs text-indigo-655 dark:text-indigo-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-850 pb-1.5">E. Totales y Moneda</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <h4 className="font-bold text-xs text-indigo-655 dark:text-indigo-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-850 pb-1.5">E. Totales y Formato</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="space-y-1">
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Moneda</label>
                       <select
@@ -1726,14 +2060,15 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">IVA (19%)</label>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Régimen IVA</label>
                       <select
-                        value={formHeader.includes_iva ? 'si' : 'no'}
-                        onChange={(e) => setFormHeader({...formHeader, includes_iva: e.target.value === 'si'})}
+                        value={formHeader.iva_mode || 'IVA incluido'}
+                        onChange={(e) => setFormHeader({...formHeader, iva_mode: e.target.value, includes_iva: e.target.value === 'IVA incluido'})}
                         className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
                       >
-                        <option value="si">IVA Incluido</option>
-                        <option value="no">Exento de IVA</option>
+                        <option value="IVA incluido">IVA incluido</option>
+                        <option value="+ IVA">+ IVA (19%)</option>
+                        <option value="Exento / sin IVA">Exento / sin IVA</option>
                       </select>
                     </div>
                     <div className="space-y-1">
@@ -1744,6 +2079,30 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                         onChange={(e) => setFormHeader({...formHeader, discount: Number(e.target.value)})}
                         className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
                       />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Formato del Documento</label>
+                      <select
+                        value={formHeader.proposal_format || 'Formal completo'}
+                        onChange={(e) => handleProposalFormatChange(e.target.value)}
+                        className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      >
+                        <option value="Formal completo">Formal completo</option>
+                        <option value="Resumen ejecutivo">Resumen ejecutivo</option>
+                        <option value="Con alternativas">Con alternativas de precio</option>
+                        <option value="Una sola propuesta">Una sola propuesta</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Firmas</label>
+                      <select
+                        value={formHeader.show_signatures !== false ? 'Con firmas' : 'Sin firmas'}
+                        onChange={(e) => setFormHeader({...formHeader, show_signatures: e.target.value === 'Con firmas'})}
+                        className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                      >
+                        <option value="Con firmas">Con firmas</option>
+                        <option value="Sin firmas">Sin firmas</option>
+                      </select>
                     </div>
                     <div className="space-y-1">
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Estado Propuesta</label>
@@ -1780,7 +2139,13 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Forma de Pago Sugerida</label>
                       <select
                         value={paymentType}
-                        onChange={(e) => setPaymentType(e.target.value)}
+                        onChange={(e) => {
+                          setPaymentType(e.target.value);
+                          setIsPaymentTermsEditedManually(false);
+                          if (e.target.value === '100_inicio') setPaymentAdvancePct(100);
+                          else if (e.target.value === '50_inicio_50_termino') setPaymentAdvancePct(50);
+                          else if (e.target.value === '50_inicio_50_entrega') setPaymentAdvancePct(50);
+                        }}
                         className="block w-full px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-700 dark:text-slate-200 text-xs focus:outline-none"
                       >
                         <option value="100_inicio">100% al inicio</option>
@@ -1798,7 +2163,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                               type="number"
                               value={paymentAdvancePct}
                               onChange={(e) => setPaymentAdvancePct(Number(e.target.value))}
-                              className="block w-full px-2 py-1 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-lg text-slate-700 dark:text-slate-200 text-xs focus:outline-none"
+                              className="block w-full px-2 py-1 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-lg text-slate-707 text-xs focus:outline-none"
                             />
                           </div>
                           <div>
@@ -1807,44 +2172,181 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                               type="number"
                               value={paymentInstallments}
                               onChange={(e) => setPaymentInstallments(Number(e.target.value))}
-                              className="block w-full px-2 py-1 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-lg text-slate-700 dark:text-slate-200 text-xs focus:outline-none"
+                              className="block w-full px-2 py-1 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-lg text-slate-707 text-xs focus:outline-none"
                             />
                           </div>
                         </div>
                       )}
 
                       {paymentType === 'personalizado' && (
-                        <textarea
-                          rows="2"
-                          value={paymentCustomText}
-                          onChange={(e) => setPaymentCustomText(e.target.value)}
-                          className="block w-full mt-2 px-2 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-lg text-slate-707 text-xs focus:outline-none"
-                          placeholder="Escribe las condiciones de pago personalizadas..."
-                        />
+                        <div className="mt-2">
+                          <label className="block text-[9px] text-slate-400 font-semibold">% Anticipo / Pago Inicial</label>
+                          <input
+                            type="number"
+                            value={paymentAdvancePct}
+                            onChange={(e) => setPaymentAdvancePct(Number(e.target.value))}
+                            className="block w-full px-2 py-1 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-lg text-slate-707 text-xs focus:outline-none"
+                          />
+                        </div>
                       )}
                       
-                      <div className="text-[9px] text-slate-450 mt-1 select-none leading-none">
-                        Vista previa: <span className="font-bold text-slate-600 dark:text-slate-300">{formHeader.payment_terms}</span>
+                      <div className="mt-2">
+                        <label className="block text-[9px] text-slate-400 font-semibold">Texto de Condiciones de Pago</label>
+                        <textarea
+                          rows="2"
+                          value={formHeader.payment_terms}
+                          onChange={(e) => {
+                            setFormHeader({ ...formHeader, payment_terms: e.target.value });
+                            setIsPaymentTermsEditedManually(true);
+                          }}
+                          className="block w-full px-2 py-1.5 border border-slate-200 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-lg text-slate-707 text-xs focus:outline-none"
+                        />
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Qué Incluye</label>
-                      <textarea
-                        rows="3"
-                        value={formHeader.includes_notes}
-                        onChange={(e) => setFormHeader({...formHeader, includes_notes: e.target.value})}
-                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
-                      />
+
+                    {/* Inclusiones / Exclusiones listas */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 col-span-2">
+                      {/* Qué incluye */}
+                      <div className="space-y-2 border border-slate-100 dark:border-slate-800 p-3 rounded-xl">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-650 dark:text-indigo-400">Qué Incluye (Listado)</label>
+                        
+                        {/* Suggested dropdown */}
+                        <div className="flex gap-2">
+                          <select
+                            value=""
+                            onChange={(e) => {
+                              handleAddInclude(e.target.value);
+                              e.target.value = "";
+                            }}
+                            className="block w-full px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs focus:outline-none"
+                          >
+                            <option value="">-- Seleccionar sugerido --</option>
+                            {getSuggestedInclusions().map((item, idx) => (
+                              <option key={idx} value={item}>{item}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Manual input */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={manualIncludeText}
+                            onChange={(e) => setManualIncludeText(e.target.value)}
+                            placeholder="Agregar concepto manual..."
+                            className="flex-1 px-3 py-1 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-xs focus:outline-none"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddInclude(manualIncludeText);
+                                setManualIncludeText('');
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleAddInclude(manualIncludeText);
+                              setManualIncludeText('');
+                            }}
+                            className="px-3 py-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 font-bold rounded-xl text-xs"
+                          >
+                            Agregar
+                          </button>
+                        </div>
+
+                        {/* Selected list */}
+                        <div className="space-y-1.5 max-h-48 overflow-y-auto pt-1">
+                          {includedItems.length === 0 ? (
+                            <p className="text-[11px] text-slate-400 italic">No hay ítems seleccionados.</p>
+                          ) : (
+                            includedItems.map((item, idx) => (
+                              <div key={idx} className="flex justify-between items-center bg-slate-50 dark:bg-slate-950/40 p-1.5 rounded-lg border border-slate-100 dark:border-slate-850 text-xs">
+                                <span className="truncate pr-2">{item}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveInclude(idx)}
+                                  className="text-rose-500 hover:text-rose-750"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Qué no incluye */}
+                      <div className="space-y-2 border border-slate-100 dark:border-slate-800 p-3 rounded-xl">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-455">Qué NO Incluye (Listado)</label>
+                        
+                        {/* Suggested dropdown */}
+                        <div className="flex gap-2">
+                          <select
+                            value=""
+                            onChange={(e) => {
+                              handleAddExclude(e.target.value);
+                              e.target.value = "";
+                            }}
+                            className="block w-full px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs focus:outline-none"
+                          >
+                            <option value="">-- Seleccionar sugerido --</option>
+                            {getSuggestedExclusions().map((item, idx) => (
+                              <option key={idx} value={item}>{item}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Manual input */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={manualExcludeText}
+                            onChange={(e) => setManualExcludeText(e.target.value)}
+                            placeholder="Agregar concepto manual..."
+                            className="flex-1 px-3 py-1 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-xs focus:outline-none"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddExclude(manualExcludeText);
+                                setManualExcludeText('');
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleAddExclude(manualExcludeText);
+                              setManualExcludeText('');
+                            }}
+                            className="px-3 py-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 font-bold rounded-xl text-xs"
+                          >
+                            Agregar
+                          </button>
+                        </div>
+
+                        {/* Selected list */}
+                        <div className="space-y-1.5 max-h-48 overflow-y-auto pt-1">
+                          {excludedItems.length === 0 ? (
+                            <p className="text-[11px] text-slate-400 italic">No hay ítems seleccionados.</p>
+                          ) : (
+                            excludedItems.map((item, idx) => (
+                              <div key={idx} className="flex justify-between items-center bg-slate-50 dark:bg-slate-955/40 p-1.5 rounded-lg border border-slate-100 dark:border-slate-850 text-xs">
+                                <span className="truncate pr-2">{item}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveExclude(idx)}
+                                  className="text-rose-500 hover:text-rose-750"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Qué NO Incluye</label>
-                      <textarea
-                        rows="3"
-                        value={formHeader.excludes_notes}
-                        onChange={(e) => setFormHeader({...formHeader, excludes_notes: e.target.value})}
-                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
-                      />
-                    </div>
+
                     <div className="col-span-2 border border-slate-100 dark:border-slate-800 p-3 rounded-xl space-y-2">
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Requisitos para Iniciar</label>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -1901,242 +2403,439 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                 </div>
                 
                 <div className="space-y-6 max-w-[800px] mx-auto text-slate-800 dark:text-slate-250">
-                  {/* PAGE 1 */}
-                  <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 text-xs space-y-6 min-h-[842px] flex flex-col justify-between">
-                    <div className="space-y-6">
-                      {/* Encabezado */}
-                      <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-b pb-1">
-                        <span>Noveli Editorial / Propuesta comercial preliminar</span>
-                        <span>Página 1</span>
-                      </div>
+                  {/* CONDITIONAL FORMAT: Resumen Ejecutivo vs Complete Format */}
+                  {formHeader.proposal_format === 'Resumen ejecutivo' ? (
+                    /* PAGE 1: RESUMEN EJECUTIVO (Single Page) */
+                    <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 text-xs space-y-6 min-h-[842px] flex flex-col justify-between">
+                      <div className="space-y-6">
+                        {/* Encabezado */}
+                        <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-b pb-1">
+                          <span>Noveli Editorial / Resumen ejecutivo de propuesta</span>
+                          <span>Página 1 de 1</span>
+                        </div>
 
-                      {/* Brand Header */}
-                      <div className="flex justify-between items-start">
-                        <div>
-                          {companySettings.logo_url ? (
-                            <img src={companySettings.logo_url} alt="Logo" className="max-h-12 max-w-full object-contain mb-2" />
-                          ) : (
-                            <h2 className="font-extrabold text-xl text-indigo-600 dark:text-indigo-400 tracking-wider">{companySettings.company_name || 'EDITORIAL NOVELI'}</h2>
-                          )}
-                          <p className="text-[10px] text-slate-450 mt-1 font-bold">{companySettings.commercial_name || 'Somos Noveli Editorial'}</p>
-                          <p className="text-[10px] text-slate-400">{companySettings.official_email || 'contacto@somosnoveli.cl'} | {companySettings.website_url || 'www.somosnoveli.cl'}</p>
-                        </div>
-                        <div className="text-right text-[10px] text-slate-500 font-medium">
-                          <span className="font-bold text-slate-705 dark:text-slate-300 text-xs block">PROPUESTA COMERCIAL PRELIMINAR</span>
-                          <span className="font-bold text-indigo-655 block mt-0.5">{formHeader.quote_number}</span>
-                          <span className="block mt-1">Fecha Emisión: {formHeader.issue_date}</span>
-                          <span>Válida hasta: {formHeader.valid_until}</span>
-                        </div>
-                      </div>
-
-                      {/* Table Inicial Box */}
-                      <div className="grid grid-cols-2 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden text-[11px]">
-                        <div className="p-3 border-r border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
-                          <span className="font-bold text-slate-400 block text-[9px] uppercase">Dirigido a:</span>
-                          <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.author_name || 'Nuevo Autor'}</span>
-                        </div>
-                        <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
-                          <span className="font-bold text-slate-400 block text-[9px] uppercase">Fecha Emisión:</span>
-                          <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.issue_date}</span>
-                        </div>
-                        <div className="p-3 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
-                          <span className="font-bold text-slate-400 block text-[9px] uppercase">Obra / Proyecto:</span>
-                          <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.object || 'Proyecto Editorial'}</span>
-                        </div>
-                        <div className="p-3 bg-slate-50/50 dark:bg-slate-950/20">
-                          <span className="font-bold text-slate-400 block text-[9px] uppercase">Tipo de solicitud:</span>
-                          <span className="font-extrabold text-slate-800 dark:text-slate-205">Propuesta Comercial</span>
-                        </div>
-                      </div>
-
-                      {/* Objeto */}
-                      <div className="space-y-1">
-                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">1. Objeto de la propuesta</h5>
-                        <p className="text-slate-600 dark:text-slate-350 leading-relaxed text-[11px]">
-                          La presente propuesta tiene como objeto detallar la prestación de servicios editoriales y de producción para la obra "{formHeader.object || 'Proyecto del Autor'}". El objetivo es lograr un producto editorial de la más alta calidad bajo la marca Noveli Editorial.
-                        </p>
-                      </div>
-
-                      {/* Servicios Incluidos */}
-                      <div className="space-y-3">
-                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">2. Servicios Incluidos</h5>
-                        <div className="space-y-3">
-                          {formItems.length === 0 ? (
-                            <p className="text-slate-400 italic">No se han añadido conceptos.</p>
-                          ) : (
-                            formItems.map((item, index) => (
-                              <div key={item.id} className="text-[11px] py-1 border-b border-slate-50 dark:border-slate-850 pb-2">
-                                <span className="font-bold text-slate-800 dark:text-slate-200 block">
-                                  {index + 1}. {item.concept}
-                                </span>
-                                {item.description && (
-                                  <p className="text-[10px] text-slate-500 mt-0.5">
-                                    {item.description}
-                                  </p>
-                                )}
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Page 1 Footer */}
-                    <div className="text-center text-[9px] text-slate-400 border-t pt-3 font-semibold">
-                      {companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.'}
-                    </div>
-                  </div>
-
-                  {/* PAGE 2 */}
-                  <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 text-xs space-y-6 min-h-[842px] flex flex-col justify-between">
-                    <div className="space-y-6">
-                      {/* Encabezado */}
-                      <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-b pb-1">
-                        <span>Noveli Editorial / Propuesta comercial preliminar</span>
-                        <span>Página 2</span>
-                      </div>
-
-                      {/* Valores del servicio Table */}
-                      <div className="space-y-2">
-                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">3. Alternativas y Valor del Servicio</h5>
-                        <div className="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
-                          <table className="w-full text-left border-collapse text-[10px]">
-                            <thead>
-                              <tr className="bg-slate-50 dark:bg-slate-950 font-bold uppercase text-[9px] text-slate-400 border-b border-slate-100 dark:border-slate-800">
-                                <th className="p-2">Alternativa / Servicio</th>
-                                <th className="p-2 w-12 text-center">Cant.</th>
-                                <th className="p-2 w-20 text-right">Neto</th>
-                                <th className="p-2 w-16 text-right">IVA 19%</th>
-                                <th className="p-2 w-24 text-right">Total</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {formItems.map(item => {
-                                const total = item.unit_price * item.quantity;
-                                const net = formHeader.includes_iva ? Math.round(total / 1.19) : total;
-                                const vat = formHeader.includes_iva ? total - net : 0;
-                                return (
-                                  <tr key={item.id} className="border-b border-slate-50 dark:border-slate-850">
-                                    <td className="p-2 font-bold">{item.concept}</td>
-                                    <td className="p-2 text-center">{item.quantity}</td>
-                                    <td className="p-2 text-right font-mono">{formatCurrency(net, formHeader.currency)}</td>
-                                    <td className="p-2 text-right font-mono">{formatCurrency(vat, formHeader.currency)}</td>
-                                    <td className="p-2 text-right font-mono font-bold text-slate-700 dark:text-slate-300">{formatCurrency(total, formHeader.currency)}</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                        
-                        {/* Totals Block */}
-                        <div className="flex justify-end pt-2">
-                          <div className="w-64 space-y-1 text-right text-[11px]">
-                            <div className="flex justify-between text-slate-400">
-                              <span>Subtotal Base:</span>
-                              <span className="font-mono">{formatCurrency(totals.subtotal, formHeader.currency)}</span>
-                            </div>
-                            {totals.adjustmentAmount > 0 && (
-                              <div className="flex justify-between text-indigo-650 dark:text-indigo-400">
-                                <span>Ajuste por Extensión:</span>
-                                <span className="font-mono">+{formatCurrency(totals.adjustmentAmount, formHeader.currency)}</span>
-                              </div>
+                        {/* Brand Header */}
+                        <div className="flex justify-between items-start">
+                          <div>
+                            {companySettings.logo_url ? (
+                              <img src={companySettings.logo_url} alt="Logo" className="max-h-12 max-w-full object-contain mb-2" />
+                            ) : (
+                              <h2 className="font-extrabold text-xl text-indigo-600 dark:text-indigo-400 tracking-wider">{companySettings.company_name || 'EDITORIAL NOVELI'}</h2>
                             )}
-                            {totals.discount > 0 && (
-                              <div className="flex justify-between text-rose-500">
-                                <span>Descuento Comercial:</span>
-                                <span className="font-mono">-{formatCurrency(totals.discount, formHeader.currency)}</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between font-extrabold text-xs text-indigo-650 dark:text-indigo-400 border-t pt-1">
-                              <span>VALOR TOTAL PROPUESTA:</span>
-                              <span className="font-mono text-xs">{formatCurrency(totals.total, formHeader.currency)}</span>
-                            </div>
+                            <p className="text-[10px] text-slate-450 mt-1 font-bold">{companySettings.commercial_name || 'Somos Noveli Editorial'}</p>
+                            <p className="text-[10px] text-slate-400">{companySettings.official_email || 'contacto@somosnoveli.cl'} | {companySettings.website_url || 'www.somosnoveli.cl'}</p>
+                          </div>
+                          <div className="text-right text-[10px] text-slate-500 font-medium">
+                            <span className="font-bold text-slate-755 dark:text-slate-300 text-xs block">RESUMEN EJECUTIVO</span>
+                            <span className="font-bold text-indigo-655 block mt-0.5">{formHeader.quote_number}</span>
+                            <span className="block mt-1">Fecha Emisión: {formHeader.issue_date}</span>
+                            <span>Válida hasta: {formHeader.valid_until}</span>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Forma de Pago Table */}
-                      <div className="space-y-2">
-                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">4. Forma de Pago</h5>
-                        <div className="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
-                          <table className="w-full text-left border-collapse text-[10px]">
-                            <thead>
-                              <tr className="bg-slate-50 dark:bg-slate-950 font-bold uppercase text-[9px] text-slate-400 border-b border-slate-100 dark:border-slate-800">
-                                <th className="p-2">Alternativa</th>
-                                <th className="p-2 w-28 text-right">Total con IVA</th>
-                                <th className="p-2 w-20 text-center">% Inicio</th>
-                                <th className="p-2 w-48">Tipo / condición</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr className="border-b border-slate-50 dark:border-slate-850">
-                                <td className="p-2 font-bold">Propuesta Sugerida</td>
-                                <td className="p-2 text-right font-mono font-bold text-indigo-650 dark:text-indigo-400">{formatCurrency(totals.total, formHeader.currency)}</td>
-                                <td className="p-2 text-center font-bold">{paymentAdvancePct}%</td>
-                                <td className="p-2 text-slate-500 leading-tight">{formHeader.payment_terms}</td>
-                              </tr>
-                            </tbody>
-                          </table>
+                        {/* Table Inicial Box */}
+                        <div className="grid grid-cols-2 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden text-[11px]">
+                          <div className="p-3 border-r border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                            <span className="font-bold text-slate-400 block text-[9px] uppercase">Dirigido a:</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.author_name || 'Nuevo Autor'}</span>
+                          </div>
+                          <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                            <span className="font-bold text-slate-400 block text-[9px] uppercase">Fecha Emisión:</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.issue_date}</span>
+                          </div>
+                          <div className="p-3 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                            <span className="font-bold text-slate-400 block text-[9px] uppercase">Obra / Proyecto:</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.object || 'Proyecto Editorial'}</span>
+                          </div>
+                          <div className="p-3 bg-slate-50/50 dark:bg-slate-950/20">
+                            <span className="font-bold text-slate-400 block text-[9px] uppercase">Tipo de solicitud:</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-205">Propuesta Comercial</span>
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Plazo de Trabajo */}
-                      <div className="space-y-1">
-                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">5. Plazo de Trabajo</h5>
-                        <p className="text-slate-600 dark:text-slate-350 text-[11px] leading-relaxed">
-                          {formHeader.work_timeline}
-                        </p>
-                      </div>
+                        {/* Valores del servicio Table */}
+                        <div className="space-y-2">
+                          <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">1. Valores y Servicios</h5>
+                          <div className="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
+                            <table className="w-full text-left border-collapse text-[10px]">
+                              <thead>
+                                <tr className="bg-slate-50 dark:bg-slate-950 font-bold uppercase text-[9px] text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                                  <th className="p-2">{formHeader.has_alternatives ? 'Alternativa / Servicio' : 'Concepto / Servicio'}</th>
+                                  <th className="p-2 w-12 text-center">Cant.</th>
+                                  <th className="p-2 w-20 text-right">Neto</th>
+                                  <th className="p-2 w-16 text-right">{formHeader.iva_mode === 'Exento / sin IVA' ? 'IVA (Exento)' : 'IVA 19%'}</th>
+                                  <th className="p-2 w-24 text-right">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {formItems.map(item => {
+                                  const total = item.unit_price * item.quantity;
+                                  const rate = (Number(formHeader.tax_rate) || 19) / 100;
+                                  let net = 0;
+                                  let vat = 0;
+                                  if (formHeader.iva_mode === 'IVA incluido') {
+                                    net = Math.round(total / (1 + rate));
+                                    vat = total - net;
+                                  } else if (formHeader.iva_mode === '+ IVA') {
+                                    net = total;
+                                    vat = Math.round(net * rate);
+                                  } else { // Exento
+                                    net = total;
+                                    vat = 0;
+                                  }
+                                  return (
+                                    <tr key={item.id} className="border-b border-slate-50 dark:border-slate-855">
+                                      <td className="p-2 font-bold">{item.concept}</td>
+                                      <td className="p-2 text-center">{item.quantity}</td>
+                                      <td className="p-2 text-right font-mono">{formatCurrency(net, formHeader.currency)}</td>
+                                      <td className="p-2 text-right font-mono">{formHeader.iva_mode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, formHeader.currency)}</td>
+                                      <td className="p-2 text-right font-mono font-bold text-slate-700 dark:text-slate-300">{formatCurrency(formHeader.iva_mode === '+ IVA' ? (net + vat) : total, formHeader.currency)}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                          
+                          {!formHeader.has_alternatives ? (
+                            <div className="flex justify-end pt-1">
+                              <div className="w-64 space-y-1 text-right text-[10px]">
+                                <div className="flex justify-between font-extrabold text-xs text-indigo-655 dark:text-indigo-400">
+                                  <span>VALOR TOTAL PROPUESTA:</span>
+                                  <span className="font-mono text-xs">{formatCurrency(totals.total, formHeader.currency)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-[9px] text-slate-400 italic font-bold text-right pt-0.5">* Valores unitarios por alternativa independiente.</p>
+                          )}
+                        </div>
 
-                      {/* Exclusiones y Condiciones */}
-                      <div className="space-y-2">
-                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">6. Servicios No Incluidos y Condiciones</h5>
+                        {/* Forma de Pago y Plazo compact */}
                         <div className="grid grid-cols-2 gap-4 text-[10px]">
                           <div className="space-y-1 bg-slate-50/50 dark:bg-slate-950/20 p-2.5 rounded-lg border border-slate-100 dark:border-slate-850">
-                            <span className="font-bold text-slate-500 dark:text-slate-400">Qué NO incluye:</span>
-                            <p className="text-slate-600 dark:text-slate-400 whitespace-pre-line leading-relaxed">{formHeader.excludes_notes}</p>
+                            <span className="font-bold text-slate-500 dark:text-slate-400 block border-b pb-0.5 mb-1 text-[9px] uppercase tracking-wider">2. Condiciones de Pago:</span>
+                            <p className="text-slate-650 dark:text-slate-350 font-medium leading-relaxed">{formHeader.payment_terms}</p>
                           </div>
                           <div className="space-y-1 bg-slate-50/50 dark:bg-slate-950/20 p-2.5 rounded-lg border border-slate-100 dark:border-slate-850">
-                            <span className="font-bold text-slate-500 dark:text-slate-400">Requisitos para iniciar:</span>
-                            <p className="text-slate-600 dark:text-slate-400 whitespace-pre-line leading-relaxed">{formHeader.start_conditions}</p>
+                            <span className="font-bold text-slate-500 dark:text-slate-400 block border-b pb-0.5 mb-1 text-[9px] uppercase tracking-wider">3. Plazo de Trabajo:</span>
+                            <p className="text-slate-650 dark:text-slate-350 font-medium leading-relaxed">{formHeader.work_timeline}</p>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Vigencia */}
-                      <div className="space-y-1">
-                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">7. Vigencia</h5>
-                        <p className="text-slate-600 dark:text-slate-350 text-[11px] leading-relaxed">
-                          Esta propuesta tiene una validez de {formHeader.validity_days || 15} días corridos a contar de su fecha de emisión.
-                        </p>
-                      </div>
-
-                      {/* Nota Legal */}
-                      <div className="bg-slate-50/50 dark:bg-slate-950/20 p-3 rounded-lg border text-[8px] text-slate-400 space-y-1 italic leading-relaxed">
-                        {formHeader.legal_notes.split('\n').map((line, i) => (
-                          <p key={i}>{line}</p>
-                        ))}
-                      </div>
-
-                      {/* Signatures block */}
-                      <div className="pt-6 flex justify-between text-[9px] text-slate-450 text-center">
-                        <div className="w-40 border-t pt-2">
-                          <span className="font-bold text-slate-755 dark:text-slate-300 block">{companySettings.representative_name || 'Javier Román González'}</span>
-                          <span>{companySettings.representative_role || 'Representante Noveli Editorial'}</span>
+                        {/* Requisitos y vigencia */}
+                        <div className="grid grid-cols-2 gap-4 text-[10px]">
+                          <div className="space-y-1 bg-slate-50/50 dark:bg-slate-950/10 p-2 rounded-lg border border-slate-100 dark:border-slate-850">
+                            <span className="font-bold text-slate-500 dark:text-slate-400 block text-[9px] uppercase">Requisitos para iniciar:</span>
+                            <p className="text-slate-600 dark:text-slate-400 italic leading-relaxed">{formHeader.start_conditions}</p>
+                          </div>
+                          <div className="space-y-1 text-right">
+                            <span className="font-bold text-slate-500 dark:text-slate-400 text-[9px] uppercase block">Vigencia propuesta:</span>
+                            <p className="text-slate-600 dark:text-slate-400 italic mt-0.5">{formHeader.validity_days} días corridos.</p>
+                          </div>
                         </div>
-                        <div className="w-40 border-t pt-2">
-                          <span className="font-bold text-slate-755 dark:text-slate-300 block">Firma Autor/a</span>
-                          <span>{formHeader.author_name || 'Firma Autor / Cliente'}</span>
-                        </div>
+
+                        {/* Signatures block */}
+                        {formHeader.show_signatures !== false && (
+                          <div className="pt-6 flex justify-between text-[9px] text-slate-455 text-center">
+                            <div className="w-40 border-t pt-2">
+                              <span className="font-bold text-slate-755 dark:text-slate-300 block">{companySettings.representative_name || 'Javier Román González'}</span>
+                              <span>{companySettings.representative_role || 'Representante Noveli Editorial'}</span>
+                            </div>
+                            <div className="w-40 border-t pt-2">
+                              <span className="font-bold text-slate-755 dark:text-slate-300 block">Firma Autor/a</span>
+                              <span>{formHeader.author_name || 'Firma Autor / Cliente'}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Page Footer */}
+                      <div className="text-center text-[9px] text-slate-400 border-t pt-3 font-semibold">
+                        {companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.'}
                       </div>
                     </div>
+                  ) : (
+                    /* TWO-PAGE FORM (Formal completo, Con alternativas, etc.) */
+                    <>
+                      {/* PAGE 1 */}
+                      <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 text-xs space-y-6 min-h-[842px] flex flex-col justify-between">
+                        <div className="space-y-6">
+                          {/* Encabezado */}
+                          <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-b pb-1">
+                            <span>Noveli Editorial / Propuesta comercial preliminar</span>
+                            <span>Página 1</span>
+                          </div>
 
-                    {/* Page 2 Footer */}
-                    <div className="text-center text-[9px] text-slate-400 border-t pt-3 font-semibold">
-                      {companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.'}
-                    </div>
-                  </div>
+                          {/* Brand Header */}
+                          <div className="flex justify-between items-start">
+                            <div>
+                              {companySettings.logo_url ? (
+                                <img src={companySettings.logo_url} alt="Logo" className="max-h-12 max-w-full object-contain mb-2" />
+                              ) : (
+                                <h2 className="font-extrabold text-xl text-indigo-600 dark:text-indigo-400 tracking-wider">{companySettings.company_name || 'EDITORIAL NOVELI'}</h2>
+                              )}
+                              <p className="text-[10px] text-slate-455 mt-1 font-bold">{companySettings.commercial_name || 'Somos Noveli Editorial'}</p>
+                              <p className="text-[10px] text-slate-400">{companySettings.official_email || 'contacto@somosnoveli.cl'} | {companySettings.website_url || 'www.somosnoveli.cl'}</p>
+                            </div>
+                            <div className="text-right text-[10px] text-slate-505 font-medium">
+                              <span className="font-bold text-slate-705 dark:text-slate-300 text-xs block">PROPUESTA COMERCIAL PRELIMINAR</span>
+                              <span className="font-bold text-indigo-655 block mt-0.5">{formHeader.quote_number}</span>
+                              <span className="block mt-1">Fecha Emisión: {formHeader.issue_date}</span>
+                              <span>Válida hasta: {formHeader.valid_until}</span>
+                            </div>
+                          </div>
+
+                          {/* Table Inicial Box */}
+                          <div className="grid grid-cols-2 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden text-[11px]">
+                            <div className="p-3 border-r border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                              <span className="font-bold text-slate-400 block text-[9px] uppercase">Dirigido a:</span>
+                              <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.author_name || 'Nuevo Autor'}</span>
+                            </div>
+                            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                              <span className="font-bold text-slate-400 block text-[9px] uppercase">Fecha Emisión:</span>
+                              <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.issue_date}</span>
+                            </div>
+                            <div className="p-3 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                              <span className="font-bold text-slate-400 block text-[9px] uppercase">Obra / Proyecto:</span>
+                              <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.object || 'Proyecto Editorial'}</span>
+                            </div>
+                            <div className="p-3 bg-slate-50/50 dark:bg-slate-950/20">
+                              <span className="font-bold text-slate-400 block text-[9px] uppercase">Tipo de solicitud:</span>
+                              <span className="font-extrabold text-slate-800 dark:text-slate-205">Propuesta Comercial</span>
+                            </div>
+                          </div>
+
+                          {/* Objeto */}
+                          <div className="space-y-1">
+                            <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">1. Objeto de la propuesta</h5>
+                            <p className="text-slate-600 dark:text-slate-355 leading-relaxed text-[11px]">
+                              La presente propuesta tiene como objeto detallar la prestación de servicios editoriales y de producción para la obra "{formHeader.object || 'Proyecto del Autor'}". El objetivo es lograr un producto editorial de la más alta calidad bajo la marca Noveli Editorial.
+                            </p>
+                          </div>
+
+                          {/* Servicios Incluidos */}
+                          <div className="space-y-3">
+                            <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">2. Servicios Incluidos</h5>
+                            <div className="space-y-2">
+                              {includedItems.length === 0 ? (
+                                <p className="text-slate-400 italic">No se han seleccionado conceptos.</p>
+                              ) : (
+                                includedItems.map((item, index) => (
+                                  <div key={index} className="text-[11px] py-1 border-b border-slate-50 dark:border-slate-850 pb-1.5 flex gap-2">
+                                    <span className="font-bold text-indigo-650 dark:text-indigo-400">{index + 1}.</span>
+                                    <span className="text-slate-700 dark:text-slate-300 font-medium">{item}</span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Page 1 Footer */}
+                        <div className="text-center text-[9px] text-slate-400 border-t pt-3 font-semibold">
+                          {companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.'}
+                        </div>
+                      </div>
+
+                      {/* PAGE 2 */}
+                      <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 text-xs space-y-6 min-h-[842px] flex flex-col justify-between">
+                        <div className="space-y-6">
+                          {/* Encabezado */}
+                          <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-b pb-1">
+                            <span>Noveli Editorial / Propuesta comercial preliminar</span>
+                            <span>Página 2</span>
+                          </div>
+
+                          {/* Valores del servicio Table */}
+                          <div className="space-y-2">
+                            <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">3. Alternativas y Valor del Servicio</h5>
+                            <div className="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
+                              <table className="w-full text-left border-collapse text-[10px]">
+                                <thead>
+                                  <tr className="bg-slate-50 dark:bg-slate-950 font-bold uppercase text-[9px] text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                                    <th className="p-2">{formHeader.has_alternatives ? 'Alternativa / Servicio' : 'Servicio / Concepto'}</th>
+                                    <th className="p-2 w-12 text-center">Cant.</th>
+                                    <th className="p-2 w-20 text-right">Neto</th>
+                                    <th className="p-2 w-16 text-right">{formHeader.iva_mode === 'Exento / sin IVA' ? 'IVA (Exento)' : 'IVA 19%'}</th>
+                                    <th className="p-2 w-24 text-right">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {formItems.map(item => {
+                                    const total = item.unit_price * item.quantity;
+                                    const rate = (Number(formHeader.tax_rate) || 19) / 100;
+                                    let net = 0;
+                                    let vat = 0;
+                                    if (formHeader.iva_mode === 'IVA incluido') {
+                                      net = Math.round(total / (1 + rate));
+                                      vat = total - net;
+                                    } else if (formHeader.iva_mode === '+ IVA') {
+                                      net = total;
+                                      vat = Math.round(net * rate);
+                                    } else { // Exento
+                                      net = total;
+                                      vat = 0;
+                                    }
+                                    return (
+                                      <tr key={item.id} className="border-b border-slate-50 dark:border-slate-850">
+                                        <td className="p-2 font-bold">{item.concept}</td>
+                                        <td className="p-2 text-center">{item.quantity}</td>
+                                        <td className="p-2 text-right font-mono">{formatCurrency(net, formHeader.currency)}</td>
+                                        <td className="p-2 text-right font-mono">{formHeader.iva_mode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, formHeader.currency)}</td>
+                                        <td className="p-2 text-right font-mono font-bold text-slate-700 dark:text-slate-300">{formatCurrency(formHeader.iva_mode === '+ IVA' ? (net + vat) : total, formHeader.currency)}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                            
+                            {/* Totals Block */}
+                            {!formHeader.has_alternatives ? (
+                              <div className="flex justify-end pt-2">
+                                <div className="w-64 space-y-1 text-right text-[11px]">
+                                  <div className="flex justify-between text-slate-400">
+                                    <span>Subtotal Base:</span>
+                                    <span className="font-mono">{formatCurrency(totals.subtotal, formHeader.currency)}</span>
+                                  </div>
+                                  {totals.adjustmentAmount > 0 && (
+                                    <div className="flex justify-between text-indigo-655 dark:text-indigo-400">
+                                      <span>Ajuste por Extensión:</span>
+                                      <span className="font-mono">+{formatCurrency(totals.adjustmentAmount, formHeader.currency)}</span>
+                                    </div>
+                                  )}
+                                  {totals.discount > 0 && (
+                                    <div className="flex justify-between text-rose-500">
+                                      <span>Descuento Comercial:</span>
+                                      <span className="font-mono">-{formatCurrency(totals.discount, formHeader.currency)}</span>
+                                    </div>
+                                  )}
+                                  <div className="flex justify-between font-extrabold text-xs text-indigo-650 dark:text-indigo-400 border-t pt-1">
+                                    <span>VALOR TOTAL PROPUESTA:</span>
+                                    <span className="font-mono text-xs">{formatCurrency(totals.total, formHeader.currency)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-[9px] text-slate-400 italic font-bold text-right pt-0.5">* Valores unitarios por alternativa independiente.</p>
+                            )}
+                          </div>
+
+                          {/* Forma de Pago Table */}
+                          <div className="space-y-2">
+                            <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">4. Forma de Pago</h5>
+                            <div className="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
+                              <table className="w-full text-left border-collapse text-[10px]">
+                                <thead>
+                                  <tr className="bg-slate-50 dark:bg-slate-950 font-bold uppercase text-[9px] text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                                    <th className="p-2">Alternativa</th>
+                                    <th className="p-2 w-28 text-right">Total</th>
+                                    <th className="p-2 w-20 text-center">% Inicio</th>
+                                    <th className="p-2 w-48">Tipo / condición</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {formHeader.has_alternatives ? (
+                                    formItems.map((item, idx) => {
+                                      const total = item.unit_price * item.quantity;
+                                      const finalTotal = formHeader.iva_mode === '+ IVA' ? Math.round(total * (1 + (Number(formHeader.tax_rate) || 19) / 100)) : total;
+                                      return (
+                                        <tr key={item.id} className="border-b border-slate-50 dark:border-slate-850">
+                                          <td className="p-2 font-bold">{item.concept}</td>
+                                          <td className="p-2 text-right font-mono font-bold text-indigo-650 dark:text-indigo-400">{formatCurrency(finalTotal, formHeader.currency)}</td>
+                                          <td className="p-2 text-center font-bold">{paymentAdvancePct}%</td>
+                                          <td className="p-2 text-slate-500 leading-tight">
+                                            {paymentType === '100_inicio' ? '100% al inicio' :
+                                             paymentType === '50_inicio_50_termino' ? '50% inicio / 50% término' :
+                                             paymentType === '50_inicio_50_entrega' ? '50% inicio / 50% contra entrega' :
+                                             paymentType === 'cuotas' ? `${paymentAdvancePct}% anticipo y saldo en ${paymentInstallments} cuotas` :
+                                             formHeader.payment_terms}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })
+                                  ) : (
+                                    <tr className="border-b border-slate-50 dark:border-slate-850">
+                                      <td className="p-2 font-bold">Propuesta Sugerida</td>
+                                      <td className="p-2 text-right font-mono font-bold text-indigo-650 dark:text-indigo-400">{formatCurrency(totals.total, formHeader.currency)}</td>
+                                      <td className="p-2 text-center font-bold">{paymentAdvancePct}%</td>
+                                      <td className="p-2 text-slate-500 leading-tight">{formHeader.payment_terms}</td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+
+                          {/* Plazo de Trabajo */}
+                          <div className="space-y-1">
+                            <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">5. Plazo de Trabajo</h5>
+                            <p className="text-slate-600 dark:text-slate-350 text-[11px] leading-relaxed">
+                              {formHeader.work_timeline}
+                            </p>
+                          </div>
+
+                          {/* Exclusiones y Condiciones */}
+                          <div className="space-y-2">
+                            <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">6. Servicios No Incluidos y Condiciones</h5>
+                            <div className="grid grid-cols-2 gap-4 text-[10px]">
+                              <div className="space-y-1 bg-slate-50/50 dark:bg-slate-950/20 p-2.5 rounded-lg border border-slate-100 dark:border-slate-850">
+                                <span className="font-bold text-slate-500 dark:text-slate-400">Qué NO incluye:</span>
+                                <div className="text-slate-600 dark:text-slate-400 space-y-1">
+                                  {excludedItems.length === 0 ? (
+                                    <p className="italic">No hay exclusiones específicas.</p>
+                                  ) : (
+                                    excludedItems.map((item, idx) => (
+                                      <p key={idx}>• {item}</p>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                              <div className="space-y-1 bg-slate-50/50 dark:bg-slate-950/20 p-2.5 rounded-lg border border-slate-100 dark:border-slate-850">
+                                <span className="font-bold text-slate-500 dark:text-slate-400">Requisitos para iniciar:</span>
+                                <p className="text-slate-600 dark:text-slate-400 whitespace-pre-line leading-relaxed">{formHeader.start_conditions}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Vigencia */}
+                          <div className="space-y-1">
+                            <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">7. Vigencia</h5>
+                            <p className="text-slate-600 dark:text-slate-350 text-[11px] leading-relaxed">
+                              Esta propuesta tiene una validez de {formHeader.validity_days || 15} días corridos a contar de su fecha de emisión.
+                            </p>
+                          </div>
+
+                          {/* Nota Legal */}
+                          <div className="bg-slate-50/50 dark:bg-slate-950/20 p-3 rounded-lg border text-[8px] text-slate-400 space-y-1 italic leading-relaxed">
+                            {formHeader.legal_notes.split('\n').map((line, i) => (
+                              <p key={i}>{line}</p>
+                            ))}
+                          </div>
+
+                          {/* Signatures block */}
+                          {formHeader.show_signatures !== false && (
+                            <div className="pt-6 flex justify-between text-[9px] text-slate-455 text-center">
+                              <div className="w-40 border-t pt-2">
+                                <span className="font-bold text-slate-755 dark:text-slate-300 block">{companySettings.representative_name || 'Javier Román González'}</span>
+                                <span>{companySettings.representative_role || 'Representante Noveli Editorial'}</span>
+                              </div>
+                              <div className="w-40 border-t pt-2">
+                                <span className="font-bold text-slate-755 dark:text-slate-300 block">Firma Autor/a</span>
+                                <span>{formHeader.author_name || 'Firma Autor / Cliente'}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Page 2 Footer */}
+                        <div className="text-center text-[9px] text-slate-400 border-t pt-3 font-semibold">
+                          {companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.'}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

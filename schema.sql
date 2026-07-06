@@ -348,6 +348,11 @@ CREATE TABLE IF NOT EXISTS service_catalog (
     requires_signed_contract BOOLEAN NOT NULL DEFAULT TRUE,
     requires_agreement_sent BOOLEAN NOT NULL DEFAULT FALSE,
     requires_duration BOOLEAN NOT NULL DEFAULT FALSE,
+    includes_text TEXT,
+    excludes_text TEXT,
+    default_work_timeline TEXT,
+    default_payment_terms TEXT,
+    default_start_conditions TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -368,6 +373,11 @@ CREATE TABLE IF NOT EXISTS service_packs (
     requires_signed_contract BOOLEAN NOT NULL DEFAULT TRUE,
     requires_agreement_sent BOOLEAN NOT NULL DEFAULT FALSE,
     requires_duration BOOLEAN NOT NULL DEFAULT FALSE,
+    includes_text TEXT,
+    excludes_text TEXT,
+    default_work_timeline TEXT,
+    default_payment_terms TEXT,
+    default_start_conditions TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -408,6 +418,18 @@ CREATE TABLE IF NOT EXISTS quotations (
     total NUMERIC(12,2) DEFAULT 0.00,
     currency TEXT NOT NULL DEFAULT 'CLP' CHECK (currency IN ('CLP', 'USD')),
     includes_iva BOOLEAN NOT NULL DEFAULT FALSE,
+    iva_mode TEXT DEFAULT 'IVA incluido',
+    tax_rate NUMERIC(5,2) DEFAULT 19.00,
+    net_amount NUMERIC(12,2) DEFAULT 0.00,
+    payment_plan_type TEXT DEFAULT '50_inicio_50_termino',
+    upfront_percentage NUMERIC(5,2) DEFAULT 50.00,
+    installments INTEGER DEFAULT 1,
+    included_items JSONB DEFAULT '[]'::jsonb,
+    excluded_items JSONB DEFAULT '[]'::jsonb,
+    start_condition_items JSONB DEFAULT '[]'::jsonb,
+    proposal_format TEXT DEFAULT 'Formal completo',
+    show_signatures BOOLEAN DEFAULT TRUE,
+    has_alternatives BOOLEAN DEFAULT FALSE,
     payment_terms TEXT,
     work_timeline TEXT,
     includes_notes TEXT,

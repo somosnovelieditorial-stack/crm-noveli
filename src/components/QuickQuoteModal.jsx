@@ -95,6 +95,199 @@ export default function QuickQuoteModal({
   });
 
   const [formItems, setFormItems] = useState([]);
+  const [includedItems, setIncludedItems] = useState([]);
+  const [excludedItems, setExcludedItems] = useState([]);
+  const [manualIncludeText, setManualIncludeText] = useState('');
+  const [manualExcludeText, setManualExcludeText] = useState('');
+
+  // Payment Terms details
+  const [paymentType, setPaymentType] = useState('50_inicio_50_termino');
+  const [paymentAdvancePct, setPaymentAdvancePct] = useState(50);
+  const [paymentInstallments, setPaymentInstallments] = useState(3);
+  const [isPaymentTermsEditedManually, setIsPaymentTermsEditedManually] = useState(false);
+
+  // Requisitos de inicio
+  const [startRequirements, setStartRequirements] = useState({
+    aceptacion: true,
+    firma: true,
+    pago: true,
+    manuscrito: false,
+    materiales: false,
+    datos: false
+  });
+
+  // Inclusions/Exclusions defaults & suggested
+  const suggestedInclusionsList = [
+    'Revisión filológica y ortotipográfica',
+    'Corrección de estilo editorial',
+    'Diseño de portada personalizado (3 propuestas)',
+    'Maquetación interior profesional (novela/ensayo/poesía)',
+    'Maquetación ebook (ePub y Mobi)',
+    'Publicación y distribución bajo demanda en Amazon',
+    'Asignación de ISBN oficial y código de barras',
+    'Ficha en catálogo oficial de Noveli Editorial',
+    'Sesión fotográfica del autor para solapas',
+    'Material promocional (marcapáginas y banners digitales)',
+    'Lanzamiento virtual en redes sociales y canal YouTube',
+    'Asesoría comercial para distribución física',
+    '10 copias físicas de autor de regalo',
+    'Informe de lectura profesional preliminar'
+  ];
+
+  const suggestedExclusionsList = [
+    'Impresión física de libros (se cotiza por separado según cantidad)',
+    'Distribución física obligatoria en librerías retail',
+    'Trámites de registro de propiedad intelectual fuera de Chile',
+    'Traducción de la obra a otros idiomas',
+    'Campañas de publicidad pagada (Facebook/Instagram Ads)',
+    'Organización de eventos de lanzamiento presenciales',
+    'Ilustraciones personalizadas a medida para el interior',
+    'Derechos de adaptaciones audiovisuales o guion'
+  ];
+
+  const parseBulletsToList = (text) => {
+    if (!text) return [];
+    return text.split('\n')
+      .map(line => line.replace(/^•\s*/, '').trim())
+      .filter(line => line.length > 0);
+  };
+
+  const getSuggestedInclusions = () => {
+    const fromItems = formItems.flatMap(item => {
+      if (item.source_type === 'pack') {
+        const p = packs.find(pk => pk.id === item.pack_id);
+        return p ? parseBulletsToList(p.includes_text || '') : [];
+      } else if (item.source_type === 'catalog') {
+        const c = catalog.find(ct => ct.id === item.catalog_id);
+        return c ? parseBulletsToList(c.includes_text || '') : [];
+      }
+      return [];
+    });
+
+    const combined = Array.from(new Set([...suggestedInclusionsList, ...fromItems]));
+    return combined.filter(item => !includedItems.includes(item) && !excludedItems.includes(item));
+  };
+
+  const getSuggestedExclusions = () => {
+    const fromItems = formItems.flatMap(item => {
+      if (item.source_type === 'pack') {
+        const p = packs.find(pk => pk.id === item.pack_id);
+        return p ? parseBulletsToList(p.excludes_text || '') : [];
+      } else if (item.source_type === 'catalog') {
+        const c = catalog.find(ct => ct.id === item.catalog_id);
+        return c ? parseBulletsToList(c.excludes_text || '') : [];
+      }
+      return [];
+    });
+
+    const combined = Array.from(new Set([...suggestedExclusionsList, ...fromItems]));
+    return combined.filter(item => !includedItems.includes(item) && !excludedItems.includes(item));
+  };
+
+  const handleAddInclude = (val) => {
+    const clean = val.trim();
+    if (!clean) return;
+    if (excludedItems.includes(clean)) {
+      alert('Este ítem ya está en la lista de no incluidos. Deseléccionalo de ahí primero.');
+      return;
+    }
+    if (!includedItems.includes(clean)) {
+      setIncludedItems([...includedItems, clean]);
+    }
+  };
+
+  const handleRemoveInclude = (idx) => {
+    setIncludedItems(includedItems.filter((_, i) => i !== idx));
+  };
+
+  const handleAddExclude = (val) => {
+    const clean = val.trim();
+    if (!clean) return;
+    if (includedItems.includes(clean)) {
+      alert('Este ítem ya está en la lista de incluidos. Deseléccionalo de ahí primero.');
+      return;
+    }
+    if (!excludedItems.includes(clean)) {
+      setExcludedItems([...excludedItems, clean]);
+    }
+  };
+
+  const handleRemoveExclude = (idx) => {
+    setExcludedItems(excludedItems.filter((_, i) => i !== idx));
+  };
+
+  // Keep includes_notes and excludes_notes updated
+  useEffect(() => {
+    setFormHeader(prev => ({
+      ...prev,
+      includes_notes: includedItems.map(item => `• ${item}`).join('\n'),
+      excludes_notes: excludedItems.map(item => `• ${item}`).join('\n')
+    }));
+  }, [includedItems, excludedItems]);
+
+  // Keep payment terms updated
+  useEffect(() => {
+    if (isPaymentTermsEditedManually) return;
+    let text = '';
+    const totals = getTotals();
+    const formattedTotal = formatCurrency(totals.total, formHeader.currency);
+    const advanceAmount = Math.round(totals.total * (paymentAdvancePct / 100));
+    const formattedAdvance = formatCurrency(advanceAmount, formHeader.currency);
+
+    if (paymentType === '100_inicio') {
+      text = `Pago del 100% de la propuesta sugerida al inicio del proyecto (${formattedTotal}).`;
+    } else if (paymentType === '55_inicio_55_termino' || paymentType === '50_inicio_50_termino') {
+      const restPct = 100 - paymentAdvancePct;
+      const restAmount = totals.total - advanceAmount;
+      const formattedRest = formatCurrency(restAmount, formHeader.currency);
+      text = `${paymentAdvancePct}% al inicio del proyecto (${formattedAdvance}) y ${restPct}% al término de los servicios contra entrega (${formattedRest}).`;
+    } else if (paymentType === '50_inicio_50_entrega') {
+      const restPct = 100 - paymentAdvancePct;
+      const restAmount = totals.total - advanceAmount;
+      const formattedRest = formatCurrency(restAmount, formHeader.currency);
+      text = `${paymentAdvancePct}% al inicio del proyecto (${formattedAdvance}) y ${restPct}% contra entrega del manuscrito diagramado listo para imprenta (${formattedRest}).`;
+    } else if (paymentType === 'cuotas') {
+      const remainingPct = 100 - paymentAdvancePct;
+      const installmentsCount = paymentInstallments || 3;
+      const remainingAmount = totals.total - advanceAmount;
+      const installmentAmount = Math.round(remainingAmount / installmentsCount);
+      const formattedInstallment = formatCurrency(installmentAmount, formHeader.currency);
+      text = `${paymentAdvancePct}% de anticipo (${formattedAdvance}) y saldo del ${remainingPct}% cancelado en ${installmentsCount} cuotas consecutivas mensuales de ${formattedInstallment} cada una.`;
+    } else {
+      text = formHeader.payment_terms;
+    }
+
+    setFormHeader(prev => ({ ...prev, payment_terms: text }));
+  }, [paymentType, paymentAdvancePct, paymentInstallments, formItems, formHeader.currency, formHeader.extension_adjustment_type, formHeader.extension_adjustment_value, formHeader.discount]);
+
+  useEffect(() => {
+    const active = Object.keys(startRequirements)
+      .filter(k => startRequirements[k])
+      .map(k => {
+        const labelsMap = {
+          aceptacion: 'Aceptación propuesta',
+          firma: 'Firma de contrato',
+          pago: 'Pago inicial',
+          manuscrito: 'Recepción manuscrito',
+          materiales: 'Recepción portada/archivos',
+          datos: 'Datos del autor'
+        };
+        return labelsMap[k];
+      });
+    setFormHeader(prev => ({
+      ...prev,
+      start_conditions: active.length > 0 ? active.map(item => `• ${item}`).join('\n') : 'A convenir.'
+    }));
+  }, [startRequirements]);
+
+  const handleProposalFormatChange = (fmt) => {
+    setFormHeader(prev => ({
+      ...prev,
+      proposal_format: fmt,
+      has_alternatives: fmt === 'Con alternativas'
+    }));
+  };
+
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -111,6 +304,7 @@ export default function QuickQuoteModal({
     if (isOpen) {
       fetchCatalogAndPacks();
       if (quotationToEdit) {
+        const loadedFormat = quotationToEdit.proposal_format || 'Formal completo';
         setFormHeader({
           author_name: quotationToEdit.author_name || '',
           author_email: quotationToEdit.author_email || '',
@@ -130,7 +324,7 @@ export default function QuickQuoteModal({
           extension_adjustment_value: quotationToEdit.extension_adjustment_value || 0,
           discount: quotationToEdit.discount || 0,
           currency: quotationToEdit.currency || 'CLP',
-          includes_iva: quotationToEdit.includes_iva !== undefined ? quotationToEdit.includes_iva : true,
+          includes_iva: quotationToEdit.iva_mode === 'IVA incluido',
           payment_terms: quotationToEdit.payment_terms || '',
           work_timeline: quotationToEdit.work_timeline || '',
           includes_notes: quotationToEdit.includes_notes || '',
@@ -138,8 +332,36 @@ export default function QuickQuoteModal({
           start_conditions: quotationToEdit.start_conditions || '',
           legal_notes: quotationToEdit.legal_notes || '',
           other_notes: quotationToEdit.other_notes || '',
-          notes: quotationToEdit.notes || ''
+          notes: quotationToEdit.notes || '',
+          
+          // NEW COLUMNS
+          iva_mode: quotationToEdit.iva_mode || (quotationToEdit.includes_iva ? 'IVA incluido' : 'Exento / sin IVA'),
+          tax_rate: quotationToEdit.tax_rate || 19,
+          proposal_format: loadedFormat,
+          show_signatures: quotationToEdit.show_signatures !== false,
+          has_alternatives: quotationToEdit.has_alternatives || loadedFormat === 'Con alternativas'
         });
+
+        // Parse lists
+        setIncludedItems(quotationToEdit.included_items || parseBulletsToList(quotationToEdit.includes_notes || ''));
+        setExcludedItems(quotationToEdit.excluded_items || parseBulletsToList(quotationToEdit.excludes_notes || ''));
+
+        // Payments
+        setPaymentType(quotationToEdit.payment_plan_type || '50_inicio_50_termino');
+        setPaymentAdvancePct(quotationToEdit.upfront_percentage !== undefined ? quotationToEdit.upfront_percentage : 50);
+        setPaymentInstallments(quotationToEdit.installments || 3);
+        setIsPaymentTermsEditedManually(true);
+
+        const reqs = quotationToEdit.start_condition_items || parseBulletsToList(quotationToEdit.start_conditions || '');
+        setStartRequirements({
+          aceptacion: reqs.includes('Aceptación propuesta') || reqs.includes('Aceptación formal de la propuesta.'),
+          firma: reqs.includes('Firma de contrato'),
+          pago: reqs.includes('Pago inicial') || reqs.includes('Pago del anticipo inicial'),
+          manuscrito: reqs.includes('Recepción manuscrito'),
+          materiales: reqs.includes('Recepción portada/archivos') || reqs.includes('envío del manuscrito definitivo'),
+          datos: reqs.includes('Datos del autor')
+        });
+
         fetchQuotationItems(quotationToEdit.id);
       } else {
         const randNum = Math.floor(1000 + Math.random() * 9000);
@@ -174,8 +396,38 @@ export default function QuickQuoteModal({
 • Esta cotización no constituye factura ni boleta.
 • Los valores indicados son referenciales hasta la aceptación formal del cliente y confirmación de pago.`,
           other_notes: '',
-          notes: ''
+          notes: '',
+          
+          iva_mode: 'IVA incluido',
+          tax_rate: 19,
+          proposal_format: 'Formal completo',
+          show_signatures: true,
+          has_alternatives: false
         });
+
+        setIncludedItems([
+          'Revisión filológica y ortotipográfica',
+          'Diseño de portada personalizado (3 propuestas)',
+          'Maquetación interior profesional (novela/ensayo/poesía)',
+          'Entrega de archivos finales en formato digital'
+        ]);
+        setExcludedItems([
+          'Impresión física de libros (se cotiza por separado según cantidad)',
+          'Distribución física obligatoria en librerías retail',
+          'Trámites de registro de propiedad intelectual fuera de Chile'
+        ]);
+        setStartRequirements({
+          aceptacion: true,
+          firma: true,
+          pago: true,
+          manuscrito: false,
+          materiales: false,
+          datos: false
+        });
+        setPaymentType('50_inicio_50_termino');
+        setPaymentAdvancePct(50);
+        setPaymentInstallments(3);
+        setIsPaymentTermsEditedManually(false);
         setFormItems([]);
       }
       setFormError('');
@@ -415,17 +667,34 @@ export default function QuickQuoteModal({
 
     const subtotalAdjusted = subtotal + adjustmentAmount;
     const discount = Number(formHeader.discount) || 0;
-    const total = Math.max(0, subtotalAdjusted - discount);
+    const totalRaw = Math.max(0, subtotalAdjusted - discount);
 
-    const split = calculateVatSplit(total, formHeader.includes_iva);
+    let net = 0;
+    let vat = 0;
+    let total = 0;
+    const rate = (Number(formHeader.tax_rate) || 19) / 100;
+
+    if (formHeader.iva_mode === 'IVA incluido') {
+      total = totalRaw;
+      net = Math.round(total / (1 + rate));
+      vat = total - net;
+    } else if (formHeader.iva_mode === '+ IVA') {
+      net = totalRaw;
+      vat = Math.round(net * rate);
+      total = net + vat;
+    } else { // 'Exento / sin IVA'
+      net = totalRaw;
+      vat = 0;
+      total = totalRaw;
+    }
 
     return {
       subtotal,
       adjustmentAmount,
       subtotalAdjusted,
       discount,
-      net: split.net,
-      vat: split.vat,
+      net,
+      vat,
       total
     };
   };
@@ -447,6 +716,20 @@ export default function QuickQuoteModal({
     try {
       const orgId = await getValidOrgId();
       const totals = getTotals();
+
+      const startConditionItems = Object.keys(startRequirements)
+        .filter(k => startRequirements[k])
+        .map(k => {
+          const optionsMap = {
+            aceptacion: 'Aceptación propuesta',
+            firma: 'Firma de contrato',
+            pago: 'Pago inicial',
+            manuscrito: 'Recepción manuscrito',
+            materiales: 'Recepción portada/archivos',
+            datos: 'Datos del autor'
+          };
+          return optionsMap[k];
+        });
 
       const payload = {
         organization_id: orgId,
@@ -472,7 +755,7 @@ export default function QuickQuoteModal({
         tax_amount: totals.vat,
         total: totals.total,
         currency: formHeader.currency,
-        includes_iva: formHeader.includes_iva,
+        includes_iva: formHeader.iva_mode === 'IVA incluido',
         payment_terms: formHeader.payment_terms,
         work_timeline: formHeader.work_timeline,
         includes_notes: formHeader.includes_notes,
@@ -483,7 +766,21 @@ export default function QuickQuoteModal({
         notes: formHeader.notes,
         status: formHeader.status,
         accepted_at: formHeader.status === 'aceptada' ? new Date().toISOString() : quotationToEdit?.accepted_at || null,
-        rejected_at: formHeader.status === 'rechazada' ? new Date().toISOString() : quotationToEdit?.rejected_at || null
+        rejected_at: formHeader.status === 'rechazada' ? new Date().toISOString() : quotationToEdit?.rejected_at || null,
+
+        // NEW COLUMNS
+        iva_mode: formHeader.iva_mode,
+        tax_rate: Number(formHeader.tax_rate) || 19,
+        net_amount: totals.net,
+        payment_plan_type: paymentType,
+        upfront_percentage: Number(paymentAdvancePct),
+        installments: Number(paymentInstallments),
+        included_items: includedItems,
+        excluded_items: excludedItems,
+        start_condition_items: startConditionItems,
+        proposal_format: formHeader.proposal_format,
+        show_signatures: formHeader.show_signatures,
+        has_alternatives: formHeader.has_alternatives
       };
 
       let quoteId = '';
@@ -543,14 +840,32 @@ export default function QuickQuoteModal({
       const secondaryColor = [30, 41, 59]; // Slate-800
       const lightBg = [248, 250, 252]; // Slate-50
 
-      // PAGE 1: OBJETO & SERVICIOS INCLUIDOS
-      // Encabezado
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.setTextColor(148, 163, 184);
-      doc.text('Noveli Editorial / Propuesta comercial preliminar', 20, 12);
-      doc.setDrawColor(226, 232, 240);
-      doc.line(20, 14, 190, 14);
+      const format = quote.proposal_format || 'Formal completo';
+      const showSigs = quote.show_signatures !== false;
+      const isExec = format === 'Resumen ejecutivo';
+      const hasAlts = quote.has_alternatives || format === 'Con alternativas';
+
+      const writeHeader = (pageNumber) => {
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text('Noveli Editorial / Propuesta comercial preliminar', 20, 12);
+        doc.setDrawColor(226, 232, 240);
+        doc.line(20, 14, 190, 14);
+        
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`Página ${pageNumber}`, 180, 12);
+      };
+
+      const writeFooter = () => {
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.text(companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.', 45, 287);
+      };
+
+      // PAGE 1
+      writeHeader(1);
 
       let nextY = 32;
       let imgH = 0;
@@ -571,13 +886,13 @@ export default function QuickQuoteModal({
           imgW = maxH_mm * ratio;
         }
         
-        let format = 'PNG';
+        let formatExt = 'PNG';
         const urlLower = String(companySettings.logo_url).toLowerCase();
-        if (urlLower.includes('.jpg') || urlLower.includes('.jpeg')) format = 'JPEG';
-        else if (urlLower.includes('.webp')) format = 'WEBP';
-        else if (urlLower.includes('.svg')) format = 'SVG';
+        if (urlLower.includes('.jpg') || urlLower.includes('.jpeg')) formatExt = 'JPEG';
+        else if (urlLower.includes('.webp')) formatExt = 'WEBP';
+        else if (urlLower.includes('.svg')) formatExt = 'SVG';
 
-        doc.addImage(logoImg, format, 20, 18, imgW, imgH);
+        doc.addImage(logoImg, formatExt, 20, 18, imgW, imgH);
         nextY = 18 + imgH + 5;
       } else {
         doc.setFont('Helvetica', 'bold');
@@ -605,9 +920,7 @@ export default function QuickQuoteModal({
       doc.setDrawColor(203, 213, 225);
       doc.setFillColor(248, 250, 252);
       doc.rect(20, tableY, 170, 20, 'FD');
-      // vertical separator line
       doc.line(105, tableY, 105, tableY + 20);
-      // horizontal separator line
       doc.line(20, tableY + 10, 190, tableY + 10);
 
       doc.setFont('Helvetica', 'bold');
@@ -625,80 +938,74 @@ export default function QuickQuoteModal({
       doc.text(quote.issue_date || '', 131, tableY + 6);
       doc.text('Propuesta Comercial', 133, tableY + 16);
 
-      // Sección 1: OBJETO
-      let s1Y = tableY + 26;
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(...primaryColor);
-      doc.text('1. OBJETO', 20, s1Y);
-      doc.setDrawColor(...primaryColor);
-      doc.line(20, s1Y + 1.5, 35, s1Y + 1.5);
+      let currentY = tableY + 25;
 
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor(51, 65, 85);
-      const objetoText = `La presente propuesta tiene como objeto detallar la prestación de servicios editoriales y de producción para la obra "${quote.object || 'Proyecto del Autor'}". El objetivo es lograr un producto editorial de la más alta calidad bajo la marca Noveli Editorial.`;
-      const splitObjeto = doc.splitTextToSize(objetoText, 170);
-      doc.text(splitObjeto, 20, s1Y + 6);
-
-      // Sección 2: SERVICIOS INCLUIDOS
-      let s2Y = s1Y + 22;
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(...primaryColor);
-      doc.text('2. SERVICIOS INCLUIDOS', 20, s2Y);
-      doc.line(20, s2Y + 1.5, 55, s2Y + 1.5);
-
-      let itemsY = s2Y + 7;
-      (items || []).forEach((item, idx) => {
-        if (itemsY > 265) {
-          doc.addPage();
-          itemsY = 20; // reset on new page if it overflows
-        }
+      if (!isExec) {
+        // Sección 1: OBJETO
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.setTextColor(30, 41, 59);
-        doc.text(`${idx + 1}. ${item.concept}`, 20, itemsY);
-        
+        doc.setFontSize(10);
+        doc.setTextColor(...primaryColor);
+        doc.text('1. OBJETO', 20, currentY);
+        doc.setDrawColor(...primaryColor);
+        doc.line(20, currentY + 1.5, 35, currentY + 1.5);
+
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(100, 116, 139);
-        const splitDesc = doc.splitTextToSize(item.description || 'Sin descripción adicional.', 160);
-        doc.text(splitDesc, 24, itemsY + 4.5);
-        itemsY += 6 + (splitDesc.length * 3.5);
-      });
+        doc.setFontSize(8.5);
+        doc.setTextColor(51, 65, 85);
+        const objetoText = `La presente propuesta tiene como objeto detallar la prestación de servicios editoriales y de producción para la obra "${quote.object || 'Proyecto del Autor'}". El objetivo es lograr un producto editorial de la más alta calidad bajo la marca Noveli Editorial.`;
+        const splitObjeto = doc.splitTextToSize(objetoText, 170);
+        doc.text(splitObjeto, 20, currentY + 6);
 
-      // PAGE 2: VALORES, PAGOS, PLAZOS Y EXCLUSIONES
-      doc.addPage();
+        currentY += 22;
 
-      // Top header page 2
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.setTextColor(148, 163, 184);
-      doc.text('Noveli Editorial / Propuesta comercial preliminar', 20, 12);
-      doc.setDrawColor(226, 232, 240);
-      doc.line(20, 14, 190, 14);
+        // Sección 2: SERVICIOS INCLUIDOS
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(...primaryColor);
+        doc.text('2. SERVICIOS INCLUIDOS', 20, currentY);
+        doc.line(20, currentY + 1.5, 55, currentY + 1.5);
 
-      // Sección 3: ALTERNATIVAS Y VALOR DEL SERVICIO
-      let s3Y = 22;
+        let itemsY = currentY + 7;
+        const pdfIncludes = (quote.included_items && Array.isArray(quote.included_items) && quote.included_items.length > 0)
+          ? quote.included_items
+          : (includedItems.length > 0 ? includedItems : parseBulletsToList(quote.includes_notes || ''));
+
+        pdfIncludes.forEach((itemText, idx) => {
+          if (itemsY > 265) {
+            doc.addPage();
+            writeHeader(1.5);
+            itemsY = 25;
+          }
+          doc.setFont('Helvetica', 'normal');
+          doc.setFontSize(8.5);
+          doc.setTextColor(30, 41, 59);
+          doc.text(`${idx + 1}. ${itemText}`, 20, itemsY);
+          itemsY += 6;
+        });
+
+        doc.addPage();
+        writeHeader(2);
+        currentY = 22;
+      }
+
+      // Sección 3: VALORES DEL SERVICIO
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(10);
       doc.setTextColor(...primaryColor);
-      doc.text('3. ALTERNATIVAS Y VALOR DEL SERVICIO', 20, s3Y);
+      doc.text(isExec ? '1. VALORES Y SERVICIOS' : '3. ALTERNATIVAS Y VALOR DEL SERVICIO', 20, currentY);
       doc.setDrawColor(...primaryColor);
-      doc.line(20, s3Y + 1.5, 80, s3Y + 1.5);
+      doc.line(20, currentY + 1.5, isExec ? 55 : 80, currentY + 1.5);
 
-      // Draw table for items
-      let tableValY = s3Y + 6;
+      let tableValY = currentY + 6;
       doc.setFillColor(248, 250, 252);
       doc.rect(20, tableValY, 170, 7, 'F');
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(71, 85, 105);
-      doc.text('Servicio / Concepto', 23, tableValY + 4.5);
+      doc.text(hasAlts ? 'Alternativa / Servicio' : 'Servicio / Concepto', 23, tableValY + 4.5);
       doc.text('Cant.', 105, tableValY + 4.5);
       doc.text('Valor Neto', 120, tableValY + 4.5);
-      doc.text('IVA 19%', 145, tableValY + 4.5);
+      doc.text(quote.iva_mode === 'Exento / sin IVA' ? 'IVA (Exento)' : 'IVA 19%', 145, tableValY + 4.5);
       doc.text('Total', 170, tableValY + 4.5);
 
       let rowY = tableValY + 7;
@@ -706,32 +1013,52 @@ export default function QuickQuoteModal({
       doc.setTextColor(30, 41, 59);
       doc.setDrawColor(241, 245, 249);
 
+      const ivaMode = quote.iva_mode || (quote.includes_iva ? 'IVA incluido' : 'Exento / sin IVA');
+      const taxRate = Number(quote.tax_rate) || 19;
+
       (items || []).forEach(item => {
         const total = Number(item.unit_price) * Number(item.quantity);
-        const net = quote.includes_iva ? Math.round(total / 1.19) : total;
-        const vat = quote.includes_iva ? (total - net) : 0;
+        let net = 0;
+        let vat = 0;
+        if (ivaMode === 'IVA incluido') {
+          net = Math.round(total / (1 + taxRate / 100));
+          vat = total - net;
+        } else if (ivaMode === '+ IVA') {
+          net = total;
+          vat = Math.round(net * (taxRate / 100));
+        } else { // Exento
+          net = total;
+          vat = 0;
+        }
 
         doc.line(20, rowY + 6, 190, rowY + 6);
         doc.text(String(item.concept).substring(0, 45), 23, rowY + 4);
         doc.text(String(item.quantity || 1), 107, rowY + 4);
         doc.text(formatCurrency(net, quote.currency), 120, rowY + 4);
-        doc.text(formatCurrency(vat, quote.currency), 145, rowY + 4);
-        doc.text(formatCurrency(total, quote.currency), 170, rowY + 4);
+        doc.text(ivaMode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, quote.currency), 145, rowY + 4);
+        doc.text(formatCurrency(ivaMode === '+ IVA' ? (net + vat) : total, quote.currency), 170, rowY + 4);
         rowY += 6;
       });
 
       // Totals display
-      doc.setFont('Helvetica', 'bold');
-      doc.text('TOTAL GENERAL CON IVA:', 110, rowY + 5);
-      doc.text(formatCurrency(quote.total, quote.currency), 170, rowY + 5);
-      rowY += 10;
+      if (!hasAlts) {
+        doc.setFont('Helvetica', 'bold');
+        doc.text('TOTAL GENERAL:', 110, rowY + 5);
+        doc.text(formatCurrency(quote.total, quote.currency), 170, rowY + 5);
+        rowY += 10;
+      } else {
+        doc.setFont('Helvetica', 'italic');
+        doc.setFontSize(7.5);
+        doc.text('* Valores unitarios por alternativa independiente.', 23, rowY + 5);
+        rowY += 10;
+      }
 
       // Sección 4: FORMA DE PAGO
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(10);
       doc.setTextColor(...primaryColor);
-      doc.text('4. FORMA DE PAGO', 20, rowY);
-      doc.line(20, rowY + 1.5, 50, rowY + 1.5);
+      doc.text(isExec ? '2. CONDICIONES DE PAGO' : '4. FORMA DE PAGO', 20, rowY);
+      doc.line(20, rowY + 1.5, isExec ? 60 : 50, rowY + 1.5);
 
       let payTableY = rowY + 6;
       doc.setFillColor(248, 250, 252);
@@ -740,34 +1067,49 @@ export default function QuickQuoteModal({
       doc.setFontSize(8);
       doc.setTextColor(71, 85, 105);
       doc.text('Alternativa', 23, payTableY + 4.5);
-      doc.text('Total con IVA', 60, payTableY + 4.5);
+      doc.text('Total', 60, payTableY + 4.5);
       doc.text('% Anticipo', 95, payTableY + 4.5);
       doc.text('Condición de pago', 120, payTableY + 4.5);
 
       doc.setFont('Helvetica', 'normal');
       doc.setTextColor(30, 41, 59);
-      doc.line(20, payTableY + 7 + 10, 190, payTableY + 7 + 10);
-      doc.text('Propuesta Sugerida', 23, payTableY + 13);
-      doc.text(formatCurrency(quote.total, quote.currency), 60, payTableY + 13);
-      
-      // Look for the percentage block in payment terms to display
-      let pct = 50;
-      const matchPct = String(quote.payment_terms || '').match(/(\d+)%/);
-      if (matchPct) {
-        pct = parseInt(matchPct[1], 10);
-      }
-      doc.text(`${pct}%`, 97, payTableY + 13);
-      const splitPayTerms = doc.splitTextToSize(quote.payment_terms || '', 68);
-      doc.text(splitPayTerms, 120, payTableY + 11);
 
-      rowY = payTableY + 7 + 16;
+      const upfrontPct = quote.upfront_percentage !== undefined ? quote.upfront_percentage : (paymentAdvancePct || 50);
+
+      if (hasAlts) {
+        let pRowY = payTableY + 7;
+        (items || []).forEach(item => {
+          const itemTotal = Number(item.unit_price) * Number(item.quantity);
+          const finalItemTotal = ivaMode === '+ IVA' ? Math.round(itemTotal * (1 + taxRate/100)) : itemTotal;
+          doc.line(20, pRowY + 6, 190, pRowY + 6);
+          doc.text(String(item.concept).substring(0, 20), 23, pRowY + 4);
+          doc.text(formatCurrency(finalItemTotal, quote.currency), 60, pRowY + 4);
+          doc.text(`${upfrontPct}%`, 97, pRowY + 4);
+          const displayTerms = quote.payment_plan_type === '100_inicio' ? '100% al inicio' :
+                               quote.payment_plan_type === '50_inicio_50_termino' ? '50% inicio / 50% término' :
+                               quote.payment_plan_type === '50_inicio_50_entrega' ? '50% inicio / 50% contra entrega' :
+                               quote.payment_plan_type === 'cuotas' ? `${upfrontPct}% anticipo, saldo en ${quote.installments || 3} cuotas` :
+                               String(quote.payment_terms).substring(0, 35);
+          doc.text(displayTerms, 120, pRowY + 4);
+          pRowY += 6;
+        });
+        rowY = pRowY + 4;
+      } else {
+        doc.line(20, payTableY + 7 + 10, 190, payTableY + 7 + 10);
+        doc.text('Propuesta Sugerida', 23, payTableY + 13);
+        doc.text(formatCurrency(quote.total, quote.currency), 60, payTableY + 13);
+        doc.text(`${upfrontPct}%`, 97, payTableY + 13);
+        const splitPayTerms = doc.splitTextToSize(quote.payment_terms || '', 68);
+        doc.text(splitPayTerms, 120, payTableY + 11);
+        rowY = payTableY + 7 + 16;
+      }
 
       // Sección 5: PLAZO DE TRABAJO
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(10);
       doc.setTextColor(...primaryColor);
-      doc.text('5. PLAZO DE TRABAJO', 20, rowY);
-      doc.line(20, rowY + 1.5, 55, rowY + 1.5);
+      doc.text(isExec ? '3. PLAZO DE TRABAJO' : '5. PLAZO DE TRABAJO', 20, rowY);
+      doc.line(20, rowY + 1.5, isExec ? 55 : 55, rowY + 1.5);
 
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8.5);
@@ -776,83 +1118,108 @@ export default function QuickQuoteModal({
 
       rowY += 13;
 
-      // Sección 6: SERVICIOS NO INCLUIDOS Y CONDICIONES
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(...primaryColor);
-      doc.text('6. SERVICIOS NO INCLUIDOS Y CONDICIONES', 20, rowY);
-      doc.line(20, rowY + 1.5, 90, rowY + 1.5);
+      if (!isExec) {
+        // Sección 6: SERVICIOS NO INCLUIDOS Y CONDICIONES
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(...primaryColor);
+        doc.text('6. SERVICIOS NO INCLUIDOS Y CONDICIONES', 20, rowY);
+        doc.line(20, rowY + 1.5, 90, rowY + 1.5);
 
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(71, 85, 105);
-      doc.text('Qué no incluye:', 20, rowY + 6);
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      const splitExcludes = doc.splitTextToSize(quote.excludes_notes || '• Exclusiones estándar.', 75);
-      doc.text(splitExcludes, 20, rowY + 10);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(71, 85, 105);
+        doc.text('Qué no incluye:', 20, rowY + 6);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        const pdfExcludes = (quote.excluded_items && Array.isArray(quote.excluded_items) && quote.excluded_items.length > 0)
+          ? quote.excluded_items
+          : (excludedItems.length > 0 ? excludedItems : parseBulletsToList(quote.excludes_notes || ''));
+        const excludesText = pdfExcludes.map(e => `• ${e}`).join('\n');
+        const splitExcludes = doc.splitTextToSize(excludesText || '• Exclusiones estándar.', 75);
+        doc.text(splitExcludes, 20, rowY + 10);
 
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(71, 85, 105);
-      doc.text('Requisitos para iniciar:', 105, rowY + 6);
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      const splitReqs = doc.splitTextToSize(quote.start_conditions || '• Aceptación formal de la propuesta.', 80);
-      doc.text(splitReqs, 105, rowY + 10);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(71, 85, 105);
+        doc.text('Requisitos para iniciar:', 105, rowY + 6);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        const splitReqs = doc.splitTextToSize(quote.start_conditions || '• Aceptación de la propuesta.', 80);
+        doc.text(splitReqs, 105, rowY + 10);
 
-      rowY += 26 + Math.max(splitExcludes.length, splitReqs.length) * 3.5;
+        rowY += 26 + Math.max(splitExcludes.length, splitReqs.length) * 3.5;
 
-      // Sección 7: VIGENCIA
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(...primaryColor);
-      doc.text('7. VIGENCIA', 20, rowY);
-      doc.line(20, rowY + 1.5, 38, rowY + 1.5);
+        // Sección 7: VIGENCIA
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(...primaryColor);
+        doc.text('7. VIGENCIA', 20, rowY);
+        doc.line(20, rowY + 1.5, 38, rowY + 1.5);
 
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(51, 65, 85);
-      doc.text(`Esta propuesta tiene una validez de ${quote.validity_days || 15} días corridos a contar de su emisión.`, 20, rowY + 6);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        doc.text(`Esta propuesta tiene una validez de ${quote.validity_days || 15} días corridos a contar del ${quote.issue_date || 'su emisión'}.`, 20, rowY + 6);
 
-      rowY += 15;
+        rowY += 15;
 
-      // Nota Legal (small)
-      doc.setFillColor(248, 250, 252);
-      doc.rect(20, rowY, 170, 18, 'F');
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(6.5);
-      doc.setTextColor(148, 163, 184);
-      const splitLegal = doc.splitTextToSize(quote.legal_notes || '', 162);
-      doc.text(splitLegal, 23, rowY + 4);
+        // Legal note
+        doc.setFillColor(248, 250, 252);
+        doc.rect(20, rowY, 170, 18, 'F');
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(6.5);
+        doc.setTextColor(148, 163, 184);
+        const splitLegal = doc.splitTextToSize(quote.legal_notes || '', 162);
+        doc.text(splitLegal, 23, rowY + 4);
 
-      rowY += 25;
+        rowY += 25;
+      } else {
+        // Compact requirements & validity for Executive Summary
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(71, 85, 105);
+        doc.text('Requisitos para iniciar:', 20, rowY + 3);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        doc.text(quote.start_conditions || 'Aceptación propuesta.', 55, rowY + 3);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.text('Vigencia:', 130, rowY + 3);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`${quote.validity_days || 15} días corridos.`, 145, rowY + 3);
+
+        rowY += 15;
+      }
 
       // Firmas
-      doc.setDrawColor(203, 213, 225);
-      doc.line(20, rowY, 80, rowY);
-      doc.line(130, rowY, 190, rowY);
+      if (showSigs) {
+        if (rowY > 260) {
+          doc.addPage();
+          writeHeader(3);
+          rowY = 30;
+        }
+        doc.setDrawColor(203, 213, 225);
+        doc.line(20, rowY, 80, rowY);
+        doc.line(130, rowY, 190, rowY);
 
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(71, 85, 105);
-      doc.text('Firma Autor/a', 147, rowY + 4);
-      doc.text(companySettings.representative_name || 'Javier Román González', 23, rowY + 4);
-      
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(100, 116, 139);
-      doc.text(companySettings.representative_role || 'Representante Noveli Editorial', 23, rowY + 8);
-      doc.text('Aceptación de Propuesta', 142, rowY + 8);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(71, 85, 105);
+        doc.text(companySettings.representative_name || 'Javier Román González', 23, rowY + 4);
+        doc.text('Firma Autor/a', 147, rowY + 4);
 
-      // Footer
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(148, 163, 184);
-      doc.text(companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.', 45, 287);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(companySettings.representative_role || 'Representante Noveli Editorial', 23, rowY + 8);
+        doc.text('Aceptación de Propuesta', 142, rowY + 8);
+      }
 
+      writeFooter();
       doc.save(`Propuesta_${quote.quote_number || 'S_N'}_${quote.author_name.replace(/\s+/g, '_')}.pdf`);
     } catch (err) {
       console.error(err);
@@ -1214,7 +1581,7 @@ export default function QuickQuoteModal({
 
             {/* Section E: Totales */}
             <div className="space-y-4">
-              <h4 className="font-bold text-xs text-indigo-650 dark:text-indigo-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-850 pb-1.5">E. Totales y Moneda</h4>
+              <h4 className="font-bold text-xs text-indigo-650 dark:text-indigo-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-850 pb-1.5">E. Configuración y Totales</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="space-y-1">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Moneda</label>
@@ -1228,15 +1595,25 @@ export default function QuickQuoteModal({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">IVA (19%)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Régimen IVA</label>
                   <select
-                    value={formHeader.includes_iva ? 'si' : 'no'}
-                    onChange={(e) => setFormHeader({...formHeader, includes_iva: e.target.value === 'si'})}
+                    value={formHeader.iva_mode}
+                    onChange={(e) => setFormHeader({...formHeader, iva_mode: e.target.value, includes_iva: e.target.value === 'IVA incluido'})}
                     className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
                   >
-                    <option value="si">IVA Incluido</option>
-                    <option value="no">Exento de IVA</option>
+                    <option value="IVA incluido">IVA incluido</option>
+                    <option value="+ IVA">+ IVA</option>
+                    <option value="Exento / sin IVA">Exento / sin IVA</option>
                   </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Tasa Impuesto (%)</label>
+                  <input
+                    type="number"
+                    value={formHeader.tax_rate !== undefined ? formHeader.tax_rate : 19}
+                    onChange={(e) => setFormHeader({...formHeader, tax_rate: Number(e.target.value)})}
+                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-855 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                  />
                 </div>
                 <div className="space-y-1">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Descuento</label>
@@ -1246,6 +1623,41 @@ export default function QuickQuoteModal({
                     onChange={(e) => setFormHeader({...formHeader, discount: Number(e.target.value)})}
                     className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
                   />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Formato Documento</label>
+                  <select
+                    value={formHeader.proposal_format}
+                    onChange={(e) => handleProposalFormatChange(e.target.value)}
+                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                  >
+                    <option value="Formal completo">Formal completo</option>
+                    <option value="Resumen ejecutivo">Resumen ejecutivo</option>
+                    <option value="Con alternativas">Con alternativas</option>
+                    <option value="Una sola propuesta">Una sola propuesta</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Mostrar Firmas</label>
+                  <select
+                    value={formHeader.show_signatures ? 'si' : 'no'}
+                    onChange={(e) => setFormHeader({...formHeader, show_signatures: e.target.value === 'si'})}
+                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                  >
+                    <option value="si">Mostrar Firmas</option>
+                    <option value="no">Ocultar Firmas</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Valores Unitarios</label>
+                  <select
+                    value={formHeader.has_alternatives ? 'si' : 'no'}
+                    onChange={(e) => setFormHeader({...formHeader, has_alternatives: e.target.value === 'si'})}
+                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-855 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                  >
+                    <option value="no">Sumar Total General</option>
+                    <option value="si">Alternativas Independientes</option>
+                  </select>
                 </div>
                 <div className="space-y-1">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Estado Propuesta</label>
@@ -1265,7 +1677,7 @@ export default function QuickQuoteModal({
               </div>
             </div>
 
-            {/* Section F: Condiciones y legal */}
+            {/* Section F: Plazo, Inclusiones y Condiciones */}
             <div className="space-y-4">
               <h4 className="font-bold text-xs text-indigo-650 dark:text-indigo-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-850 pb-1.5">F. Plazo, Inclusiones y Condiciones</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1278,42 +1690,230 @@ export default function QuickQuoteModal({
                     className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Forma de Pago Sugerida</label>
-                  <input
-                    type="text"
-                    value={formHeader.payment_terms}
-                    onChange={(e) => setFormHeader({...formHeader, payment_terms: e.target.value})}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
-                  />
+                
+                <div className="space-y-2 border border-slate-100 dark:border-slate-800 p-3 rounded-xl">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Esquema Forma de Pago</label>
+                  <select
+                    value={paymentType}
+                    onChange={(e) => {
+                      setPaymentType(e.target.value);
+                      setIsPaymentTermsEditedManually(false);
+                    }}
+                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                  >
+                    <option value="100_inicio">100% al inicio</option>
+                    <option value="50_inicio_50_termino">50% al inicio y 50% al término</option>
+                    <option value="50_inicio_50_entrega">50% al inicio y 50% contra entrega</option>
+                    <option value="cuotas">Pago en cuotas</option>
+                    <option value="personalizado">Pago personalizado / Editar texto</option>
+                  </select>
+
+                  {paymentType !== '100_inicio' && paymentType !== 'personalizado' && (
+                    <div className="space-y-1 mt-2">
+                      <label className="block text-[9px] uppercase text-slate-400 font-bold">% Inicio / Anticipo</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="99"
+                        value={paymentAdvancePct}
+                        onChange={(e) => {
+                          setPaymentAdvancePct(Number(e.target.value));
+                          setIsPaymentTermsEditedManually(false);
+                        }}
+                        className="block w-full px-2 py-1 border rounded-lg text-xs"
+                      />
+                    </div>
+                  )}
+
+                  {paymentType === 'cuotas' && (
+                    <div className="space-y-1 mt-2">
+                      <label className="block text-[9px] uppercase text-slate-400 font-bold">Número de Cuotas de Saldo</label>
+                      <input
+                        type="number"
+                        min="2"
+                        max="12"
+                        value={paymentInstallments}
+                        onChange={(e) => {
+                          setPaymentInstallments(Number(e.target.value));
+                          setIsPaymentTermsEditedManually(false);
+                        }}
+                        className="block w-full px-2 py-1 border rounded-lg text-xs"
+                      />
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Qué Incluye</label>
-                  <textarea
-                    rows="3"
-                    value={formHeader.includes_notes}
-                    onChange={(e) => setFormHeader({...formHeader, includes_notes: e.target.value})}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Qué NO Incluye</label>
-                  <textarea
-                    rows="3"
-                    value={formHeader.excludes_notes}
-                    onChange={(e) => setFormHeader({...formHeader, excludes_notes: e.target.value})}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-855 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
-                  />
-                </div>
+
                 <div className="col-span-2 space-y-1">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Requisitos para Iniciar</label>
-                  <input
-                    type="text"
-                    value={formHeader.start_conditions}
-                    onChange={(e) => setFormHeader({...formHeader, start_conditions: e.target.value})}
-                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-855 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs"
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Texto Forma de Pago (Editable)</label>
+                  <textarea
+                    rows="2"
+                    value={formHeader.payment_terms}
+                    onChange={(e) => {
+                      setFormHeader({...formHeader, payment_terms: e.target.value});
+                      setIsPaymentTermsEditedManually(true);
+                    }}
+                    className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs font-semibold"
                   />
+                  <div className="text-[9px] text-slate-450 leading-none select-none">
+                    * Si editas este texto manualmente, se desactivará el cálculo automático hasta que vuelvas a seleccionar un esquema.
+                  </div>
                 </div>
+
+                {/* Qué Incluye */}
+                <div className="space-y-2 border border-slate-100 dark:border-slate-800 p-3 rounded-xl">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Qué Incluye</label>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto mb-2 pr-1">
+                    {includedItems.map((item, idx) => (
+                      <div key={idx} className="flex justify-between items-center gap-1 bg-slate-50 dark:bg-slate-950 p-1.5 rounded-lg border text-xs">
+                        <span className="leading-tight text-slate-700 dark:text-slate-200">{item}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveInclude(idx)}
+                          className="text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 p-0.5 rounded cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div className="space-y-1">
+                      <span className="block text-[9px] font-bold uppercase text-slate-400">Sugerencias del Catálogo/Packs</span>
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleAddInclude(e.target.value);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="block w-full px-2 py-1 border rounded-lg text-xs"
+                      >
+                        <option value="">-- Seleccionar sugerencia --</option>
+                        {getSuggestedInclusions().map((s, i) => (
+                          <option key={i} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="block text-[9px] font-bold uppercase text-slate-400">Agregar ítem manual</span>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={manualIncludeText}
+                          onChange={(e) => setManualIncludeText(e.target.value)}
+                          placeholder="Escribe un ítem..."
+                          className="block w-full px-2 py-1 border rounded-lg text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleAddInclude(manualIncludeText);
+                            setManualIncludeText('');
+                          }}
+                          className="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold cursor-pointer"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Qué NO Incluye */}
+                <div className="space-y-2 border border-slate-100 dark:border-slate-800 p-3 rounded-xl">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Qué NO Incluye</label>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto mb-2 pr-1">
+                    {excludedItems.map((item, idx) => (
+                      <div key={idx} className="flex justify-between items-center gap-1 bg-slate-50 dark:bg-slate-950 p-1.5 rounded-lg border text-xs">
+                        <span className="leading-tight text-slate-700 dark:text-slate-200">{item}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveExclude(idx)}
+                          className="text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 p-0.5 rounded cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div className="space-y-1">
+                      <span className="block text-[9px] font-bold uppercase text-slate-400">Sugerencias del Catálogo/Packs</span>
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleAddExclude(e.target.value);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="block w-full px-2 py-1 border rounded-lg text-xs"
+                      >
+                        <option value="">-- Seleccionar sugerencia --</option>
+                        {getSuggestedExclusions().map((s, i) => (
+                          <option key={i} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="block text-[9px] font-bold uppercase text-slate-400">Agregar ítem manual</span>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={manualExcludeText}
+                          onChange={(e) => setManualExcludeText(e.target.value)}
+                          placeholder="Escribe un ítem..."
+                          className="block w-full px-2 py-1 border rounded-lg text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleAddExclude(manualExcludeText);
+                            setManualExcludeText('');
+                          }}
+                          className="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold cursor-pointer"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Requisitos para Iniciar */}
+                <div className="col-span-2 space-y-2 border border-slate-100 dark:border-slate-800 p-3 rounded-xl">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Requisitos para iniciar</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {Object.keys(startRequirements).map((key) => {
+                      const labelsMap = {
+                        aceptacion: 'Aceptación propuesta',
+                        firma: 'Firma de contrato',
+                        pago: 'Pago inicial',
+                        manuscrito: 'Recepción manuscrito',
+                        materiales: 'Recepción portada/archivos',
+                        datos: 'Datos del autor'
+                      };
+                      return (
+                        <label key={key} className="flex items-center gap-2 bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 p-2 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-950 transition-all select-none">
+                          <input
+                            type="checkbox"
+                            checked={startRequirements[key]}
+                            onChange={(e) => setStartRequirements({...startRequirements, [key]: e.target.checked})}
+                            className="rounded text-indigo-650 focus:ring-indigo-500 w-3.5 h-3.5"
+                          />
+                          <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300">{labelsMap[key]}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="text-[9px] text-slate-450 mt-1 select-none leading-none">
+                    Vista previa: <span className="font-bold text-slate-600 dark:text-slate-300">{formHeader.start_conditions}</span>
+                  </div>
+                </div>
+
                 <div className="col-span-2 space-y-1">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Nota Legal e Incompatibilidad</label>
                   <textarea
@@ -1341,242 +1941,435 @@ export default function QuickQuoteModal({
             </div>
             
             <div className="space-y-6 max-w-[800px] mx-auto text-slate-800 dark:text-slate-250">
-              {/* PAGE 1 */}
-              <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 text-xs space-y-6 min-h-[842px] flex flex-col justify-between">
-                <div className="space-y-6">
-                  {/* Encabezado */}
-                  <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-b pb-1">
-                    <span>Noveli Editorial / Propuesta comercial preliminar</span>
-                    <span>Página 1</span>
-                  </div>
+              {/* CONDITIONAL FORMAT: Resumen Ejecutivo vs Complete Format */}
+              {formHeader.proposal_format === 'Resumen ejecutivo' ? (
+                /* PAGE 1: RESUMEN EJECUTIVO (Single Page) */
+                <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 text-xs space-y-6 min-h-[842px] flex flex-col justify-between">
+                  <div className="space-y-6">
+                    {/* Encabezado */}
+                    <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-b pb-1">
+                      <span>Noveli Editorial / Resumen ejecutivo de propuesta</span>
+                      <span>Página 1 de 1</span>
+                    </div>
 
-                  {/* Brand Header */}
-                  <div className="flex justify-between items-start">
-                    <div>
-                      {companySettings.logo_url ? (
-                        <img src={companySettings.logo_url} alt="Logo" className="max-h-12 max-w-full object-contain mb-2" />
-                      ) : (
-                        <h2 className="font-extrabold text-xl text-indigo-600 dark:text-indigo-400 tracking-wider">{companySettings.company_name || 'EDITORIAL NOVELI'}</h2>
-                      )}
-                      <p className="text-[10px] text-slate-455 mt-1 font-bold">{companySettings.commercial_name || 'Somos Noveli Editorial'}</p>
-                      <p className="text-[10px] text-slate-400">{companySettings.official_email || 'contacto@somosnoveli.cl'} | {companySettings.website_url || 'www.somosnoveli.cl'}</p>
+                    {/* Brand Header */}
+                    <div className="flex justify-between items-start">
+                      <div>
+                        {companySettings.logo_url ? (
+                          <img src={companySettings.logo_url} alt="Logo" className="max-h-12 max-w-full object-contain mb-2" />
+                        ) : (
+                          <h2 className="font-extrabold text-xl text-indigo-600 dark:text-indigo-400 tracking-wider">{companySettings.company_name || 'EDITORIAL NOVELI'}</h2>
+                        )}
+                        <p className="text-[10px] text-slate-455 mt-1 font-bold">{companySettings.commercial_name || 'Somos Noveli Editorial'}</p>
+                        <p className="text-[10px] text-slate-400">{companySettings.official_email || 'contacto@somosnoveli.cl'} | {companySettings.website_url || 'www.somosnoveli.cl'}</p>
+                      </div>
+                      <div className="text-right text-[10px] text-slate-500 font-medium">
+                        <span className="font-bold text-slate-705 dark:text-slate-300 text-xs block">PROPUESTA COMERCIAL PRELIMINAR</span>
+                        <span className="font-bold text-indigo-650 block mt-0.5">{formHeader.quote_number}</span>
+                        <span className="block mt-1">Fecha Emisión: {formHeader.issue_date}</span>
+                        <span>Válida hasta: {formHeader.valid_until}</span>
+                      </div>
                     </div>
-                    <div className="text-right text-[10px] text-slate-500 font-medium">
-                      <span className="font-bold text-slate-705 dark:text-slate-300 text-xs block">PROPUESTA COMERCIAL PRELIMINAR</span>
-                      <span className="font-bold text-indigo-650 block mt-0.5">{formHeader.quote_number}</span>
-                      <span className="block mt-1">Fecha Emisión: {formHeader.issue_date}</span>
-                      <span>Válida hasta: {formHeader.valid_until}</span>
-                    </div>
-                  </div>
 
-                  {/* Table Inicial Box */}
-                  <div className="grid grid-cols-2 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden text-[11px]">
-                    <div className="p-3 border-r border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
-                      <span className="font-bold text-slate-400 block text-[9px] uppercase">Dirigido a:</span>
-                      <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.author_name || 'Nuevo Autor'}</span>
+                    {/* Table Inicial Box */}
+                    <div className="grid grid-cols-2 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden text-[11px]">
+                      <div className="p-3 border-r border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/10">
+                        <span className="font-bold text-slate-400 block text-[9px] uppercase">Dirigido a:</span>
+                        <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.author_name || 'Nuevo Autor'}</span>
+                      </div>
+                      <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/10">
+                        <span className="font-bold text-slate-400 block text-[9px] uppercase">Fecha Emisión:</span>
+                        <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.issue_date}</span>
+                      </div>
+                      <div className="p-3 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/10">
+                        <span className="font-bold text-slate-400 block text-[9px] uppercase">Obra / Proyecto:</span>
+                        <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.object || 'Proyecto Editorial'}</span>
+                      </div>
+                      <div className="p-3 bg-slate-50/50 dark:bg-slate-955/10">
+                        <span className="font-bold text-slate-400 block text-[9px] uppercase">Tipo de solicitud:</span>
+                        <span className="font-extrabold text-slate-800 dark:text-slate-205">Resumen Ejecutivo</span>
+                      </div>
                     </div>
-                    <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
-                      <span className="font-bold text-slate-400 block text-[9px] uppercase">Fecha Emisión:</span>
-                      <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.issue_date}</span>
-                    </div>
-                    <div className="p-3 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
-                      <span className="font-bold text-slate-400 block text-[9px] uppercase">Obra / Proyecto:</span>
-                      <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.object || 'Proyecto Editorial'}</span>
-                    </div>
-                    <div className="p-3 bg-slate-50/50 dark:bg-slate-950/20">
-                      <span className="font-bold text-slate-400 block text-[9px] uppercase">Tipo de solicitud:</span>
-                      <span className="font-extrabold text-slate-800 dark:text-slate-205">Propuesta Comercial</span>
-                    </div>
-                  </div>
 
-                  {/* Objeto */}
-                  <div className="space-y-1">
-                    <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">1. Objeto de la propuesta</h5>
-                    <p className="text-slate-600 dark:text-slate-350 leading-relaxed text-[11px]">
-                      La presente propuesta tiene como objeto detallar la prestación de servicios editoriales y de producción para la obra "{formHeader.object || 'Proyecto del Autor'}". El objetivo es lograr un producto editorial de la más alta calidad bajo la marca Noveli Editorial.
-                    </p>
-                  </div>
-
-                  {/* Servicios Incluidos */}
-                  <div className="space-y-3">
-                    <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">2. Servicios Incluidos</h5>
-                    <div className="space-y-3">
-                      {formItems.length === 0 ? (
-                        <p className="text-slate-400 italic">No se han añadido conceptos.</p>
-                      ) : (
-                        formItems.map((item, index) => (
-                          <div key={item.id} className="text-[11px] py-1 border-b border-slate-50 dark:border-slate-850 pb-2">
-                            <span className="font-bold text-slate-800 dark:text-slate-200 block">
-                              {index + 1}. {item.concept}
-                            </span>
-                            {item.description && (
-                              <p className="text-[10px] text-slate-500 mt-0.5">
-                                {item.description}
-                              </p>
-                            )}
+                    {/* Valores del servicio Table */}
+                    <div className="space-y-2">
+                      <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">1. Valores y Servicios</h5>
+                      <div className="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
+                        <table className="w-full text-left border-collapse text-[10px]">
+                          <thead>
+                            <tr className="bg-slate-55 dark:bg-slate-950 font-bold uppercase text-[9px] text-slate-455 border-b border-slate-100 dark:border-slate-800">
+                              <th className="p-2">Servicio / Alternativa</th>
+                              <th className="p-2 w-12 text-center">Cant.</th>
+                              <th className="p-2 w-20 text-right">Neto</th>
+                              <th className="p-2 w-20 text-right">{formHeader.iva_mode === 'Exento / sin IVA' ? 'IVA (Exento)' : 'IVA 19%'}</th>
+                              <th className="p-2 w-24 text-right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {formItems.map(item => {
+                              const total = item.unit_price * item.quantity;
+                              let net = 0;
+                              let vat = 0;
+                              if (formHeader.iva_mode === 'IVA incluido') {
+                                net = Math.round(total / 1.19);
+                                vat = total - net;
+                              } else if (formHeader.iva_mode === '+ IVA') {
+                                net = total;
+                                vat = Math.round(net * 0.19);
+                              } else {
+                                net = total;
+                                vat = 0;
+                              }
+                              return (
+                                <tr key={item.id} className="border-b border-slate-50 dark:border-slate-850">
+                                  <td className="p-2 font-bold">{item.concept}</td>
+                                  <td className="p-2 text-center">{item.quantity}</td>
+                                  <td className="p-2 text-right font-mono">{formatCurrency(net, formHeader.currency)}</td>
+                                  <td className="p-2 text-right font-mono">{formHeader.iva_mode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, formHeader.currency)}</td>
+                                  <td className="p-2 text-right font-mono font-bold text-slate-700 dark:text-slate-355">{formatCurrency(formHeader.iva_mode === '+ IVA' ? (net + vat) : total, formHeader.currency)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      
+                      {!formHeader.has_alternatives && (
+                        <div className="flex justify-end pt-1">
+                          <div className="w-64 space-y-1 text-right text-[11px] font-bold">
+                            <div className="flex justify-between font-extrabold text-indigo-650 dark:text-indigo-400">
+                              <span>VALOR TOTAL PROPUESTA:</span>
+                              <span className="font-mono text-xs">{formatCurrency(totals.total, formHeader.currency)}</span>
+                            </div>
                           </div>
-                        ))
+                        </div>
+                      )}
+                      {formHeader.has_alternatives && (
+                        <div className="text-[10px] text-slate-500 italic mt-1 text-right">
+                          * Valores unitarios por alternativa independiente.
+                        </div>
                       )}
                     </div>
+
+                    {/* Pago, Plazo, Requisitos */}
+                    <div className="grid grid-cols-2 gap-4 text-[10px]">
+                      <div className="space-y-1 bg-slate-50/50 dark:bg-slate-950/20 p-2.5 rounded-lg border">
+                        <span className="font-bold text-slate-550 block">2. Condiciones de Pago:</span>
+                        <p className="text-slate-600 dark:text-slate-400 leading-tight font-medium">{formHeader.payment_terms}</p>
+                      </div>
+                      <div className="space-y-1 bg-slate-50/50 dark:bg-slate-955/20 p-2.5 rounded-lg border">
+                        <span className="font-bold text-slate-550 block">3. Plazo de Trabajo y Requisitos:</span>
+                        <p className="text-slate-600 dark:text-slate-400 leading-tight">Plazo: {formHeader.work_timeline}</p>
+                        <p className="text-slate-500 dark:text-slate-500 mt-1 leading-tight text-[9px] whitespace-pre-line">{formHeader.start_conditions}</p>
+                      </div>
+                    </div>
+
+                    {/* Firmas en Resumen Ejecutivo */}
+                    {formHeader.show_signatures && (
+                      <div className="pt-4 flex justify-between text-[9px] text-slate-455 text-center">
+                        <div className="w-40 border-t pt-2">
+                          <span className="font-bold text-slate-755 dark:text-slate-300 block">{companySettings.representative_name || 'Javier Román González'}</span>
+                          <span>Representante Noveli Editorial</span>
+                        </div>
+                        <div className="w-40 border-t pt-2">
+                          <span className="font-bold text-slate-755 dark:text-slate-300 block">Aceptación de Propuesta</span>
+                          <span>{formHeader.author_name || 'Firma Autor / Cliente'}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="text-center text-[9px] text-slate-400 border-t pt-3 font-semibold">
+                    {companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.'}
                   </div>
                 </div>
-                
-                {/* Page 1 Footer */}
-                <div className="text-center text-[9px] text-slate-400 border-t pt-3 font-semibold">
-                  {companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.'}
-                </div>
-              </div>
+              ) : (
+                /* DETAILED FORMAT: PAGE 1 + PAGE 2 */
+                <>
+                  {/* PAGE 1: DETAILED OBJETO & INCLUSIONES */}
+                  <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 text-xs space-y-6 min-h-[842px] flex flex-col justify-between">
+                    <div className="space-y-6">
+                      {/* Encabezado */}
+                      <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-b pb-1">
+                        <span>Noveli Editorial / Propuesta comercial preliminar</span>
+                        <span>Página 1</span>
+                      </div>
 
-              {/* PAGE 2 */}
-              <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 text-xs space-y-6 min-h-[842px] flex flex-col justify-between">
-                <div className="space-y-6">
-                  {/* Encabezado */}
-                  <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-b pb-1">
-                    <span>Noveli Editorial / Propuesta comercial preliminar</span>
-                    <span>Página 2</span>
-                  </div>
+                      {/* Brand Header */}
+                      <div className="flex justify-between items-start">
+                        <div>
+                          {companySettings.logo_url ? (
+                            <img src={companySettings.logo_url} alt="Logo" className="max-h-12 max-w-full object-contain mb-2" />
+                          ) : (
+                            <h2 className="font-extrabold text-xl text-indigo-600 dark:text-indigo-400 tracking-wider">{companySettings.company_name || 'EDITORIAL NOVELI'}</h2>
+                          )}
+                          <p className="text-[10px] text-slate-455 mt-1 font-bold">{companySettings.commercial_name || 'Somos Noveli Editorial'}</p>
+                          <p className="text-[10px] text-slate-400">{companySettings.official_email || 'contacto@somosnoveli.cl'} | {companySettings.website_url || 'www.somosnoveli.cl'}</p>
+                        </div>
+                        <div className="text-right text-[10px] text-slate-500 font-medium">
+                          <span className="font-bold text-slate-705 dark:text-slate-300 text-xs block">PROPUESTA COMERCIAL PRELIMINAR</span>
+                          <span className="font-bold text-indigo-650 block mt-0.5">{formHeader.quote_number}</span>
+                          <span className="block mt-1">Fecha Emisión: {formHeader.issue_date}</span>
+                          <span>Válida hasta: {formHeader.valid_until}</span>
+                        </div>
+                      </div>
 
-                  {/* Valores del servicio Table */}
-                  <div className="space-y-2">
-                    <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">3. Alternativas y Valor del Servicio</h5>
-                    <div className="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
-                      <table className="w-full text-left border-collapse text-[10px]">
-                        <thead>
-                          <tr className="bg-slate-55 dark:bg-slate-950 font-bold uppercase text-[9px] text-slate-455 border-b border-slate-100 dark:border-slate-800">
-                            <th className="p-2">Alternativa / Servicio</th>
-                            <th className="p-2 w-12 text-center">Cant.</th>
-                            <th className="p-2 w-20 text-right">Neto</th>
-                            <th className="p-2 w-16 text-right">IVA 19%</th>
-                            <th className="p-2 w-24 text-right">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {formItems.map(item => {
-                            const total = item.unit_price * item.quantity;
-                            const net = formHeader.includes_iva ? Math.round(total / 1.19) : total;
-                            const vat = formHeader.includes_iva ? total - net : 0;
-                            return (
-                              <tr key={item.id} className="border-b border-slate-50 dark:border-slate-850">
-                                <td className="p-2 font-bold">{item.concept}</td>
-                                <td className="p-2 text-center">{item.quantity}</td>
-                                <td className="p-2 text-right font-mono">{formatCurrency(net, formHeader.currency)}</td>
-                                <td className="p-2 text-right font-mono">{formatCurrency(vat, formHeader.currency)}</td>
-                                <td className="p-2 text-right font-mono font-bold text-slate-700 dark:text-slate-300">{formatCurrency(total, formHeader.currency)}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                      {/* Table Inicial Box */}
+                      <div className="grid grid-cols-2 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden text-[11px]">
+                        <div className="p-3 border-r border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                          <span className="font-bold text-slate-400 block text-[9px] uppercase">Dirigido a:</span>
+                          <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.author_name || 'Nuevo Autor'}</span>
+                        </div>
+                        <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                          <span className="font-bold text-slate-400 block text-[9px] uppercase">Fecha Emisión:</span>
+                          <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.issue_date}</span>
+                        </div>
+                        <div className="p-3 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                          <span className="font-bold text-slate-400 block text-[9px] uppercase">Obra / Proyecto:</span>
+                          <span className="font-extrabold text-slate-800 dark:text-slate-205">{formHeader.object || 'Proyecto Editorial'}</span>
+                        </div>
+                        <div className="p-3 bg-slate-50/50 dark:bg-slate-955/10">
+                          <span className="font-bold text-slate-400 block text-[9px] uppercase">Tipo de solicitud:</span>
+                          <span className="font-extrabold text-slate-800 dark:text-slate-205">Propuesta Comercial</span>
+                        </div>
+                      </div>
+
+                      {/* Objeto */}
+                      <div className="space-y-1">
+                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">1. Objeto de la propuesta</h5>
+                        <p className="text-slate-600 dark:text-slate-350 leading-relaxed text-[11px]">
+                          La presente propuesta tiene como objeto detallar la prestación de servicios editoriales y de producción para la obra "{formHeader.object || 'Proyecto del Autor'}". El objetivo es lograr un producto editorial de la más alta calidad bajo la marca Noveli Editorial.
+                        </p>
+                      </div>
+
+                      {/* Servicios Incluidos */}
+                      <div className="space-y-3">
+                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">2. Servicios Incluidos</h5>
+                        <div className="space-y-1 bg-slate-50/20 p-3 rounded-xl border border-slate-100/50 dark:border-slate-800/40">
+                          {includedItems.length === 0 ? (
+                            <p className="text-slate-400 italic">No se han seleccionado conceptos de inclusión.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-slate-600 dark:text-slate-350">
+                              {includedItems.map((item, idx) => (
+                                <div key={idx} className="flex items-start gap-1">
+                                  <span className="text-indigo-500 font-bold">•</span>
+                                  <span>{item}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     
-                    {/* Totals Block */}
-                    <div className="flex justify-end pt-2">
-                      <div className="w-64 space-y-1 text-right text-[11px]">
-                        <div className="flex justify-between text-slate-400">
-                          <span>Subtotal Base:</span>
-                          <span className="font-mono">{formatCurrency(totals.subtotal, formHeader.currency)}</span>
+                    {/* Page 1 Footer */}
+                    <div className="text-center text-[9px] text-slate-400 border-t pt-3 font-semibold">
+                      {companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.'}
+                    </div>
+                  </div>
+
+                  {/* PAGE 2: VALORES, FORMAS DE PAGO & EXCLUSIONES */}
+                  <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 text-xs space-y-6 min-h-[842px] flex flex-col justify-between">
+                    <div className="space-y-6">
+                      {/* Encabezado */}
+                      <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-b pb-1">
+                        <span>Noveli Editorial / Propuesta comercial preliminar</span>
+                        <span>Página 2</span>
+                      </div>
+
+                      {/* Valores del servicio Table */}
+                      <div className="space-y-2">
+                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">3. Alternativas y Valor del Servicio</h5>
+                        <div className="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
+                          <table className="w-full text-left border-collapse text-[10px]">
+                            <thead>
+                              <tr className="bg-slate-55 dark:bg-slate-950 font-bold uppercase text-[9px] text-slate-455 border-b border-slate-100 dark:border-slate-800">
+                                <th className="p-2">Alternativa / Servicio</th>
+                                <th className="p-2 w-12 text-center">Cant.</th>
+                                <th className="p-2 w-20 text-right">Neto</th>
+                                <th className="p-2 w-20 text-right">{formHeader.iva_mode === 'Exento / sin IVA' ? 'IVA (Exento)' : 'IVA 19%'}</th>
+                                <th className="p-2 w-24 text-right">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {formItems.map(item => {
+                                const total = item.unit_price * item.quantity;
+                                let net = 0;
+                                let vat = 0;
+                                if (formHeader.iva_mode === 'IVA incluido') {
+                                  net = Math.round(total / 1.19);
+                                  vat = total - net;
+                                } else if (formHeader.iva_mode === '+ IVA') {
+                                  net = total;
+                                  vat = Math.round(net * 0.19);
+                                } else {
+                                  net = total;
+                                  vat = 0;
+                                }
+                                return (
+                                  <tr key={item.id} className="border-b border-slate-50 dark:border-slate-850">
+                                    <td className="p-2 font-bold">{item.concept}</td>
+                                    <td className="p-2 text-center">{item.quantity}</td>
+                                    <td className="p-2 text-right font-mono">{formatCurrency(net, formHeader.currency)}</td>
+                                    <td className="p-2 text-right font-mono">{formHeader.iva_mode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, formHeader.currency)}</td>
+                                    <td className="p-2 text-right font-mono font-bold text-slate-700 dark:text-slate-355">{formatCurrency(formHeader.iva_mode === '+ IVA' ? (net + vat) : total, formHeader.currency)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         </div>
-                        {totals.adjustmentAmount > 0 && (
-                          <div className="flex justify-between text-indigo-650 dark:text-indigo-400">
-                            <span>Ajuste por Extensión:</span>
-                            <span className="font-mono">+{formatCurrency(totals.adjustmentAmount, formHeader.currency)}</span>
+                        
+                        {/* Totals Block */}
+                        {!formHeader.has_alternatives && (
+                          <div className="flex justify-end pt-2">
+                            <div className="w-64 space-y-1 text-right text-[11px]">
+                              <div className="flex justify-between text-slate-400">
+                                <span>Subtotal Base:</span>
+                                <span className="font-mono">{formatCurrency(totals.subtotal, formHeader.currency)}</span>
+                              </div>
+                              {totals.adjustmentAmount > 0 && (
+                                <div className="flex justify-between text-indigo-650 dark:text-indigo-400">
+                                  <span>Ajuste por Extensión:</span>
+                                  <span className="font-mono">+{formatCurrency(totals.adjustmentAmount, formHeader.currency)}</span>
+                                </div>
+                              )}
+                              {totals.discount > 0 && (
+                                <div className="flex justify-between text-rose-500">
+                                  <span>Descuento Comercial:</span>
+                                  <span className="font-mono">-{formatCurrency(totals.discount, formHeader.currency)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between font-extrabold text-xs text-indigo-650 dark:text-indigo-400 border-t pt-1 border-slate-200 dark:border-slate-800">
+                                <span>VALOR TOTAL PROPUESTA:</span>
+                                <span className="font-mono text-xs">{formatCurrency(totals.total, formHeader.currency)}</span>
+                              </div>
+                            </div>
                           </div>
                         )}
-                        {totals.discount > 0 && (
-                          <div className="flex justify-between text-rose-500">
-                            <span>Descuento Comercial:</span>
-                            <span className="font-mono">-{formatCurrency(totals.discount, formHeader.currency)}</span>
+                        {formHeader.has_alternatives && (
+                          <div className="text-[10px] text-slate-500 italic mt-1 text-right">
+                            * Valores unitarios por alternativa independiente.
                           </div>
                         )}
-                        <div className="flex justify-between font-extrabold text-xs text-indigo-650 dark:text-indigo-400 border-t pt-1 border-slate-200 dark:border-slate-800">
-                          <span>VALOR TOTAL PROPUESTA:</span>
-                          <span className="font-mono text-xs">{formatCurrency(totals.total, formHeader.currency)}</span>
+                      </div>
+
+                      {/* Forma de Pago Table */}
+                      <div className="space-y-2">
+                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">4. Forma de Pago</h5>
+                        <div className="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
+                          <table className="w-full text-left border-collapse text-[10px]">
+                            <thead>
+                              <tr className="bg-slate-55 dark:bg-slate-950 font-bold uppercase text-[9px] text-slate-455 border-b border-slate-100 dark:border-slate-800">
+                                <th className="p-2">Alternativa</th>
+                                <th className="p-2 w-28 text-right">Total</th>
+                                <th className="p-2 w-20 text-center">% Anticipo</th>
+                                <th className="p-2 w-48">Tipo / condición de pago</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {formHeader.has_alternatives ? (
+                                formItems.map(item => {
+                                  const itemTotal = item.unit_price * item.quantity;
+                                  const finalItemTotal = formHeader.iva_mode === '+ IVA' ? Math.round(itemTotal * 1.19) : itemTotal;
+                                  return (
+                                    <tr key={item.id} className="border-b border-slate-50 dark:border-slate-850">
+                                      <td className="p-2 font-bold">{item.concept}</td>
+                                      <td className="p-2 text-right font-mono">{formatCurrency(finalItemTotal, formHeader.currency)}</td>
+                                      <td className="p-2 text-center">{paymentAdvancePct}%</td>
+                                      <td className="p-2 text-slate-500 leading-tight">
+                                        {paymentType === '100_inicio' ? '100% al inicio' :
+                                         paymentType === '50_inicio_50_termino' ? '50% inicio / 50% término' :
+                                         paymentType === '50_inicio_50_entrega' ? '50% inicio / 50% contra entrega' :
+                                         paymentType === 'cuotas' ? `${paymentAdvancePct}% anticipo, saldo en ${paymentInstallments} cuotas` :
+                                         formHeader.payment_terms}
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              ) : (
+                                <tr className="border-b border-slate-50 dark:border-slate-850">
+                                  <td className="p-2 font-bold">Propuesta Sugerida</td>
+                                  <td className="p-2 text-right font-mono font-bold text-indigo-650 dark:text-indigo-400">{formatCurrency(totals.total, formHeader.currency)}</td>
+                                  <td className="p-2 text-center font-bold">{paymentAdvancePct}%</td>
+                                  <td className="p-2 text-slate-500 leading-tight">{formHeader.payment_terms}</td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Forma de Pago Table */}
-                  <div className="space-y-2">
-                    <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">4. Forma de Pago</h5>
-                    <div className="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
-                      <table className="w-full text-left border-collapse text-[10px]">
-                        <thead>
-                          <tr className="bg-slate-55 dark:bg-slate-950 font-bold uppercase text-[9px] text-slate-455 border-b border-slate-100 dark:border-slate-800">
-                            <th className="p-2">Alternativa</th>
-                            <th className="p-2 w-28 text-right">Total con IVA</th>
-                            <th className="p-2 w-20 text-center">% Inicio</th>
-                            <th className="p-2 w-48">Tipo / condición</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr className="border-b border-slate-50 dark:border-slate-850">
-                            <td className="p-2 font-bold">Propuesta Sugerida</td>
-                            <td className="p-2 text-right font-mono font-bold text-indigo-650 dark:text-indigo-400">{formatCurrency(totals.total, formHeader.currency)}</td>
-                            <td className="p-2 text-center font-bold">{getPaymentAdvancePct()}</td>
-                            <td className="p-2 text-slate-500 leading-tight">{formHeader.payment_terms}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* Plazo de Trabajo */}
-                  <div className="space-y-1">
-                    <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">5. Plazo de Trabajo</h5>
-                    <p className="text-slate-600 dark:text-slate-350 text-[11px] leading-relaxed">
-                      {formHeader.work_timeline}
-                    </p>
-                  </div>
-
-                  {/* Exclusiones y Condiciones */}
-                  <div className="space-y-2">
-                    <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">6. Servicios No Incluidos y Condiciones</h5>
-                    <div className="grid grid-cols-2 gap-4 text-[10px]">
-                      <div className="space-y-1 bg-slate-50/50 dark:bg-slate-950/20 p-2.5 rounded-lg border border-slate-100 dark:border-slate-850">
-                        <span className="font-bold text-slate-500 dark:text-slate-400">Qué NO incluye:</span>
-                        <p className="text-slate-600 dark:text-slate-400 whitespace-pre-line leading-relaxed">{formHeader.excludes_notes}</p>
+                      {/* Plazo de Trabajo */}
+                      <div className="space-y-1">
+                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">5. Plazo de Trabajo</h5>
+                        <p className="text-slate-600 dark:text-slate-350 text-[11px] leading-relaxed">
+                          {formHeader.work_timeline}
+                        </p>
                       </div>
-                      <div className="space-y-1 bg-slate-50/50 dark:bg-slate-955/20 p-2.5 rounded-lg border border-slate-100 dark:border-slate-850">
-                        <span className="font-bold text-slate-500 dark:text-slate-400">Requisitos para iniciar:</span>
-                        <p className="text-slate-600 dark:text-slate-400 whitespace-pre-line leading-relaxed">{formHeader.start_conditions}</p>
+
+                      {/* Exclusiones y Condiciones */}
+                      <div className="space-y-2">
+                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">6. Servicios No Incluidos y Condiciones</h5>
+                        <div className="grid grid-cols-2 gap-4 text-[10px]">
+                          <div className="space-y-1 bg-slate-50/50 dark:bg-slate-955/20 p-2.5 rounded-lg border border-slate-100 dark:border-slate-850">
+                            <span className="font-bold text-slate-550 block">Qué NO incluye:</span>
+                            <div className="space-y-1 text-slate-600 dark:text-slate-400 leading-relaxed max-h-32 overflow-y-auto">
+                              {excludedItems.map((e, idx) => (
+                                <div key={idx} className="flex items-start gap-1">
+                                  <span>•</span>
+                                  <span>{e}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="space-y-1 bg-slate-50/50 dark:bg-slate-955/20 p-2.5 rounded-lg border border-slate-100 dark:border-slate-850">
+                            <span className="font-bold text-slate-550 block">Requisitos para iniciar:</span>
+                            <div className="text-slate-600 dark:text-slate-400 whitespace-pre-line leading-relaxed">
+                              {formHeader.start_conditions}
+                            </div>
+                          </div>
+                        </div>
                       </div>
+
+                      {/* Vigencia */}
+                      <div className="space-y-1">
+                        <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">7. Vigencia</h5>
+                        <p className="text-slate-600 dark:text-slate-350 text-[11px] leading-relaxed">
+                          Esta propuesta tiene una validez de {formHeader.validity_days || 15} días corridos a contar de su fecha de emisión.
+                        </p>
+                      </div>
+
+                      {/* Legal Notes */}
+                      <div className="bg-slate-50/50 dark:bg-slate-955/20 p-3 rounded-lg border text-[8px] text-slate-400 space-y-1 italic leading-relaxed">
+                        {formHeader.legal_notes.split('\n').map((line, i) => (
+                          <p key={i}>{line}</p>
+                        ))}
+                      </div>
+
+                      {/* Signatures block */}
+                      {formHeader.show_signatures && (
+                        <div className="pt-6 flex justify-between text-[9px] text-slate-455 text-center">
+                          <div className="w-40 border-t pt-2">
+                            <span className="font-bold text-slate-755 dark:text-slate-300 block">{companySettings.representative_name || 'Javier Román González'}</span>
+                            <span>Representante Noveli Editorial</span>
+                          </div>
+                          <div className="w-40 border-t pt-2">
+                            <span className="font-bold text-slate-755 dark:text-slate-300 block">Aceptación de Propuesta</span>
+                            <span>{formHeader.author_name || 'Firma Autor / Cliente'}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Page 2 Footer */}
+                    <div className="text-center text-[9px] text-slate-400 border-t pt-3 font-semibold">
+                      {companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.'}
                     </div>
                   </div>
-
-                  {/* Vigencia */}
-                  <div className="space-y-1">
-                    <h5 className="font-bold text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b pb-1">7. Vigencia</h5>
-                    <p className="text-slate-600 dark:text-slate-350 text-[11px] leading-relaxed">
-                      Esta propuesta tiene una validez de {formHeader.validity_days || 15} días corridos a contar de su fecha de emisión.
-                    </p>
-                  </div>
-
-                  {/* Legal Notes */}
-                  <div className="bg-slate-50/50 dark:bg-slate-955/20 p-3 rounded-lg border text-[8px] text-slate-400 space-y-1 italic leading-relaxed">
-                    {formHeader.legal_notes.split('\n').map((line, i) => (
-                      <p key={i}>{line}</p>
-                    ))}
-                  </div>
-
-                  {/* Signatures block */}
-                  <div className="pt-6 flex justify-between text-[9px] text-slate-455 text-center">
-                    <div className="w-40 border-t pt-2">
-                      <span className="font-bold text-slate-755 dark:text-slate-300 block">{companySettings.representative_name || 'Javier Román González'}</span>
-                      <span>Representante Noveli Editorial</span>
-                    </div>
-                    <div className="w-40 border-t pt-2">
-                      <span className="font-bold text-slate-755 dark:text-slate-300 block">Aceptación de Propuesta</span>
-                      <span>{formHeader.author_name || 'Firma Autor / Cliente'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Page 2 Footer */}
-                <div className="text-center text-[9px] text-slate-400 border-t pt-3 font-semibold">
-                  {companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.'}
-                </div>
-              </div>
+                </>
+              )}
             </div>
           </div>
         </div>
