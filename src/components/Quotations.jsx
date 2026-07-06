@@ -4,7 +4,7 @@ import { formatCurrency, calculateVatSplit, formatDate } from '../utils';
 import { jsPDF } from 'jspdf';
 import { 
   Plus, Search, Edit2, Trash2, X, FileText, Check, AlertTriangle,
-  User, Sparkles, Download, DollarSign, Eye, RefreshCw, Calendar, Trash, FolderOpen
+  User, Sparkles, Download, DollarSign, Eye, RefreshCw, Calendar, Trash, FolderOpen, Building2
 } from 'lucide-react';
 
 export default function Quotations({ isReadOnly = false, userRole = 'administrador' }) {
@@ -18,6 +18,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState(null);
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   
   // Editor view split state: 'split' or 'form' or 'preview'
   const [editorTab, setEditorTab] = useState('split'); 
@@ -25,6 +26,27 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
   // Selection states for catalog / packs in editor
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [selectedPackId, setSelectedPackId] = useState('');
+
+  // Company Settings state
+  const [companySettings, setCompanySettings] = useState({
+    company_name: 'EDITORIAL NOVELI',
+    commercial_name: 'Somos Noveli Editorial',
+    representative_name: 'Javier Román González',
+    representative_role: 'Representante Noveli Editorial',
+    official_email: 'somosnovelieditorial@gmail.com',
+    phone: '',
+    website_url: 'https://www.somosnovelieditorial.com',
+    instagram_url: 'https://www.instagram.com/editorialnoveli/',
+    address: 'Santa Magdalena 75 Of 304, Providencia',
+    city: 'Santiago',
+    country: 'Chile',
+    tax_id: '',
+    logo_url: '',
+    favicon_url: '',
+    signature_name: 'Javier Román González',
+    default_legal_text: '',
+    default_footer_text: 'Los derechos de la obra pertenecen siempre al autor.'
+  });
 
   // Form State
   const [formHeader, setFormHeader] = useState({
@@ -77,7 +99,72 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
   useEffect(() => {
     fetchQuotations();
     fetchCatalogAndPacks();
+    fetchCompanySettings();
   }, []);
+
+  const fetchCompanySettings = async () => {
+    try {
+      const orgId = await getValidOrgId();
+      const { data, error } = await supabase
+        .from('company_settings')
+        .select('*')
+        .eq('organization_id', orgId);
+      
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setCompanySettings(data[0]);
+      }
+    } catch (err) {
+      console.error('Error fetching company settings:', err);
+    }
+  };
+
+  const handleCompanySaveInline = async (e) => {
+    e.preventDefault();
+    try {
+      const orgId = await getValidOrgId();
+      const payload = {
+        company_name: companySettings.company_name,
+        commercial_name: companySettings.commercial_name,
+        representative_name: companySettings.representative_name,
+        representative_role: companySettings.representative_role,
+        official_email: companySettings.official_email,
+        phone: companySettings.phone || '',
+        website_url: companySettings.website_url,
+        instagram_url: companySettings.instagram_url,
+        address: companySettings.address,
+        city: companySettings.city,
+        country: companySettings.country,
+        tax_id: companySettings.tax_id || '',
+        logo_url: companySettings.logo_url || '',
+        favicon_url: companySettings.favicon_url || '',
+        signature_name: companySettings.signature_name,
+        default_legal_text: companySettings.default_legal_text || '',
+        default_footer_text: companySettings.default_footer_text || '',
+        organization_id: orgId
+      };
+
+      if (companySettings.id) {
+        payload.id = companySettings.id;
+      }
+
+      const { data, error } = await supabase
+        .from('company_settings')
+        .upsert(payload, { onConflict: 'organization_id' })
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setCompanySettings(data);
+      }
+      setIsCompanyModalOpen(false);
+      alert('Datos de la empresa guardados con éxito.');
+    } catch (err) {
+      console.error(err);
+      alert('Error al guardar datos de la empresa: ' + err.message);
+    }
+  };
 
   const fetchQuotations = async () => {
     setLoading(true);
@@ -142,7 +229,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       includes_notes: '• Reuniones de seguimiento editorial y asesoría continua.\n• Entrega de archivos finales en formato digital listos para imprenta/distribución.',
       excludes_notes: '• Costos de impresión física de ejemplares (se cotizan por separado).\n• Trámites legales de depósito legal fuera del territorio nacional.',
       start_conditions: 'Pago del anticipo inicial, firma de contrato y envío del manuscrito definitivo.',
-      legal_notes: `• La cotización de impresión física se realizará por separado antes de la entrega del libro finalizado.
+      legal_notes: companySettings.default_legal_text || `• La cotización de impresión física se realizará por separado antes de la entrega del libro finalizado.
 • Editorial Noveli no comercializa directamente el libro ni administra sus ventas, salvo acuerdo distinto por escrito.
 • Los derechos de la obra pertenecen siempre al autor.
 • Esta cotización no constituye factura ni boleta.
@@ -515,13 +602,16 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(22);
       doc.setTextColor(...primaryColor);
-      doc.text('SOMOS NOVELI EDITORIAL', 20, 25);
+      doc.text(String(companySettings.company_name || 'EDITORIAL NOVELI').toUpperCase(), 20, 25);
 
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(100, 116, 139);
-      doc.text('Correo: contacto@somosnoveli.cl', 20, 31);
-      doc.text('Web: www.somosnoveli.cl', 20, 36);
+      doc.text(`Correo: ${companySettings.official_email || 'contacto@somosnoveli.cl'}`, 20, 31);
+      doc.text(`Web: ${companySettings.website_url || 'www.somosnoveli.cl'}`, 20, 36);
+      if (companySettings.address) {
+        doc.text(`Dirección: ${companySettings.address}, ${companySettings.city || ''}`, 20, 41);
+      }
 
       // Proposal details
       doc.setFont('Helvetica', 'bold');
@@ -698,8 +788,8 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(71, 85, 105);
-      doc.text('Javier Román González', 32, y + 4);
-      doc.text('Representante Noveli Editorial', 27, y + 8);
+      doc.text(companySettings.representative_name || 'Javier Román González', 32, y + 4);
+      doc.text(companySettings.representative_role || 'Representante Noveli Editorial', 27, y + 8);
       
       doc.text('Aceptación de Propuesta', 142, y + 4);
       doc.text(quote.author_name || 'Firma Autor / Cliente', 142, y + 8);
@@ -708,7 +798,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(8.5);
       doc.setTextColor(148, 163, 184);
-      doc.text('Somos Noveli Editorial - Los derechos de la obra pertenecen siempre al autor.', 45, 287);
+      doc.text(companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.', 45, 287);
 
       doc.save(`Propuesta_${quote.quote_number || 'S_N'}_${quote.author_name.replace(/\s+/g, '_')}.pdf`);
     } catch (err) {
@@ -1347,15 +1437,30 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
               </div>
 
               {/* Live Preview (right panel) */}
-              <div className={`bg-slate-50/60 dark:bg-slate-950/20 p-6 overflow-y-auto ${editorTab === 'form' ? 'hidden' : editorTab === 'split' ? 'w-full md:w-1/2' : 'w-full'}`}>
+              <div className={`bg-slate-50/60 dark:bg-slate-950/20 p-6 overflow-y-auto ${editorTab === 'form' ? 'hidden' : editorTab === 'split' ? 'w-full md:w-1/2' : 'w-full'} space-y-3`}>
+                <div className="flex justify-between items-center max-w-[800px] mx-auto text-slate-400 font-bold uppercase text-[9px] tracking-wider">
+                  <span>Vista Previa Interactiva</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsCompanyModalOpen(true)}
+                    className="text-[10px] font-extrabold text-indigo-650 hover:text-indigo-500 transition-all cursor-pointer border border-indigo-150 rounded-lg px-2 py-0.5 bg-indigo-50/20"
+                  >
+                    Editar datos de empresa
+                  </button>
+                </div>
                 <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 max-w-[800px] mx-auto text-slate-800 dark:text-slate-250 text-xs space-y-6">
                   
                   {/* Logo Brand Header */}
                   <div className="border-b pb-6 flex justify-between items-start">
                     <div>
-                      <h2 className="font-extrabold text-xl text-indigo-600 dark:text-indigo-400 tracking-wider">NOVELI EDITORIAL</h2>
-                      <p className="text-[10px] text-slate-450 mt-1 font-bold">SOMOS NOVELI EDITORIAL</p>
-                      <p className="text-[10px] text-slate-400">contacto@somosnoveli.cl | www.somosnoveli.cl</p>
+                      {companySettings.logo_url ? (
+                        <img src={companySettings.logo_url} alt="Logo" className="max-h-12 max-w-full object-contain mb-2" />
+                      ) : (
+                        <h2 className="font-extrabold text-xl text-indigo-600 dark:text-indigo-400 tracking-wider">{companySettings.company_name || 'EDITORIAL NOVELI'}</h2>
+                      )}
+                      <p className="text-[10px] text-slate-450 mt-1 font-bold">{companySettings.commercial_name || 'Somos Noveli Editorial'}</p>
+                      <p className="text-[10px] text-slate-400">{companySettings.official_email || 'contacto@somosnoveli.cl'} | {companySettings.website_url || 'www.somosnoveli.cl'}</p>
+                      {companySettings.address && <p className="text-[9px] text-slate-400 mt-0.5">{companySettings.address}, {companySettings.city || ''}</p>}
                     </div>
                     <div className="text-right text-[10px] text-slate-500 font-medium">
                       <span className="font-bold text-slate-705 dark:text-slate-300 text-xs block">PROPUESTA COMERCIAL PRELIMINAR</span>
@@ -1497,8 +1602,8 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                   {/* Signatures block */}
                   <div className="pt-8 flex justify-between text-[9px] text-slate-450 text-center">
                     <div className="w-40 border-t pt-2">
-                      <span className="font-bold text-slate-755 dark:text-slate-300 block">Javier Román González</span>
-                      <span>Representante Noveli Editorial</span>
+                      <span className="font-bold text-slate-755 dark:text-slate-300 block">{companySettings.representative_name || 'Javier Román González'}</span>
+                      <span>{companySettings.representative_role || 'Representante Noveli Editorial'}</span>
                     </div>
                     <div className="w-40 border-t pt-2">
                       <span className="font-bold text-slate-755 dark:text-slate-300 block">Aceptación de Propuesta</span>
@@ -1507,7 +1612,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                   </div>
 
                   <div className="text-center text-[9px] text-slate-400 font-bold border-t pt-3">
-                    Somos Noveli Editorial - Los derechos de la obra pertenecen siempre al autor.
+                    {companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.'}
                   </div>
 
                 </div>
@@ -1553,6 +1658,171 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {isCompanyModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-xs z-[60] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full max-h-[85vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b">
+              <h4 className="font-bold text-slate-850 dark:text-slate-100 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-indigo-500" />
+                Editar Datos de Empresa
+              </h4>
+              <button onClick={() => setIsCompanyModalOpen(false)} className="text-slate-400 hover:text-slate-655 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCompanySaveInline} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Nombre Editorial</label>
+                  <input
+                    type="text"
+                    required
+                    value={companySettings.company_name}
+                    onChange={(e) => setCompanySettings({...companySettings, company_name: e.target.value})}
+                    className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-200"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Nombre Comercial</label>
+                  <input
+                    type="text"
+                    required
+                    value={companySettings.commercial_name}
+                    onChange={(e) => setCompanySettings({...companySettings, commercial_name: e.target.value})}
+                    className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Representante</label>
+                  <input
+                    type="text"
+                    required
+                    value={companySettings.representative_name}
+                    onChange={(e) => setCompanySettings({...companySettings, representative_name: e.target.value})}
+                    className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Cargo</label>
+                  <input
+                    type="text"
+                    required
+                    value={companySettings.representative_role}
+                    onChange={(e) => setCompanySettings({...companySettings, representative_role: e.target.value})}
+                    className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Email Oficial</label>
+                  <input
+                    type="email"
+                    required
+                    value={companySettings.official_email}
+                    onChange={(e) => setCompanySettings({...companySettings, official_email: e.target.value})}
+                    className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Teléfono</label>
+                  <input
+                    type="text"
+                    value={companySettings.phone || ''}
+                    onChange={(e) => setCompanySettings({...companySettings, phone: e.target.value})}
+                    className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Sitio Web</label>
+                  <input
+                    type="url"
+                    required
+                    value={companySettings.website_url}
+                    onChange={(e) => setCompanySettings({...companySettings, website_url: e.target.value})}
+                    className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Instagram</label>
+                  <input
+                    type="url"
+                    required
+                    value={companySettings.instagram_url}
+                    onChange={(e) => setCompanySettings({...companySettings, instagram_url: e.target.value})}
+                    className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                  />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Dirección</label>
+                  <input
+                    type="text"
+                    required
+                    value={companySettings.address}
+                    onChange={(e) => setCompanySettings({...companySettings, address: e.target.value})}
+                    className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Ciudad</label>
+                  <input
+                    type="text"
+                    required
+                    value={companySettings.city}
+                    onChange={(e) => setCompanySettings({...companySettings, city: e.target.value})}
+                    className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">País</label>
+                  <input
+                    type="text"
+                    required
+                    value={companySettings.country}
+                    onChange={(e) => setCompanySettings({...companySettings, country: e.target.value})}
+                    className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                  />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Texto Legal Predeterminado</label>
+                  <textarea
+                    rows="3"
+                    value={companySettings.default_legal_text}
+                    onChange={(e) => setCompanySettings({...companySettings, default_legal_text: e.target.value})}
+                    className="block w-full p-2 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707 resize-none"
+                  />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Pie de Página Predeterminado</label>
+                  <input
+                    type="text"
+                    required
+                    value={companySettings.default_footer_text}
+                    onChange={(e) => setCompanySettings({...companySettings, default_footer_text: e.target.value})}
+                    className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setIsCompanyModalOpen(false)}
+                  className="px-3.5 py-1.5 border rounded-xl font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold cursor-pointer shadow-sm shadow-indigo-600/10"
+                >
+                  Guardar
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

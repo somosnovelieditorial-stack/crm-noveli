@@ -1,0 +1,26 @@
+-- Migration 34: Create company_settings table
+CREATE TABLE IF NOT EXISTS company_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    company_name TEXT NOT NULL DEFAULT 'EDITORIAL NOVELI',
+    commercial_name TEXT NOT NULL DEFAULT 'Somos Noveli Editorial',
+    representative_name TEXT NOT NULL DEFAULT 'Javier Román González',
+    representative_role TEXT NOT NULL DEFAULT 'Representante Noveli Editorial',
+    official_email TEXT NOT NULL DEFAULT 'somosnovelieditorial@gmail.com',
+    phone TEXT,
+    website_url TEXT NOT NULL DEFAULT 'https://www.somosnovelieditorial.com',
+    instagram_url TEXT NOT NULL DEFAULT 'https://www.instagram.com/editorialnoveli/',
+    address TEXT NOT NULL DEFAULT 'Santa Magdalena 75 Of 304, Providencia',
+    city TEXT NOT NULL DEFAULT 'Santiago',
+    country TEXT NOT NULL DEFAULT 'Chile',
+    tax_id TEXT,
+    logo_url TEXT,
+    favicon_url TEXT,
+    signature_name TEXT NOT NULL DEFAULT 'Javier Román González',
+    default_legal_text TEXT,
+    default_footer_text TEXT NOT NULL DEFAULT 'Los derechos de la obra pertenecen siempre al autor.',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(organization_id)
+);

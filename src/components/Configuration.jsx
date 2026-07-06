@@ -26,6 +26,27 @@ export default function Configuration() {
     quotation_legal: ""
   });
 
+  const [companySettings, setCompanySettings] = useState({
+    id: '',
+    company_name: 'EDITORIAL NOVELI',
+    commercial_name: 'Somos Noveli Editorial',
+    representative_name: 'Javier Román González',
+    representative_role: 'Representante Noveli Editorial',
+    official_email: 'somosnovelieditorial@gmail.com',
+    phone: '',
+    website_url: 'https://www.somosnovelieditorial.com',
+    instagram_url: 'https://www.instagram.com/editorialnoveli/',
+    address: 'Santa Magdalena 75 Of 304, Providencia',
+    city: 'Santiago',
+    country: 'Chile',
+    tax_id: '',
+    logo_url: '',
+    favicon_url: '',
+    signature_name: 'Javier Román González',
+    default_legal_text: '',
+    default_footer_text: 'Los derechos de la obra pertenecen siempre al autor.'
+  });
+
   const [stages, setStages] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState({ text: '', type: 'success' });
@@ -116,9 +137,10 @@ export default function Configuration() {
     setLoading(true);
     try {
       const orgId = await getValidOrgId();
-      const [settingsRes, stagesRes] = await Promise.all([
+      const [settingsRes, stagesRes, companyRes] = await Promise.all([
         supabase.from('settings').select('*').eq('organization_id', orgId),
-        supabase.from('editorial_stages').select('*').order('order', { ascending: true })
+        supabase.from('editorial_stages').select('*').order('order', { ascending: true }),
+        supabase.from('company_settings').select('*').eq('organization_id', orgId)
       ]);
 
       if (settingsRes.data && settingsRes.data.length > 0) {
@@ -129,6 +151,16 @@ export default function Configuration() {
           organization_id: orgId
         }));
       }
+
+      if (companyRes.data && companyRes.data.length > 0) {
+        setCompanySettings(companyRes.data[0]);
+      } else {
+        setCompanySettings(prev => ({
+          ...prev,
+          organization_id: orgId
+        }));
+      }
+
       setStages(stagesRes.data || []);
     } catch (err) {
       console.error("Error loading config data:", err);
@@ -201,6 +233,56 @@ export default function Configuration() {
     } catch (err) {
       console.error("Error updating settings:", err);
       setMessage({ text: `Error al guardar la configuración: ${err.message || 'Error desconocido'}`, type: 'error' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCompanySubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setMessage({ text: '', type: 'success' });
+    try {
+      const orgId = await getValidOrgId();
+      const payload = {
+        company_name: companySettings.company_name,
+        commercial_name: companySettings.commercial_name,
+        representative_name: companySettings.representative_name,
+        representative_role: companySettings.representative_role,
+        official_email: companySettings.official_email,
+        phone: companySettings.phone || '',
+        website_url: companySettings.website_url,
+        instagram_url: companySettings.instagram_url,
+        address: companySettings.address,
+        city: companySettings.city,
+        country: companySettings.country,
+        tax_id: companySettings.tax_id || '',
+        logo_url: companySettings.logo_url || '',
+        favicon_url: companySettings.favicon_url || '',
+        signature_name: companySettings.signature_name,
+        default_legal_text: companySettings.default_legal_text || '',
+        default_footer_text: companySettings.default_footer_text || '',
+        organization_id: orgId
+      };
+
+      if (companySettings.id) {
+        payload.id = companySettings.id;
+      }
+
+      const { data, error } = await supabase
+        .from('company_settings')
+        .upsert(payload, { onConflict: 'organization_id' })
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setCompanySettings(data);
+      }
+      setMessage({ text: 'Datos de la empresa guardados exitosamente.', type: 'success' });
+    } catch (err) {
+      console.error("Error saving company settings:", err);
+      setMessage({ text: `Error al guardar datos de la empresa: ${err.message}`, type: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -322,6 +404,16 @@ export default function Configuration() {
           }`}
         >
           Perfil de Editorial
+        </button>
+        <button
+          onClick={() => setActiveTab('company')}
+          className={`px-4 py-2.5 font-bold text-xs border-b-2 transition-all cursor-pointer ${
+            activeTab === 'company' 
+              ? 'border-brand-500 text-brand-600 dark:text-brand-450' 
+              : 'border-transparent text-slate-400 hover:text-slate-655'
+          }`}
+        >
+          Datos de Editorial Noveli
         </button>
         <button
           onClick={() => setActiveTab('workflow')}
@@ -552,6 +644,234 @@ export default function Configuration() {
             >
               <Save className="w-4 h-4" />
               {isSubmitting ? 'Guardando...' : 'Guardar Parámetros'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {activeTab === 'company' && (
+        <form onSubmit={handleCompanySubmit} className="space-y-6">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-brand-500" />
+              Datos de Editorial Noveli
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Nombre de la Empresa / Editorial</label>
+                <input
+                  type="text"
+                  required
+                  value={companySettings.company_name}
+                  onChange={(e) => setCompanySettings({...companySettings, company_name: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-950/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="EDITORIAL NOVELI"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Nombre Comercial</label>
+                <input
+                  type="text"
+                  required
+                  value={companySettings.commercial_name}
+                  onChange={(e) => setCompanySettings({...companySettings, commercial_name: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-950/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="Somos Noveli Editorial"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Nombre del Representante</label>
+                <input
+                  type="text"
+                  required
+                  value={companySettings.representative_name}
+                  onChange={(e) => setCompanySettings({...companySettings, representative_name: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="Javier Román González"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Cargo del Representante</label>
+                <input
+                  type="text"
+                  required
+                  value={companySettings.representative_role}
+                  onChange={(e) => setCompanySettings({...companySettings, representative_role: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="Representante Noveli Editorial"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Email Oficial</label>
+                <input
+                  type="email"
+                  required
+                  value={companySettings.official_email}
+                  onChange={(e) => setCompanySettings({...companySettings, official_email: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="somosnovelieditorial@gmail.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Teléfono</label>
+                <input
+                  type="text"
+                  value={companySettings.phone}
+                  onChange={(e) => setCompanySettings({...companySettings, phone: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="+569..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Sitio Web URL</label>
+                <input
+                  type="url"
+                  required
+                  value={companySettings.website_url}
+                  onChange={(e) => setCompanySettings({...companySettings, website_url: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="https://www.somosnovelieditorial.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Instagram URL</label>
+                <input
+                  type="url"
+                  required
+                  value={companySettings.instagram_url}
+                  onChange={(e) => setCompanySettings({...companySettings, instagram_url: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="https://www.instagram.com/editorialnoveli/"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">RUT / Tax ID</label>
+                <input
+                  type="text"
+                  value={companySettings.tax_id}
+                  onChange={(e) => setCompanySettings({...companySettings, tax_id: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="76.xxx.xxx-x"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Firma / Nombre para Firma</label>
+                <input
+                  type="text"
+                  required
+                  value={companySettings.signature_name}
+                  onChange={(e) => setCompanySettings({...companySettings, signature_name: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="Javier Román González"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Logo URL</label>
+                <input
+                  type="text"
+                  value={companySettings.logo_url}
+                  onChange={(e) => setCompanySettings({...companySettings, logo_url: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Favicon URL</label>
+                <input
+                  type="text"
+                  value={companySettings.favicon_url}
+                  onChange={(e) => setCompanySettings({...companySettings, favicon_url: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="https://..."
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Dirección de la Empresa</label>
+                <input
+                  type="text"
+                  required
+                  value={companySettings.address}
+                  onChange={(e) => setCompanySettings({...companySettings, address: e.target.value})}
+                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                  placeholder="Santa Magdalena 75 Of 304, Providencia"
+                />
+              </div>
+
+              <div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Ciudad</label>
+                    <input
+                      type="text"
+                      required
+                      value={companySettings.city}
+                      onChange={(e) => setCompanySettings({...companySettings, city: e.target.value})}
+                      className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                      placeholder="Santiago"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">País</label>
+                    <input
+                      type="text"
+                      required
+                      value={companySettings.country}
+                      onChange={(e) => setCompanySettings({...companySettings, country: e.target.value})}
+                      className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                      placeholder="Chile"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Texto Legal Predeterminado</label>
+              <textarea
+                rows="4"
+                value={companySettings.default_legal_text}
+                onChange={(e) => setCompanySettings({...companySettings, default_legal_text: e.target.value})}
+                className="block w-full p-3 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-xs focus:outline-none"
+                placeholder="• La cotización de impresión física se realizará por separado..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Pie de Página Predeterminado</label>
+              <input
+                type="text"
+                required
+                value={companySettings.default_footer_text}
+                onChange={(e) => setCompanySettings({...companySettings, default_footer_text: e.target.value})}
+                className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                placeholder="Los derechos de la obra pertenecen siempre al autor."
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-sm transition-all shadow-md shadow-brand-600/20 cursor-pointer disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {isSubmitting ? 'Guardando...' : 'Guardar Datos de Empresa'}
             </button>
           </div>
         </form>
