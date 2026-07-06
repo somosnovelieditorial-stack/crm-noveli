@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase, getValidOrgId } from '../supabaseClient';
 import { formatCurrency } from '../utils';
 import { 
   Plus, Search, Edit2, Trash2, X, Sparkles,
@@ -56,9 +56,13 @@ export default function Catalog() {
   const fetchCatalog = async () => {
     setLoading(true);
     try {
+      const orgId = await getValidOrgId();
+      console.log("fetchCatalog orgId:", orgId, "activeFilter:", activeFilter);
+
       let query = supabase
         .from('service_catalog')
-        .select('*');
+        .select('*')
+        .eq('organization_id', orgId);
 
       if (activeFilter === 'si') {
         query = query.eq('active', true);
@@ -71,22 +75,36 @@ export default function Catalog() {
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase service_catalog error:", error);
+        throw error;
+      }
+
+      console.log("Cargados del catálogo:", data?.length);
       setCatalog(data || []);
     } catch (err) {
       console.error("Error loading catalog by display_order:", err);
       // Fallback if display_order does not exist in DB yet
       try {
-        let fallbackQuery = supabase.from('service_catalog').select('*');
+        const orgId = await getValidOrgId();
+        let fallbackQuery = supabase
+          .from('service_catalog')
+          .select('*')
+          .eq('organization_id', orgId);
+
         if (activeFilter === 'si') {
           fallbackQuery = fallbackQuery.eq('active', true);
         } else if (activeFilter === 'no') {
           fallbackQuery = fallbackQuery.eq('active', false);
         }
+        
         const { data, error } = await fallbackQuery.order('name', { ascending: true });
-        if (!error) {
-          setCatalog(data || []);
+        if (error) {
+          console.error("Fallback query Supabase error:", error);
+          throw error;
         }
+        console.log("Cargados del catálogo (fallback):", data?.length);
+        setCatalog(data || []);
       } catch (fallbackErr) {
         console.error("Fallback query also failed:", fallbackErr);
       }
@@ -185,11 +203,14 @@ export default function Catalog() {
     setFormError('');
 
     try {
+      const orgId = await getValidOrgId();
+      const payload = { ...formData, organization_id: orgId };
+
       if (selectedItem) {
         // Edit Mode
         const { error } = await supabase
           .from('service_catalog')
-          .update(formData)
+          .update(payload)
           .eq('id', selectedItem.id);
 
         if (error) throw error;
@@ -197,7 +218,7 @@ export default function Catalog() {
         // Add Mode
         const { error } = await supabase
           .from('service_catalog')
-          .insert([formData]);
+          .insert([payload]);
 
         if (error) throw error;
       }
