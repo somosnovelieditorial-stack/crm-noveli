@@ -1446,7 +1446,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
                                   currency: p.preferred_currency || 'CLP'
                                 })}
                                 className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle"
-                                title="Crear Cotización Rápida"
+                                title="Crear Propuesta Comercial"
                               >
                                 <FileText className="w-4 h-4" />
                               </button>
@@ -1456,7 +1456,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
                                   setIsQuotesHistoryOpen(true);
                                 }}
                                 className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer align-middle mr-0.5"
-                                title="Ver Cotizaciones"
+                                title="Ver Propuestas"
                               >
                                 <FolderOpen className="w-4 h-4" />
                               </button>
@@ -3135,7 +3135,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
         entityName={quickQuoteProspect?.name}
         preferredCurrency={quickQuoteProspect?.currency}
         onSuccess={() => {
-          alert('¡Cotización rápida guardada con éxito!');
+          alert('¡Propuesta comercial guardada con éxito!');
         }}
       />
 

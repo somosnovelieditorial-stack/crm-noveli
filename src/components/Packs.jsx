@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
+import QuickQuoteModal from './QuickQuoteModal';
 import { formatCurrency } from '../utils';
 import { 
   Plus, Search, Edit2, Trash2, X, Info,
-  Package, ToggleLeft, ToggleRight, Check, ListChecks 
+  Package, ToggleLeft, ToggleRight, Check, ListChecks, FileText 
 } from 'lucide-react';
 
 export default function Packs() {
@@ -12,6 +13,7 @@ export default function Packs() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('todos');
+  const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -310,14 +312,23 @@ export default function Packs() {
             Crea promociones y combinaciones de servicios del catálogo con precios especiales.
           </p>
         </div>
-        <button
-          onClick={handleOpenAddModal}
-          disabled={catalog.length === 0}
-          className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-sm transition-all shadow-md shadow-brand-600/20 disabled:opacity-50 cursor-pointer w-fit"
-        >
-          <Plus className="w-4 h-4" />
-          Añadir Pack Editorial
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setIsProposalModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 dark:bg-indigo-950/20 dark:text-indigo-400 rounded-xl font-semibold text-sm transition-all cursor-pointer w-fit"
+          >
+            <FileText className="w-4 h-4" />
+            Crear cotización desde catálogo
+          </button>
+          <button
+            onClick={handleOpenAddModal}
+            disabled={catalog.length === 0}
+            className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-sm transition-all shadow-md shadow-brand-600/20 disabled:opacity-50 cursor-pointer w-fit"
+          >
+            <Plus className="w-4 h-4" />
+            Añadir Pack Editorial
+          </button>
+        </div>
       </div>
 
       {catalog.length === 0 && (
@@ -735,6 +746,14 @@ export default function Packs() {
           </div>
         </div>
       )}
+
+      <QuickQuoteModal
+        isOpen={isProposalModalOpen}
+        onClose={() => setIsProposalModalOpen(false)}
+        onSuccess={() => {
+          alert('¡Propuesta comercial guardada con éxito!');
+        }}
+      />
     </div>
   );
 }

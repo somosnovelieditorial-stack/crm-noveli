@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase, getValidOrgId } from '../supabaseClient';
+import QuickQuoteModal from './QuickQuoteModal';
 import { formatCurrency } from '../utils';
 import { 
   Plus, Search, Edit2, Trash2, X, Sparkles,
-  ToggleLeft, ToggleRight, DollarSign, Tag, Info 
+  ToggleLeft, ToggleRight, DollarSign, Tag, Info, FileText 
 } from 'lucide-react';
 
 const categoryLabels = {
@@ -25,6 +26,7 @@ export default function Catalog() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('todos');
   const [activeFilter, setActiveFilter] = useState('si');
+  const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -280,13 +282,22 @@ export default function Catalog() {
             Define la lista de servicios editoriales estándar y sus tarifas de base.
           </p>
         </div>
-        <button
-          onClick={handleOpenAddModal}
-          className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-sm transition-all shadow-md shadow-brand-600/20 cursor-pointer w-fit"
-        >
-          <Plus className="w-4 h-4" />
-          Añadir al Catálogo
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setIsProposalModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 dark:bg-indigo-950/20 dark:text-indigo-400 rounded-xl font-semibold text-sm transition-all cursor-pointer w-fit"
+          >
+            <FileText className="w-4 h-4" />
+            Crear cotización desde catálogo
+          </button>
+          <button
+            onClick={handleOpenAddModal}
+            className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-sm transition-all shadow-md shadow-brand-600/20 cursor-pointer w-fit"
+          >
+            <Plus className="w-4 h-4" />
+            Añadir al Catálogo
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -656,6 +667,14 @@ export default function Catalog() {
           </div>
         </div>
       )}
+
+      <QuickQuoteModal
+        isOpen={isProposalModalOpen}
+        onClose={() => setIsProposalModalOpen(false)}
+        onSuccess={() => {
+          alert('¡Propuesta comercial guardada con éxito!');
+        }}
+      />
     </div>
   );
 }
