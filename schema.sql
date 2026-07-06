@@ -37,7 +37,7 @@ CREATE OR REPLACE FUNCTION get_user_org_id()
 RETURNS UUID AS $$
     SELECT organization_id 
     FROM organization_members 
-    WHERE user_id = auth.uid() 
+    WHERE user_id = auth.uid() AND active = true
     LIMIT 1;
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
@@ -46,7 +46,7 @@ CREATE OR REPLACE FUNCTION get_user_role()
 RETURNS TEXT AS $$
     SELECT role 
     FROM organization_members 
-    WHERE user_id = auth.uid() 
+    WHERE user_id = auth.uid() AND active = true
     LIMIT 1;
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 

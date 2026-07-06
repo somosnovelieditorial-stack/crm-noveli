@@ -112,18 +112,25 @@ export default function Dashboard({ organizationId }) {
       ]);
 
       // Temporary development logs
-      const userJson = localStorage.getItem('somos_noveli_crm_user');
-      let userEmail = 'unknown';
-      if (userJson) {
-        try {
-          userEmail = JSON.parse(userJson).email;
-        } catch(e) {}
-      }
-      console.log('current user', userEmail);
-      console.log('organizationId usado', orgId);
-      console.log('clientes cargados', clients.length);
-      console.log('ingresos cargados', incomes.length);
-      console.log('gastos cargados', expenses.length);
+      let currentUserEmail = 'unknown';
+      try {
+        const userRes = await supabase.auth.getUser();
+        if (userRes.data?.user) {
+          currentUserEmail = userRes.data.user.email;
+        } else {
+          const userJson = localStorage.getItem('somos_noveli_crm_user');
+          if (userJson) {
+            currentUserEmail = JSON.parse(userJson).email;
+          }
+        }
+      } catch (e) {}
+      const organizationId = orgId;
+      console.log("usuario actual", currentUserEmail);
+      console.log("organizationId usado", organizationId);
+      console.log("clientes cargados", clients.length);
+      console.log("ingresos cargados", incomes.length);
+      console.log("gastos cargados", expenses.length);
+      console.log("servicios cargados", services.length);
 
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];

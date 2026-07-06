@@ -6,6 +6,22 @@ ON CONFLICT (id) DO NOTHING;
 -- Ensure active column exists on organization_members
 ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE;
 
+CREATE OR REPLACE FUNCTION get_user_org_id()
+RETURNS UUID AS $$
+    SELECT organization_id 
+    FROM organization_members 
+    WHERE user_id = auth.uid() AND active = true
+    LIMIT 1;
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION get_user_role()
+RETURNS TEXT AS $$
+    SELECT role 
+    FROM organization_members 
+    WHERE user_id = auth.uid() AND active = true
+    LIMIT 1;
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
 -- Migrate all records with null organization_id to the default organization
 UPDATE providers SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL;
 UPDATE clients SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL;
