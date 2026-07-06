@@ -8,7 +8,7 @@ import {
   Clock, CheckCircle, Award, Landmark, PiggyBank, FileText, ArrowUpRight, ShieldCheck, ChevronRight
 } from 'lucide-react';
 
-export default function Dashboard({ organizationId }) {
+export default function Dashboard({ organizationId, realtimeTrigger }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('finanzas'); // 'finanzas' | 'operativa'
   const [stats, setStats] = useState({
@@ -536,7 +536,7 @@ export default function Dashboard({ organizationId }) {
     } finally {
       setLoading(false);
     }
-  }, [period]);
+  }, [period, realtimeTrigger]);
 
   useEffect(() => {
     fetchDashboardData();

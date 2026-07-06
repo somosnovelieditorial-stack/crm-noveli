@@ -100,7 +100,7 @@ class ClientsErrorBoundary extends Component {
   }
 }
 
-function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
+function ClientsContent({ isReadOnly = false, userRole = 'administrador', realtimeTrigger }) {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
@@ -662,7 +662,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador' }) {
     fetchClients();
     fetchEditorialStages();
     fetchCatalogAndPacks();
-  }, []);
+  }, [realtimeTrigger]);
 
   // Update estimated delivery dynamically based on duration input
   useEffect(() => {

@@ -2225,18 +2225,27 @@ const mockSupabase = {
 
   from: (table) => {
     return new MockQueryBuilder(table);
+  },
+  removeChannel: (channel) => {
+    if (channel && typeof channel.unsubscribe === 'function') {
+      channel.unsubscribe();
+    }
   }
 };
 
 let authListener = null;
+let realClient = null;
 
 if (useRealSupabase) {
-  const realClient = createClient(supabaseUrl, supabaseAnonKey);
+  realClient = createClient(supabaseUrl, supabaseAnonKey);
   supabaseInstance = {
     auth: realClient.auth,
     storage: realClient.storage,
     from: (table) => {
       return new RealSupabaseQueryBuilder(table, realClient);
+    },
+    removeChannel: (channel) => {
+      return realClient.removeChannel(channel);
     }
   };
   console.log("🚀 Somos Noveli CRM: Conectado a la base de datos Supabase Real.");
@@ -2280,6 +2289,35 @@ export const getCurrentOrganizationId = async () => {
 };
 
 export const getValidOrgId = getCurrentOrganizationId;
+
+export const subscribeToOrganizationChanges = (organizationId, onChange) => {
+  if (!useRealSupabase || !realClient) {
+    // Mock simulation
+    console.log(`[Mock Realtime] Subscribed to crm-org-${organizationId}`);
+    return {
+      unsubscribe: () => {
+        console.log(`[Mock Realtime] Unsubscribed from crm-org-${organizationId}`);
+      }
+    };
+  }
+
+  const channel = realClient
+    .channel(`crm-org-${organizationId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        filter: `organization_id=eq.${organizationId}`
+      },
+      (payload) => {
+        onChange(payload);
+      }
+    )
+    .subscribe();
+
+  return channel;
+};
 
 function formatCurrency(amount, currency = 'CLP') {
   if (currency === 'CLP') {

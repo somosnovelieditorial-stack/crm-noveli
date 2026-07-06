@@ -7,7 +7,7 @@ import {
   User, Sparkles, Download, DollarSign, Eye, RefreshCw, Calendar, Trash, FolderOpen, Building2
 } from 'lucide-react';
 
-export default function Quotations({ isReadOnly = false, userRole = 'administrador' }) {
+export default function Quotations({ isReadOnly = false, userRole = 'administrador', realtimeTrigger }) {
   const [quotations, setQuotations] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [packs, setPacks] = useState([]);
@@ -100,7 +100,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
     fetchQuotations();
     fetchCatalogAndPacks();
     fetchCompanySettings();
-  }, []);
+  }, [realtimeTrigger]);
 
   const fetchCompanySettings = async () => {
     try {

@@ -7,7 +7,7 @@ import {
   AlertCircle, AlertTriangle, CheckCircle2, XCircle, Mail, Phone, FolderOpen
 } from 'lucide-react';
 
-export default function Prospects({ isReadOnly = false, userRole = 'administrador' }) {
+export default function Prospects({ isReadOnly = false, userRole = 'administrador', realtimeTrigger }) {
   const [prospects, setProspects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -180,7 +180,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
     fetchProspects();
     fetchEditorialStages();
     fetchCatalogAndPacks();
-  }, []);
+  }, [realtimeTrigger]);
 
   // Update estimated delivery dynamically based on duration input for convertData
   useEffect(() => {

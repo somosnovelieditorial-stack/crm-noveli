@@ -8,7 +8,7 @@ import {
   FileSpreadsheet, Image, File, AlertTriangle
 } from 'lucide-react';
 
-export default function Documents() {
+export default function Documents({ realtimeTrigger }) {
   const [documents, setDocuments] = useState([]);
   const [clients, setClients] = useState([]);
   const [providers, setProviders] = useState([]);
@@ -115,7 +115,7 @@ export default function Documents() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [realtimeTrigger]);
 
   const fetchData = async () => {
     setLoading(true);

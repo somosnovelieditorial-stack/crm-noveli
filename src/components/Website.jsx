@@ -50,7 +50,7 @@ const DEFAULT_WEB_SECTIONS = [
   { section_key: 'contacto', title: 'Ponte en contacto', subtitle: 'Hablemos hoy', content: '¿Tienes un manuscrito listo? Escríbenos a contacto@somosnovelieditorial.com o búscanos en redes sociales.', active: true, display_order: 3 }
 ];
 
-export default function Website({ isReadOnly, initialPath = 'dashboard', onChangePath }) {
+export default function Website({ isReadOnly, initialPath = 'dashboard', onChangePath, realtimeTrigger }) {
   const [currentPath, setCurrentPath] = useState(initialPath);
   const [loading, setLoading] = useState(false);
   const [usingMockDb, setUsingMockDb] = useState(false);
@@ -127,7 +127,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     fetchBooks();
     fetchLinks();
     fetchSections();
-  }, []);
+  }, [realtimeTrigger]);
 
   const navigateTo = (path) => {
     setCurrentPath(path);

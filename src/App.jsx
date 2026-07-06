@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { supabase, isMock, getValidOrgId } from './supabaseClient';
+import { supabase, isMock, getValidOrgId, subscribeToOrganizationChanges } from './supabaseClient';
 
 // Original Components
 import Login from './components/Login';
@@ -424,6 +424,8 @@ export default function App() {
   // Advanced States
   const [userRole, setUserRole] = useState('administrador');
   const [organizationId, setOrganizationId] = useState('11111111-1111-1111-1111-111111111111');
+  const [realtimeTrigger, setRealtimeTrigger] = useState(0);
+  const [realtimeToast, setRealtimeToast] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -611,6 +613,70 @@ export default function App() {
   useEffect(() => {
     setSearchResults(searchGlobal(searchQuery));
   }, [searchQuery]);
+
+  // Realtime subscription per organization
+  useEffect(() => {
+    if (!organizationId) return;
+
+    console.log(`📡 [Realtime] Iniciando suscripción para la organización: ${organizationId}`);
+    
+    let active = true;
+    const channel = subscribeToOrganizationChanges(organizationId, (payload) => {
+      if (!active) return;
+      console.log("🔔 [Realtime Update Received]", payload);
+      
+      // Increment trigger to refresh mounted components
+      setRealtimeTrigger(prev => prev + 1);
+
+      // Human-readable names for tables
+      const tableNamesMap = {
+        clients: 'Clientes',
+        prospects: 'Prospectos',
+        quotations: 'Propuestas',
+        quotation_items: 'Ítems de Propuesta',
+        services: 'Servicios',
+        service_stages: 'Etapas de Servicio',
+        documents: 'Documentos',
+        incomes: 'Ingresos',
+        expenses: 'Gastos',
+        staff: 'Personal',
+        payroll_payments: 'Nómina',
+        operational_reserve_movements: 'Movimientos de Reserva',
+        service_catalog: 'Catálogo de Servicios',
+        service_packs: 'Packs de Servicios',
+        company_settings: 'Datos de Empresa',
+        website_settings: 'Configuración Web',
+        website_services: 'Servicios Web',
+        website_books: 'Libros Web',
+        website_sections: 'Secciones Web'
+      };
+
+      const tableName = tableNamesMap[payload.table] || payload.table;
+      
+      setRealtimeToast({
+        message: `Datos de ${tableName} actualizados`,
+        table: payload.table,
+        type: payload.eventType
+      });
+
+      // Clear toast after 3 seconds
+      setTimeout(() => {
+        setRealtimeToast(prev => {
+          if (prev && prev.table === payload.table && prev.type === payload.eventType) {
+            return null;
+          }
+          return prev;
+        });
+      }, 3000);
+    });
+
+    return () => {
+      active = false;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [organizationId]);
 
   const toggleTheme = () => {
     const nextDark = !isDarkMode;
@@ -928,7 +994,7 @@ export default function App() {
   // Render current tab content with dynamic roles and write access checks
   const renderTabContent = () => {
     const isReadOnly = !hasPermission(userRole, activeTab);
-    const commonProps = { isReadOnly, userRole, organizationId };
+    const commonProps = { isReadOnly, userRole, organizationId, realtimeTrigger };
 
     switch (activeTab) {
       case 'dashboard': return <Dashboard {...commonProps} />;
@@ -1378,6 +1444,24 @@ export default function App() {
           onClick={() => setIsSidebarOpen(false)}
           className="fixed inset-0 bg-black/40 backdrop-blur-xs z-30 lg:hidden"
         ></div>
+      )}
+
+      {/* Realtime Update Toast Notification Indicator */}
+      {realtimeToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3.5 px-4.5 py-3 rounded-2xl bg-slate-900/95 text-white dark:bg-slate-100/95 dark:text-slate-950 border border-slate-800 dark:border-slate-200 shadow-xl backdrop-blur-md transition-all duration-300 select-none">
+          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0 absolute left-4.5 top-[18px]"></div>
+          <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
+          <div className="flex flex-col gap-0.5 pr-2">
+            <span className="text-xs font-bold font-sans">Datos actualizados</span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium leading-none">{realtimeToast.message}</span>
+          </div>
+          <button 
+            onClick={() => setRealtimeToast(null)}
+            className="text-slate-400 hover:text-white dark:text-slate-500 dark:hover:text-slate-900 transition-colors pl-1 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       )}
 
     </div>

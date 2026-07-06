@@ -1,4 +1,4 @@
-import { supabase, getCurrentOrganizationId } from './supabaseClient';
+import { supabase, getCurrentOrganizationId, subscribeToOrganizationChanges } from './supabaseClient';
 
 
 /**
@@ -680,7 +680,7 @@ const ROLE_PERMISSIONS = {
   }
 };
 
-export { getCurrentOrganizationId };
+export { getCurrentOrganizationId, subscribeToOrganizationChanges };
 
 export const getCurrentUserRole = () => {
   const userJson = localStorage.getItem('somos_noveli_crm_user');

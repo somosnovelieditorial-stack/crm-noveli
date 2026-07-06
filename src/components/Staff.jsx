@@ -6,7 +6,7 @@ import {
   ArrowUpRight, ArrowDownRight, RefreshCw, BarChart2
 } from 'lucide-react';
 
-export default function Staff({ defaultSubTab = 'members' }) {
+export default function Staff({ defaultSubTab = 'members', realtimeTrigger }) {
   const [loading, setLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState(defaultSubTab);
 
@@ -70,7 +70,7 @@ export default function Staff({ defaultSubTab = 'members' }) {
 
   useEffect(() => {
     fetchData();
-  }, [activeSubTab]);
+  }, [activeSubTab, realtimeTrigger]);
 
   const fetchData = async () => {
     setLoading(true);

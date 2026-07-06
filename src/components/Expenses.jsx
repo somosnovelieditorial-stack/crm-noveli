@@ -8,7 +8,7 @@ import {
   UploadCloud, FileSpreadsheet, Image, File, Eye, Trash
 } from 'lucide-react';
 
-export default function Expenses() {
+export default function Expenses({ realtimeTrigger }) {
   const [expenses, setExpenses] = useState([]);
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +60,7 @@ export default function Expenses() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [realtimeTrigger]);
 
   const fetchData = async () => {
     setLoading(true);

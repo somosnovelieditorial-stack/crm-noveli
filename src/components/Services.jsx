@@ -9,7 +9,7 @@ import {
   UploadCloud, FileSpreadsheet, Image, File, Eye, FileText, Settings, ArrowUp, ArrowDown
 } from 'lucide-react';
 
-export default function Services({ isReadOnly = false }) {
+export default function Services({ isReadOnly = false, realtimeTrigger }) {
   const [services, setServices] = useState([]);
   const [clients, setClients] = useState([]);
   const [editorialStages, setEditorialStages] = useState([]);
@@ -86,7 +86,7 @@ export default function Services({ isReadOnly = false }) {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [realtimeTrigger]);
 
   // Sync exchange rate in form when currency changes
   useEffect(() => {

@@ -20,7 +20,7 @@ const categoryLabels = {
   'otro': 'Otro'
 };
 
-export default function Catalog() {
+export default function Catalog({ realtimeTrigger }) {
   const [catalog, setCatalog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,7 +53,7 @@ export default function Catalog() {
 
   useEffect(() => {
     fetchCatalog();
-  }, [activeFilter]);
+  }, [activeFilter, realtimeTrigger]);
 
   const fetchCatalog = async () => {
     setLoading(true);

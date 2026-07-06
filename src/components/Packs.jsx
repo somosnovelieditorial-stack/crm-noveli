@@ -7,7 +7,7 @@ import {
   Package, ToggleLeft, ToggleRight, Check, ListChecks, FileText 
 } from 'lucide-react';
 
-export default function Packs() {
+export default function Packs({ realtimeTrigger }) {
   const [packs, setPacks] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +41,7 @@ export default function Packs() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [realtimeTrigger]);
 
   const fetchData = async () => {
     setLoading(true);
