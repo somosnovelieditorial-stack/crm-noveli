@@ -920,43 +920,90 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
         services_summary: convertData.selected_services ? convertData.selected_services.map(s => s.name).join(', ') : ''
       };
 
-      // 1. Insert into clients
-      const { data: newClient, error: clientError } = await supabase
-        .from('clients')
-        .insert([payload])
-        .select()
-        .single();
+      // 1. Check if client already exists with same email, instagram, or phone
+      let existingClient = null;
+      if (convertData.email && convertData.email.trim()) {
+        const { data: byEmail, error: errE } = await supabase
+          .from('clients')
+          .select('id, name')
+          .eq('email', convertData.email.trim())
+          .limit(1);
+        if (!errE && byEmail && byEmail.length > 0) existingClient = byEmail[0];
+      }
+      if (!existingClient && convertData.instagram && convertData.instagram.trim()) {
+        const { data: byInsta, error: errI } = await supabase
+          .from('clients')
+          .select('id, name')
+          .eq('instagram', convertData.instagram.trim())
+          .limit(1);
+        if (!errI && byInsta && byInsta.length > 0) existingClient = byInsta[0];
+      }
+      if (!existingClient && convertData.phone && convertData.phone.trim()) {
+        const { data: byPhone, error: errP } = await supabase
+          .from('clients')
+          .select('id, name')
+          .eq('phone', convertData.phone.trim())
+          .limit(1);
+        if (!errP && byPhone && byPhone.length > 0) existingClient = byPhone[0];
+      }
 
-      if (clientError) throw clientError;
+      let clientTargetId = '';
+      let clientTargetName = '';
 
-      if (!newClient?.id) {
-        throw new Error('Cliente creado, pero Supabase no devolvió ID');
+      if (existingClient) {
+        clientTargetId = existingClient.id;
+        clientTargetName = existingClient.name;
+        // Update existing client with latest conversion payload
+        const { error: updateClientErr } = await supabase
+          .from('clients')
+          .update(payload)
+          .eq('id', clientTargetId);
+        if (updateClientErr) throw updateClientErr;
+      } else {
+        // Insert new client
+        const { data: newClient, error: clientError } = await supabase
+          .from('clients')
+          .insert([payload])
+          .select()
+          .single();
+
+        if (clientError) throw clientError;
+        if (!newClient?.id) {
+          throw new Error('Cliente creado, pero Supabase no devolvió ID');
+        }
+        clientTargetId = newClient.id;
+        clientTargetName = newClient.name;
       }
 
       // 2. Insert into activity_log if any requirements are already completed
       if (payload.payment_link_sent) {
-        await logActivity('link de pago enviado', `Link de pago enviado a ${payload.name}`, newClient.id);
+        await logActivity('link de pago enviado', `Link de pago enviado a ${payload.name}`, clientTargetId);
       }
       if (payload.contract_sent) {
-        await logActivity('contrato enviado', `Contrato enviado a ${payload.name}`, newClient.id);
+        await logActivity('contrato enviado', `Contrato enviado a ${payload.name}`, clientTargetId);
       }
       if (payload.contract_signed_received) {
-        await logActivity('contrato firmado recibido', `Contrato firmado recibido de ${payload.name}`, newClient.id);
+        await logActivity('contrato firmado recibido', `Contrato firmado recibido de ${payload.name}`, clientTargetId);
       }
       if (payload.files_received) {
-        await logActivity('manuscrito/archivos recibidos', `Manuscrito o archivos recibidos de ${payload.name}`, newClient.id);
+        await logActivity('manuscrito/archivos recibidos', `Manuscrito o archivos recibidos de ${payload.name}`, clientTargetId);
       }
       if (payload.ready_to_start) {
-        await logActivity('cliente listo para iniciar', `Cliente ${payload.name} listo para iniciar trabajo editorial`, newClient.id);
+        await logActivity('cliente listo para iniciar', `Cliente ${payload.name} listo para iniciar trabajo editorial`, clientTargetId);
       }
       if (parseFloat(payload.amount_paid) > 0) {
-        await logActivity('pago recibido', `Pago de ${payload.currency} ${parseFloat(payload.amount_paid).toLocaleString()} recibido de ${payload.name}`, newClient.id);
+        await logActivity('pago recibido', `Pago de ${payload.currency} ${parseFloat(payload.amount_paid).toLocaleString()} recibido de ${payload.name}`, clientTargetId);
       }
 
-      // 3. Link prospect with new client
+      // 3. Link prospect with client and update status
       const { error: prospectError } = await supabase
         .from('prospects')
-        .update({ converted_to_client_id: newClient.id })
+        .update({ 
+          converted_to_client_id: clientTargetId,
+          converted_to_client: true,
+          status: 'convertido',
+          converted_at: new Date().toISOString()
+        })
         .eq('id', selectedProspect.id);
 
       if (prospectError) throw prospectError;
@@ -978,7 +1025,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
         for (const [sidx, sItem] of servicesToRegister.entries()) {
           const sValue = parseFloat(sItem.price) || 0;
           const servicePayload = {
-            client_id: newClient.id,
+            client_id: clientTargetId,
             type: sItem.name,
             book_title: convertData.service_book_title,
             value: sValue,
@@ -1033,7 +1080,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
               const { error: incomeError } = await supabase
                 .from('incomes')
                 .insert({
-                  client_id: newClient.id,
+                  client_id: clientTargetId,
                   service_id: newService.id,
                   amount: amtPaidVal,
                   currency: currency,
@@ -1054,7 +1101,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
 
       await fetchProspects();
       setIsConvertModalOpen(false);
-      alert(`¡Prospecto convertido en cliente con éxito! Nuevo cliente: ${newClient.name}`);
+      alert(`¡Prospecto convertido en cliente con éxito! Cliente: ${clientTargetName}`);
 
     } catch (err) {
       console.error('Error converting prospect to client:', err);
@@ -1084,11 +1131,16 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
     const matchesCountry = countryFilter === 'todos' || p.country === countryFilter;
     const matchesType = clientTypeFilter === 'todos' || p.client_type === clientTypeFilter;
     
+    const isConvertedOrExcluded = 
+      p.converted_to_client_id || 
+      p.converted_to_client === true || 
+      ['convertido', 'cliente', 'finalizado', 'perdido', 'perdido / rechazado'].includes(String(p.status || '').toLowerCase().trim());
+
     let matchesConv = true;
-    if (conversionStatus === 'pendientes') {
-      matchesConv = !p.converted_to_client_id;
+    if (conversionStatus === 'todos' || conversionStatus === 'pendientes') {
+      matchesConv = !isConvertedOrExcluded;
     } else if (conversionStatus === 'convertidos') {
-      matchesConv = !!p.converted_to_client_id;
+      matchesConv = (p.converted_to_client_id || p.converted_to_client === true || p.status === 'convertido');
     }
 
     return matchesSearch && matchesProb && matchesOrig && matchesCountry && matchesType && matchesConv;
@@ -1427,7 +1479,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
                     <td className="px-6 py-4 text-right space-x-1.5 whitespace-nowrap">
                       {!isReadOnly && (
                         <>
-                          {!p.converted_to_client_id && (
+                          {!(p.converted_to_client_id || p.converted_to_client || p.status === 'convertido') && (
                             <button
                               onClick={() => handleOpenConvertModal(p)}
                               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-all shadow-sm shadow-emerald-600/10 cursor-pointer"
@@ -1437,7 +1489,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
                               <span>Convertir</span>
                             </button>
                           )}
-                          {!isReadOnly && !p.converted_to_client_id && (
+                          {!isReadOnly && !(p.converted_to_client_id || p.converted_to_client || p.status === 'convertido') && (
                             <>
                               <button
                                 onClick={() => setQuickQuoteProspect({

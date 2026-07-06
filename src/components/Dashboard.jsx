@@ -326,7 +326,11 @@ export default function Dashboard() {
       // 2. Filter active prospects
       const activeProspects = (prospects || []).filter(p => {
         const status = String(p.status || '').toLowerCase().trim();
-        return !['perdido', 'perdido / rechazado', 'finalizado'].includes(status) && !p.converted_to_client_id;
+        const isConvertedOrExcluded = 
+          p.converted_to_client_id || 
+          p.converted_to_client === true || 
+          ['convertido', 'cliente', 'finalizado', 'perdido', 'perdido / rechazado'].includes(status);
+        return !isConvertedOrExcluded;
       }).length;
 
       // 3. Servicios en Proceso
