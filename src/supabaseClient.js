@@ -977,6 +977,21 @@ const getMockDb = () => {
     });
   }
 
+  // Ensure every record in all business tables has organization_id
+  const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
+  const defaultOrgId = '11111111-1111-1111-1111-111111111111';
+  Object.keys(parsed).forEach(table => {
+    if (!EXCLUDED_TABLES.includes(table) && Array.isArray(parsed[table])) {
+      parsed[table] = parsed[table].map(row => {
+        if (!row.organization_id) {
+          row.organization_id = defaultOrgId;
+          updated = true;
+        }
+        return row;
+      });
+    }
+  });
+
   if (updated) {
     localStorage.setItem('somos_noveli_crm_db', JSON.stringify(parsed));
   }
@@ -995,6 +1010,12 @@ class MockQueryBuilder {
     this.filters = [];
     this.orderConfig = null;
     this.singleRow = false;
+
+    const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
+    if (!EXCLUDED_TABLES.includes(table)) {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      this.filters.push({ column: 'organization_id', value: orgId });
+    }
   }
 
   select(columns = '*') {
@@ -1154,6 +1175,9 @@ class MockQueryBuilder {
       const existingIdx = records.findIndex(r => r[onConflict] === item[onConflict]);
       const current = existingIdx >= 0 ? records[existingIdx] : {};
       
+      const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+
       const mergedItem = {
         id: item.id || current.id || genId(this.table),
         user_id: item.user_id || current.user_id || getMockUser().id,
@@ -1161,6 +1185,12 @@ class MockQueryBuilder {
         ...current,
         ...item
       };
+
+      if (!EXCLUDED_TABLES.includes(this.table)) {
+        if (!mergedItem.organization_id) {
+          mergedItem.organization_id = orgId;
+        }
+      }
 
       if (['services', 'incomes', 'expenses', 'quotations'].includes(String(this.table || ''))) {
         if (mergedItem.exchange_rate === undefined) {
@@ -1195,14 +1225,23 @@ class MockQueryBuilder {
     const db = getMockDb();
     const records = db[this.table] || [];
     
+    const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
+    const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+
     const itemsToInsert = Array.isArray(newData) ? newData : [newData];
     const insertedItems = itemsToInsert.map(item => {
       const newItem = {
         id: item.id || genId(this.table),
-        user_id: getMockUser().id,
+        user_id: item.user_id || getMockUser().id,
         created_at: new Date().toISOString(),
         ...item
       };
+
+      if (!EXCLUDED_TABLES.includes(this.table)) {
+        if (!newItem.organization_id) {
+          newItem.organization_id = orgId;
+        }
+      }
 
       // Multicurrency calculations
       if (['services', 'incomes', 'expenses', 'quotations'].includes(String(this.table || ''))) {
@@ -1583,11 +1622,29 @@ class MutationQueryBuilder {
 
   async execute() {
     let query;
+    const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
+    const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+    
+    let currentUserId = null;
+    try {
+      const userRes = await this.realClient.auth.getUser();
+      if (userRes.data?.user) {
+        currentUserId = userRes.data.user.id;
+      }
+    } catch (e) {}
 
     if (this.method === 'insert') {
       const items = Array.isArray(this.data) ? this.data : [this.data];
       const updatedItems = await Promise.all(items.map(async item => {
         const newItem = { ...item };
+        if (!EXCLUDED_TABLES.includes(this.table)) {
+          if (!newItem.organization_id) {
+            newItem.organization_id = orgId;
+          }
+          if (currentUserId && !newItem.user_id) {
+            newItem.user_id = currentUserId;
+          }
+        }
         if (['services', 'incomes', 'expenses', 'quotations'].includes(String(this.table || ''))) {
           if (newItem.exchange_rate === undefined) {
             let rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
@@ -1610,14 +1667,28 @@ class MutationQueryBuilder {
 
     } else if (this.method === 'update') {
       query = this.realClient.from(this.table).update(this.data);
+      if (!EXCLUDED_TABLES.includes(this.table)) {
+        query = query.eq('organization_id', orgId);
+      }
 
     } else if (this.method === 'delete') {
       query = this.realClient.from(this.table).delete();
+      if (!EXCLUDED_TABLES.includes(this.table)) {
+        query = query.eq('organization_id', orgId);
+      }
 
     } else if (this.method === 'upsert') {
       const items = Array.isArray(this.data) ? this.data : [this.data];
       const updatedItems = await Promise.all(items.map(async item => {
         const newItem = { ...item };
+        if (!EXCLUDED_TABLES.includes(this.table)) {
+          if (!newItem.organization_id) {
+            newItem.organization_id = orgId;
+          }
+          if (currentUserId && !newItem.user_id) {
+            newItem.user_id = currentUserId;
+          }
+        }
         if (['services', 'incomes', 'expenses', 'quotations'].includes(String(this.table || ''))) {
           if (newItem.exchange_rate === undefined) {
             let rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
@@ -1870,6 +1941,12 @@ class RealSupabaseQueryBuilder {
     this.realClient = realClient;
     this.query = realClient.from(table);
     this.singleRow = false;
+
+    const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
+    if (!EXCLUDED_TABLES.includes(table)) {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      this.query = this.query.eq('organization_id', orgId);
+    }
     
     const self = this;
     const proxy = new Proxy(this, {

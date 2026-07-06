@@ -189,11 +189,7 @@ export const filterByPeriod = (items, dateField, config) => {
  * @returns {boolean} True if write permission is allowed, false otherwise
  */
 export const hasPermission = (role, module) => {
-  if (!role) return false;
-  const userRole = role.toLowerCase();
-  
-  if (userRole === 'solo lectura') return false;
-  return true; // All other roles can create, edit, and delete
+  return canPerformAction(module, 'write');
 };
 
 /**
@@ -640,3 +636,78 @@ export const syncStageEventsToAgenda = async (serviceId) => {
   }
 };
 
+const ROLE_PERMISSIONS = {
+  administrador: {
+    modules: '*',
+  },
+  editor: {
+    modules: [
+      'dashboard', 'notifications', 'quotations', 'clients', 'prospects', 'seguimientos',
+      'services', 'completed_sales', 'documents', 'catalog', 'packs', 'website', 
+      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones',
+      'reports'
+    ]
+  },
+  diseñador: {
+    modules: [
+      'dashboard', 'notifications', 'clients', 'prospects', 'seguimientos', 'services', 
+      'completed_sales', 'documents', 'website', 
+      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones',
+      'reports'
+    ]
+  },
+  corrector: {
+    modules: [
+      'dashboard', 'notifications', 'clients', 'prospects', 'seguimientos', 'services', 
+      'completed_sales', 'documents', 'website', 
+      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones',
+      'reports'
+    ]
+  },
+  contador: {
+    modules: [
+      'dashboard', 'notifications', 'clients', 'prospects', 'seguimientos', 'services', 'completed_sales', 
+      'incomes', 'expenses', 'taxes', 'currency_rates', 'providers', 'staff', 'reserve',
+      'reports'
+    ]
+  },
+  'solo lectura': {
+    modules: [
+      'dashboard', 'notifications', 'quotations', 'clients', 'prospects', 'seguimientos',
+      'services', 'completed_sales', 'documents', 'catalog', 'packs', 'website', 
+      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones',
+      'reports'
+    ]
+  }
+};
+
+export const getCurrentOrganizationId = () => {
+  return localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+};
+
+export const getCurrentUserRole = () => {
+  const userJson = localStorage.getItem('somos_noveli_crm_user');
+  if (userJson) {
+    try {
+      const user = JSON.parse(userJson);
+      if (user.role) return user.role.toLowerCase();
+    } catch(e) {}
+  }
+  return (localStorage.getItem('somos_noveli_crm_role') || 'solo lectura').toLowerCase();
+};
+
+export const canAccessModule = (moduleKey) => {
+  const role = getCurrentUserRole();
+  const permissions = ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS['solo lectura'];
+  if (permissions.modules === '*') return true;
+  return permissions.modules.includes(moduleKey);
+};
+
+export const canPerformAction = (moduleKey, action) => {
+  const role = getCurrentUserRole();
+  if (role === 'solo lectura') return false;
+  if (role === 'administrador') return true;
+  
+  // For other roles, block write actions if they cannot access the module
+  return canAccessModule(moduleKey);
+};

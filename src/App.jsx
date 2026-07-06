@@ -28,7 +28,7 @@ import Staff from './components/Staff';
 import Website from './components/Website';
 
 // Permission Helper
-import { hasPermission, formatCurrency } from './utils';
+import { hasPermission, formatCurrency, canAccessModule, canPerformAction } from './utils';
 
 // Icons
 import { 
@@ -474,14 +474,17 @@ export default function App() {
       if (data && data.length > 0) {
         const membership = data[0];
         setUserRole(membership.role || 'solo lectura');
+        localStorage.setItem('somos_noveli_crm_role', membership.role || 'solo lectura');
         localStorage.setItem('somos_noveli_crm_org_id', membership.organization_id || '11111111-1111-1111-1111-111111111111');
       } else {
         setUserRole('solo lectura');
+        localStorage.setItem('somos_noveli_crm_role', 'solo lectura');
         localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
       }
     } catch (err) {
       console.error("Error fetching database role:", err);
       setUserRole(activeUser.role || 'solo lectura');
+      localStorage.setItem('somos_noveli_crm_role', activeUser.role || 'solo lectura');
       localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
     } finally {
       setLoading(false);
@@ -516,9 +519,11 @@ export default function App() {
           if (data && data.length > 0) {
             const membership = data[0];
             setUserRole(membership.role || 'solo lectura');
+            localStorage.setItem('somos_noveli_crm_role', membership.role || 'solo lectura');
             localStorage.setItem('somos_noveli_crm_org_id', membership.organization_id || '11111111-1111-1111-1111-111111111111');
           } else {
             setUserRole('solo lectura');
+            localStorage.setItem('somos_noveli_crm_role', 'solo lectura');
             localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
           }
         }
@@ -528,6 +533,7 @@ export default function App() {
           setUser(activeUser);
           userRef.current = activeUser;
           setUserRole(activeUser.role || 'solo lectura');
+          localStorage.setItem('somos_noveli_crm_role', activeUser.role || 'solo lectura');
           localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
         }
       } finally {
@@ -1049,8 +1055,16 @@ export default function App() {
           {/* Nav links (Scrollable area) */}
           <nav className="flex-1 overflow-y-auto pr-1 space-y-1 scrollbar-thin text-xs">
             {menuGroups.map((group) => {
+              if (group.tab && !canAccessModule(group.tab)) return null;
+
+              let visibleItems = null;
+              if (group.items) {
+                visibleItems = group.items.filter(item => canAccessModule(item.tab || item.id));
+                if (visibleItems.length === 0) return null;
+              }
+
               const isGroupActive = group.tab === activeTab || 
-                (group.items && group.items.some(item => item.id === activeTab || item.tab === activeTab));
+                (visibleItems && visibleItems.some(item => item.id === activeTab || item.tab === activeTab));
               const isExpanded = expandedGroups[group.id];
 
               if (group.url) {
@@ -1113,7 +1127,7 @@ export default function App() {
 
                   {isExpanded && (
                     <div className="pl-3.5 space-y-0.5 border-l border-slate-200 dark:border-slate-800 ml-4.5 my-1 animate-slide-down">
-                      {group.items.map((item) => {
+                      {visibleItems.map((item) => {
                         const isItemActive = activeTab === item.id || activeTab === item.tab;
                         return (
                           <button
