@@ -8,7 +8,7 @@ import {
   Clock, CheckCircle, Award, Landmark, PiggyBank, FileText, ArrowUpRight, ShieldCheck, ChevronRight
 } from 'lucide-react';
 
-export default function Dashboard() {
+export default function Dashboard({ organizationId }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('finanzas'); // 'finanzas' | 'operativa'
   const [stats, setStats] = useState({
@@ -111,15 +111,19 @@ export default function Dashboard() {
         safeQuery('operational_reserve_movements')
       ]);
 
-      // Temporary development logs (will be kept discrete)
-      console.log("📊 [Dashboard Debug] Loaded counts:", {
-        clients: clients.length,
-        prospects: prospects.length,
-        services: services.length,
-        incomes: incomes.length,
-        expenses: expenses.length,
-        payroll_payments: payroll.length
-      });
+      // Temporary development logs
+      const userJson = localStorage.getItem('somos_noveli_crm_user');
+      let userEmail = 'unknown';
+      if (userJson) {
+        try {
+          userEmail = JSON.parse(userJson).email;
+        } catch(e) {}
+      }
+      console.log('current user', userEmail);
+      console.log('organizationId usado', orgId);
+      console.log('clientes cargados', clients.length);
+      console.log('ingresos cargados', incomes.length);
+      console.log('gastos cargados', expenses.length);
 
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];

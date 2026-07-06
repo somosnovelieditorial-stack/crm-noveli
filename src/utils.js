@@ -695,6 +695,7 @@ export const getCurrentUserRole = () => {
 
 export const canAccessModule = (moduleKey) => {
   const role = getCurrentUserRole();
+  if (role === 'admin' || role === 'administrador') return true;
   const permissions = ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS['solo lectura'];
   if (permissions.modules === '*') return true;
   return permissions.modules.includes(moduleKey);
@@ -703,7 +704,7 @@ export const canAccessModule = (moduleKey) => {
 export const canPerformAction = (moduleKey, action) => {
   const role = getCurrentUserRole();
   if (role === 'solo lectura') return false;
-  if (role === 'administrador') return true;
+  if (role === 'admin' || role === 'administrador') return true;
   
   // For other roles, block write actions if they cannot access the module
   return canAccessModule(moduleKey);

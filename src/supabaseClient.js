@@ -2262,7 +2262,8 @@ export const getCurrentOrganizationId = async () => {
       const { data, error } = await supabaseInstance
         .from('organization_members')
         .select('organization_id')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('active', true);
 
       if (!error && data && data.length > 0) {
         const orgId = data[0].organization_id;

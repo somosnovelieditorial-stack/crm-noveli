@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS organization_members (
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     role TEXT NOT NULL CHECK (role IN ('administrador', 'editor', 'diseñador', 'corrector', 'contador', 'solo lectura')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    active BOOLEAN DEFAULT TRUE,
     UNIQUE (organization_id, user_id)
 );
 

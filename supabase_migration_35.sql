@@ -3,6 +3,9 @@ INSERT INTO organizations (id, name)
 VALUES ('11111111-1111-1111-1111-111111111111', 'Editorial Noveli')
 ON CONFLICT (id) DO NOTHING;
 
+-- Ensure active column exists on organization_members
+ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE;
+
 -- Migrate all records with null organization_id to the default organization
 UPDATE providers SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL;
 UPDATE clients SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL;

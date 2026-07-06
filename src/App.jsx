@@ -423,6 +423,7 @@ export default function App() {
 
   // Advanced States
   const [userRole, setUserRole] = useState('administrador');
+  const [organizationId, setOrganizationId] = useState('11111111-1111-1111-1111-111111111111');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -467,23 +468,27 @@ export default function App() {
       const { data, error } = await supabase
         .from('organization_members')
         .select('role, organization_id')
-        .eq('user_id', activeUser.id);
+        .eq('user_id', activeUser.id)
+        .eq('active', true);
         
       if (error) throw error;
       
       if (data && data.length > 0) {
         const membership = data[0];
         setUserRole(membership.role || 'solo lectura');
+        setOrganizationId(membership.organization_id || '11111111-1111-1111-1111-111111111111');
         localStorage.setItem('somos_noveli_crm_role', membership.role || 'solo lectura');
         localStorage.setItem('somos_noveli_crm_org_id', membership.organization_id || '11111111-1111-1111-1111-111111111111');
       } else {
         setUserRole('solo lectura');
+        setOrganizationId('11111111-1111-1111-1111-111111111111');
         localStorage.setItem('somos_noveli_crm_role', 'solo lectura');
         localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
       }
     } catch (err) {
       console.error("Error fetching database role:", err);
       setUserRole(activeUser.role || 'solo lectura');
+      setOrganizationId('11111111-1111-1111-1111-111111111111');
       localStorage.setItem('somos_noveli_crm_role', activeUser.role || 'solo lectura');
       localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
     } finally {
@@ -509,7 +514,8 @@ export default function App() {
         const { data, error } = await supabase
           .from('organization_members')
           .select('role, organization_id')
-          .eq('user_id', activeUser.id);
+          .eq('user_id', activeUser.id)
+          .eq('active', true);
           
         if (error) throw error;
         
@@ -519,10 +525,12 @@ export default function App() {
           if (data && data.length > 0) {
             const membership = data[0];
             setUserRole(membership.role || 'solo lectura');
+            setOrganizationId(membership.organization_id || '11111111-1111-1111-1111-111111111111');
             localStorage.setItem('somos_noveli_crm_role', membership.role || 'solo lectura');
             localStorage.setItem('somos_noveli_crm_org_id', membership.organization_id || '11111111-1111-1111-1111-111111111111');
           } else {
             setUserRole('solo lectura');
+            setOrganizationId('11111111-1111-1111-1111-111111111111');
             localStorage.setItem('somos_noveli_crm_role', 'solo lectura');
             localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
           }
@@ -533,6 +541,7 @@ export default function App() {
           setUser(activeUser);
           userRef.current = activeUser;
           setUserRole(activeUser.role || 'solo lectura');
+          setOrganizationId('11111111-1111-1111-1111-111111111111');
           localStorage.setItem('somos_noveli_crm_role', activeUser.role || 'solo lectura');
           localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
         }
@@ -919,7 +928,7 @@ export default function App() {
   // Render current tab content with dynamic roles and write access checks
   const renderTabContent = () => {
     const isReadOnly = !hasPermission(userRole, activeTab);
-    const commonProps = { isReadOnly, userRole };
+    const commonProps = { isReadOnly, userRole, organizationId };
 
     switch (activeTab) {
       case 'dashboard': return <Dashboard {...commonProps} />;
