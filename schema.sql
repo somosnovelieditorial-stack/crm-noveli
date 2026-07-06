@@ -1139,3 +1139,12 @@ UPDATE service_checklists SET organization_id = '11111111-1111-1111-1111-1111111
 UPDATE activity_log SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL;
 UPDATE agenda_events SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL;
 UPDATE company_settings SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL;
+UPDATE staff SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL;
+UPDATE payroll_payments SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL;
+UPDATE operational_reserve_movements SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL;
+UPDATE income_allocations SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL;
+UPDATE website_services SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL OR organization_id != '11111111-1111-1111-1111-111111111111';
+UPDATE website_books SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL OR organization_id != '11111111-1111-1111-1111-111111111111';
+UPDATE website_settings SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL OR organization_id != '11111111-1111-1111-1111-111111111111';
+UPDATE website_links SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL OR organization_id != '11111111-1111-1111-1111-111111111111';
+UPDATE website_sections SET organization_id = '11111111-1111-1111-1111-111111111111' WHERE organization_id IS NULL OR organization_id != '11111111-1111-1111-1111-111111111111';

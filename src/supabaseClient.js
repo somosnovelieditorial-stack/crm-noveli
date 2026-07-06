@@ -1010,12 +1010,6 @@ class MockQueryBuilder {
     this.filters = [];
     this.orderConfig = null;
     this.singleRow = false;
-
-    const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
-    if (!EXCLUDED_TABLES.includes(table)) {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
-      this.filters.push({ column: 'organization_id', value: orgId });
-    }
   }
 
   select(columns = '*') {
@@ -1042,6 +1036,12 @@ class MockQueryBuilder {
     try {
       const db = getMockDb();
       let records = db[this.table] || [];
+
+      const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
+      if (!EXCLUDED_TABLES.includes(this.table)) {
+        const orgId = await getCurrentOrganizationId();
+        records = records.filter(row => row.organization_id === orgId);
+      }
 
       // Filter
       for (const filter of this.filters) {
@@ -1623,7 +1623,7 @@ class MutationQueryBuilder {
   async execute() {
     let query;
     const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
-    const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+    const orgId = await getCurrentOrganizationId();
     
     let currentUserId = null;
     try {
@@ -1941,12 +1941,7 @@ class RealSupabaseQueryBuilder {
     this.realClient = realClient;
     this.query = realClient.from(table);
     this.singleRow = false;
-
-    const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
-    if (!EXCLUDED_TABLES.includes(table)) {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
-      this.query = this.query.eq('organization_id', orgId);
-    }
+    this.orgFiltered = false;
     
     const self = this;
     const proxy = new Proxy(this, {
@@ -1985,6 +1980,12 @@ class RealSupabaseQueryBuilder {
   }
 
   async execute() {
+    const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
+    if (!EXCLUDED_TABLES.includes(this.table) && !this.orgFiltered) {
+      const orgId = await getCurrentOrganizationId();
+      this.query = this.query.eq('organization_id', orgId);
+      this.orgFiltered = true;
+    }
     const result = await this.query;
     if (result.error) return { data: null, error: result.error };
     
@@ -2247,7 +2248,7 @@ if (useRealSupabase) {
 export const supabase = supabaseInstance;
 export const isMock = !useRealSupabase;
 
-export const getValidOrgId = async () => {
+export const getCurrentOrganizationId = async () => {
   const defaultOrgId = '11111111-1111-1111-1111-111111111111';
   try {
     const storedOrgId = localStorage.getItem('somos_noveli_crm_org_id');
@@ -2276,6 +2277,8 @@ export const getValidOrgId = async () => {
   }
   return defaultOrgId;
 };
+
+export const getValidOrgId = getCurrentOrganizationId;
 
 function formatCurrency(amount, currency = 'CLP') {
   if (currency === 'CLP') {

@@ -1,5 +1,4 @@
-// Financial and formatting utilities for Somos Noveli CRM
-import { supabase } from './supabaseClient';
+import { supabase, getCurrentOrganizationId } from './supabaseClient';
 
 
 /**
@@ -681,9 +680,7 @@ const ROLE_PERMISSIONS = {
   }
 };
 
-export const getCurrentOrganizationId = () => {
-  return localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
-};
+export { getCurrentOrganizationId };
 
 export const getCurrentUserRole = () => {
   const userJson = localStorage.getItem('somos_noveli_crm_user');
