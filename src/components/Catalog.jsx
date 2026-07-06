@@ -24,7 +24,7 @@ export default function Catalog() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('todos');
-  const [activeFilter, setActiveFilter] = useState('todos');
+  const [activeFilter, setActiveFilter] = useState('si');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -51,20 +51,45 @@ export default function Catalog() {
 
   useEffect(() => {
     fetchCatalog();
-  }, []);
+  }, [activeFilter]);
 
   const fetchCatalog = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('service_catalog')
-        .select('*')
-        .order('name', { ascending: true });
+        .select('*');
+
+      if (activeFilter === 'si') {
+        query = query.eq('active', true);
+      } else if (activeFilter === 'no') {
+        query = query.eq('active', false);
+      }
+
+      // Order by display_order
+      query = query.order('display_order', { ascending: true });
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setCatalog(data || []);
     } catch (err) {
-      console.error("Error loading catalog:", err);
+      console.error("Error loading catalog by display_order:", err);
+      // Fallback if display_order does not exist in DB yet
+      try {
+        let fallbackQuery = supabase.from('service_catalog').select('*');
+        if (activeFilter === 'si') {
+          fallbackQuery = fallbackQuery.eq('active', true);
+        } else if (activeFilter === 'no') {
+          fallbackQuery = fallbackQuery.eq('active', false);
+        }
+        const { data, error } = await fallbackQuery.order('name', { ascending: true });
+        if (!error) {
+          setCatalog(data || []);
+        }
+      } catch (fallbackErr) {
+        console.error("Fallback query also failed:", fallbackErr);
+      }
     } finally {
       setLoading(false);
     }
@@ -93,9 +118,9 @@ export default function Catalog() {
   const handleOpenEditModal = (item) => {
     setSelectedItem(item);
     setFormData({
-      name: item.name || '',
+      name: item.name || item.title || '',
       description: item.description || '',
-      base_price: item.base_price || 0,
+      base_price: item.price_from !== undefined && item.price_from !== null ? item.price_from : item.base_price || 0,
       currency: item.currency || 'CLP',
       includes_vat: item.includes_vat || false,
       category: item.category || 'editorial',
@@ -297,7 +322,7 @@ export default function Catalog() {
         </div>
       ) : filteredCatalog.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-12 text-center text-slate-400">
-          No se encontraron servicios en el catálogo.
+          {activeFilter === 'si' ? 'No hay servicios activos registrados.' : 'No se encontraron servicios en el catálogo.'}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -327,7 +352,7 @@ export default function Catalog() {
                 </div>
 
                 <div>
-                  <h3 className="font-bold text-base text-slate-800 dark:text-slate-100">{item.name}</h3>
+                  <h3 className="font-bold text-base text-slate-800 dark:text-slate-100">{item.name || item.title}</h3>
                   <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 leading-relaxed line-clamp-3">
                     {item.description || 'Sin descripción.'}
                   </p>
@@ -338,7 +363,7 @@ export default function Catalog() {
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Tarifa Base</span>
                   <span className="font-extrabold text-slate-800 dark:text-slate-150 text-base mt-0.5 inline-block">
-                    {formatCurrency(item.base_price, item.currency)}
+                    {formatCurrency(item.price_from !== undefined && item.price_from !== null ? item.price_from : item.base_price, item.currency)}
                   </span>
                   <span className="text-[10px] text-slate-400 ml-1 font-semibold">
                     {item.includes_vat ? 'con IVA' : 'exento'}
