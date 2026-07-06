@@ -7,7 +7,7 @@ import {
   Plus, Search, Edit2, Trash2, Eye, X, 
   User, Mail, Phone, Globe, FileText, Download, DollarSign, MapPin, Clock,
   BookOpen, ChevronDown, ChevronUp, AlertCircle, CheckCircle, AlertTriangle, Calendar, ClipboardList,
-  UploadCloud, FileSpreadsheet, Image, File, Briefcase
+  UploadCloud, FileSpreadsheet, Image, File, Briefcase, FolderOpen
 } from 'lucide-react';
 
 const InstagramIcon = ({ className }) => (
