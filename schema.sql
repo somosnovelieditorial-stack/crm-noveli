@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS prospects (
     client_type TEXT DEFAULT 'Nacional',
     preferred_currency TEXT DEFAULT 'CLP',
     converted_to_client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+    converted_client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
     converted_to_client BOOLEAN DEFAULT FALSE,
     converted_at TIMESTAMP WITH TIME ZONE,
 

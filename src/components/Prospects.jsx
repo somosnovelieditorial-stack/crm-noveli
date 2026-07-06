@@ -1000,6 +1000,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
         .from('prospects')
         .update({ 
           converted_to_client_id: clientTargetId,
+          converted_client_id: clientTargetId,
           converted_to_client: true,
           status: 'convertido',
           converted_at: new Date().toISOString()
@@ -1133,6 +1134,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
     
     const isConvertedOrExcluded = 
       p.converted_to_client_id || 
+      p.converted_client_id || 
       p.converted_to_client === true || 
       ['convertido', 'cliente', 'finalizado', 'perdido', 'perdido / rechazado'].includes(String(p.status || '').toLowerCase().trim());
 
@@ -1140,7 +1142,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
     if (conversionStatus === 'todos' || conversionStatus === 'pendientes') {
       matchesConv = !isConvertedOrExcluded;
     } else if (conversionStatus === 'convertidos') {
-      matchesConv = (p.converted_to_client_id || p.converted_to_client === true || p.status === 'convertido');
+      matchesConv = (p.converted_to_client_id || p.converted_client_id || p.converted_to_client === true || p.status === 'convertido');
     }
 
     return matchesSearch && matchesProb && matchesOrig && matchesCountry && matchesType && matchesConv;

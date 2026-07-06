@@ -328,6 +328,7 @@ export default function Dashboard() {
         const status = String(p.status || '').toLowerCase().trim();
         const isConvertedOrExcluded = 
           p.converted_to_client_id || 
+          p.converted_client_id || 
           p.converted_to_client === true || 
           ['convertido', 'cliente', 'finalizado', 'perdido', 'perdido / rechazado'].includes(status);
         return !isConvertedOrExcluded;
