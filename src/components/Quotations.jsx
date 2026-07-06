@@ -1,11 +1,21 @@
 import { useEffect, useState } from 'react';
-import { supabase, getValidOrgId } from '../supabaseClient';
+import { supabase, getValidOrgId, isMock } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit, formatDate } from '../utils';
 import { jsPDF } from 'jspdf';
 import { 
   Plus, Search, Edit2, Trash2, X, FileText, Check, AlertTriangle,
   User, Sparkles, Download, DollarSign, Eye, RefreshCw, Calendar, Trash, FolderOpen, Building2
 } from 'lucide-react';
+
+const loadImage = (url) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = (e) => reject(e);
+    img.src = url;
+  });
+};
 
 export default function Quotations({ isReadOnly = false, userRole = 'administrador', realtimeTrigger }) {
   const [quotations, setQuotations] = useState([]);
@@ -116,6 +126,54 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       }
     } catch (err) {
       console.error('Error fetching company settings:', err);
+    }
+  };
+
+  const [uploadingCompanyLogo, setUploadingCompanyLogo] = useState(false);
+
+  const uploadCompanyLogoFile = async (file) => {
+    const orgId = await getValidOrgId();
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'svg'];
+    if (!allowedExts.includes(fileExt)) {
+      throw new Error('Formato no permitido. Solo se aceptan: JPG, PNG, WEBP, SVG.');
+    }
+
+    const storagePath = `${orgId}/company_logo_${Date.now()}.${fileExt}`;
+
+    if (isMock) {
+      return `mock://brand-assets/${storagePath}`;
+    } else {
+      const { error: uploadErr } = await supabase.storage
+        .from('brand-assets')
+        .upload(storagePath, file, { upsert: true });
+
+      if (uploadErr) {
+        console.error("Supabase storage upload error complete:", uploadErr);
+        throw uploadErr;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('brand-assets')
+        .getPublicUrl(storagePath);
+      
+      return publicUrlData?.publicUrl || '';
+    }
+  };
+
+  const handleCompanyLogoChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingCompanyLogo(true);
+    try {
+      const url = await uploadCompanyLogoFile(file);
+      setCompanySettings(prev => ({ ...prev, logo_url: url }));
+      alert('Logo subido temporalmente. Haz clic en Guardar para conservar los cambios.');
+    } catch (err) {
+      console.error("Error uploading company logo:", err);
+      alert(err.message || 'Error al subir el logo');
+    } finally {
+      setUploadingCompanyLogo(false);
     }
   };
 
@@ -1785,6 +1843,35 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                     onChange={(e) => setCompanySettings({...companySettings, country: e.target.value})}
                     className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
                   />
+                </div>
+                <div className="space-y-1 col-span-2 border border-slate-100 dark:border-slate-800 p-3 rounded-xl space-y-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Logo de Empresa (SVG, PNG, JPG, WEBP)</label>
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.svg"
+                      onChange={handleCompanyLogoChange}
+                      className="block w-full text-[10px] text-slate-500 file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-slate-850 dark:file:text-slate-350"
+                    />
+                    {uploadingCompanyLogo && <p className="text-[9px] text-brand-500 font-bold mt-0.5 animate-pulse">Subiendo logo...</p>}
+                    
+                    {companySettings.logo_url && (
+                      <div className="mt-1.5 p-1 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-100 dark:border-slate-850 inline-block">
+                        <img src={companySettings.logo_url} alt="Logo de la Empresa" className="max-h-12 max-w-full object-contain rounded" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Logo URL Directa</label>
+                    <input
+                      type="text"
+                      value={companySettings.logo_url || ''}
+                      onChange={(e) => setCompanySettings({...companySettings, logo_url: e.target.value})}
+                      className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                      placeholder="https://..."
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1 col-span-2">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Texto Legal Predeterminado</label>

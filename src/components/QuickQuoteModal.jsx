@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react';
-import { supabase, getValidOrgId } from '../supabaseClient';
+import { supabase, getValidOrgId, isMock } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit } from '../utils';
 import { jsPDF } from 'jspdf';
 import { 
   X, Plus, Trash2, Check, FileText, AlertTriangle, Download, Calendar, Sparkles, Building2
 } from 'lucide-react';
+
+const loadImage = (url) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = (e) => reject(e);
+    img.src = url;
+  });
+};
 
 export default function QuickQuoteModal({ 
   isOpen, 
@@ -192,6 +202,54 @@ export default function QuickQuoteModal({
       console.error('Error fetching catalog/packs/company:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const [uploadingCompanyLogo, setUploadingCompanyLogo] = useState(false);
+
+  const uploadCompanyLogoFile = async (file) => {
+    const orgId = await getValidOrgId();
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'svg'];
+    if (!allowedExts.includes(fileExt)) {
+      throw new Error('Formato no permitido. Solo se aceptan: JPG, PNG, WEBP, SVG.');
+    }
+
+    const storagePath = `${orgId}/company_logo_${Date.now()}.${fileExt}`;
+
+    if (isMock) {
+      return `mock://brand-assets/${storagePath}`;
+    } else {
+      const { error: uploadErr } = await supabase.storage
+        .from('brand-assets')
+        .upload(storagePath, file, { upsert: true });
+
+      if (uploadErr) {
+        console.error("Supabase storage upload error complete:", uploadErr);
+        throw uploadErr;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('brand-assets')
+        .getPublicUrl(storagePath);
+      
+      return publicUrlData?.publicUrl || '';
+    }
+  };
+
+  const handleCompanyLogoChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingCompanyLogo(true);
+    try {
+      const url = await uploadCompanyLogoFile(file);
+      setCompanySettings(prev => ({ ...prev, logo_url: url }));
+      alert('Logo subido temporalmente. Haz clic en Guardar para conservar los cambios.');
+    } catch (err) {
+      console.error("Error uploading company logo:", err);
+      alert(err.message || 'Error al subir el logo');
+    } finally {
+      setUploadingCompanyLogo(false);
     }
   };
 
@@ -467,11 +525,20 @@ export default function QuickQuoteModal({
     }
   };
 
-  const handleDownloadPDF = (quote) => {
+  const handleDownloadPDF = async (quote) => {
     try {
       const primaryColor = [79, 70, 229]; // Indigo-600
       const secondaryColor = [30, 41, 59]; // Slate-800
       const lightBg = [248, 250, 252]; // Slate-50
+
+      let logoImg = null;
+      if (companySettings.logo_url) {
+        try {
+          logoImg = await loadImage(companySettings.logo_url);
+        } catch (err) {
+          console.error("Error loading logo image for PDF:", err);
+        }
+      }
 
       const doc = new jsPDF();
       
@@ -479,19 +546,49 @@ export default function QuickQuoteModal({
       doc.setFillColor(...primaryColor);
       doc.rect(0, 0, 210, 8, 'F');
 
-      // Brand Title
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(22);
-      doc.setTextColor(...primaryColor);
-      doc.text(String(companySettings.company_name || 'EDITORIAL NOVELI').toUpperCase(), 20, 25);
+      let nextY = 31;
+      let imgH = 0;
+
+      // Brand Title or Logo
+      if (logoImg) {
+        const maxW_mm = 47.6;
+        const maxH_mm = 18.5;
+        let imgW = logoImg.width;
+        imgH = logoImg.height;
+        const ratio = imgW / imgH;
+
+        if (ratio > maxW_mm / maxH_mm) {
+          imgW = maxW_mm;
+          imgH = maxW_mm / ratio;
+        } else {
+          imgH = maxH_mm;
+          imgW = maxH_mm * ratio;
+        }
+        
+        let format = 'PNG';
+        const urlLower = String(companySettings.logo_url).toLowerCase();
+        if (urlLower.includes('.jpg') || urlLower.includes('.jpeg')) format = 'JPEG';
+        else if (urlLower.includes('.webp')) format = 'WEBP';
+        else if (urlLower.includes('.svg')) format = 'SVG';
+
+        // Add logo at x = 20, y = 12
+        doc.addImage(logoImg, format, 20, 12, imgW, imgH);
+        nextY = 12 + imgH + 5;
+      } else {
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(22);
+        doc.setTextColor(...primaryColor);
+        doc.text(String(companySettings.company_name || 'EDITORIAL NOVELI').toUpperCase(), 20, 25);
+        nextY = 31;
+      }
 
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(100, 116, 139);
-      doc.text(`Correo: ${companySettings.official_email || 'contacto@somosnoveli.cl'}`, 20, 31);
-      doc.text(`Web: ${companySettings.website_url || 'www.somosnoveli.cl'}`, 20, 36);
+      doc.text(`Correo: ${companySettings.official_email || 'contacto@somosnoveli.cl'}`, 20, nextY);
+      doc.text(`Web: ${companySettings.website_url || 'www.somosnoveli.cl'}`, 20, nextY + 5);
       if (companySettings.address) {
-        doc.text(`Dirección: ${companySettings.address}, ${companySettings.city || ''}`, 20, 41);
+        doc.text(`Dirección: ${companySettings.address}, ${companySettings.city || ''}`, 20, nextY + 10);
       }
 
       // Proposal details
@@ -1495,6 +1592,35 @@ export default function QuickQuoteModal({
                     onChange={(e) => setCompanySettings({...companySettings, country: e.target.value})}
                     className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
                   />
+                </div>
+                <div className="space-y-1 col-span-2 border border-slate-100 dark:border-slate-800 p-3 rounded-xl space-y-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Logo de Empresa (SVG, PNG, JPG, WEBP)</label>
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.svg"
+                      onChange={handleCompanyLogoChange}
+                      className="block w-full text-[10px] text-slate-500 file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-slate-850 dark:file:text-slate-350"
+                    />
+                    {uploadingCompanyLogo && <p className="text-[9px] text-brand-500 font-bold mt-0.5 animate-pulse">Subiendo logo...</p>}
+                    
+                    {companySettings.logo_url && (
+                      <div className="mt-1.5 p-1 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-100 dark:border-slate-850 inline-block">
+                        <img src={companySettings.logo_url} alt="Logo de la Empresa" className="max-h-12 max-w-full object-contain rounded" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Logo URL Directa</label>
+                    <input
+                      type="text"
+                      value={companySettings.logo_url || ''}
+                      onChange={(e) => setCompanySettings({...companySettings, logo_url: e.target.value})}
+                      className="block w-full px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950/50 text-slate-707"
+                      placeholder="https://..."
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1 col-span-2">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Texto Legal Predeterminado</label>

@@ -53,6 +53,7 @@ export default function Configuration() {
 
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
+  const [uploadingCompanyLogo, setUploadingCompanyLogo] = useState(false);
 
   // Stage edit states
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
@@ -113,6 +114,23 @@ export default function Configuration() {
       alert(err.message || 'Error al subir el logo');
     } finally {
       setUploadingLogo(false);
+    }
+  };
+
+  const handleCompanyLogoChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingCompanyLogo(true);
+    setMessage({ text: '', type: 'success' });
+    try {
+      const url = await uploadBrandAsset(file, 'company_logo');
+      setCompanySettings(prev => ({ ...prev, logo_url: url }));
+      setMessage({ text: 'Logo de empresa subido temporalmente. Guarda los cambios para aplicar.', type: 'success' });
+    } catch (err) {
+      console.error("Error uploading company logo:", err);
+      alert(err.message || 'Error al subir el logo de la empresa');
+    } finally {
+      setUploadingCompanyLogo(false);
     }
   };
 
@@ -776,15 +794,35 @@ export default function Configuration() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Logo URL</label>
-                <input
-                  type="text"
-                  value={companySettings.logo_url}
-                  onChange={(e) => setCompanySettings({...companySettings, logo_url: e.target.value})}
-                  className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
-                  placeholder="https://..."
-                />
+              <div className="border border-slate-100 dark:border-slate-800 p-4 rounded-xl space-y-3 col-span-1 md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Logo de Empresa (SVG, PNG, JPG, WEBP)</label>
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,.svg"
+                    onChange={handleCompanyLogoChange}
+                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-slate-800 dark:file:text-slate-350"
+                  />
+                  {uploadingCompanyLogo && <p className="text-[10px] text-brand-500 font-bold mt-1 animate-pulse">Subiendo logo...</p>}
+                  
+                  {companySettings.logo_url && (
+                    <div className="mt-2.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-100 dark:border-slate-850 inline-block">
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">Vista Previa del Logo:</p>
+                      <img src={companySettings.logo_url} alt="Logo de la Empresa" className="max-h-16 max-w-full object-contain rounded" />
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Logo URL Directa</label>
+                  <input
+                    type="text"
+                    value={companySettings.logo_url}
+                    onChange={(e) => setCompanySettings({...companySettings, logo_url: e.target.value})}
+                    className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-slate-55/50 dark:bg-slate-955/50 rounded-xl text-slate-707 dark:text-slate-200 text-sm focus:outline-none"
+                    placeholder="https://..."
+                  />
+                </div>
               </div>
 
               <div>
