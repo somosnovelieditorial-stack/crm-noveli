@@ -45,6 +45,11 @@ export default function QuickQuoteModal({
   const [catalog, setCatalog] = useState([]);
   const [packs, setPacks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentQuotation, setCurrentQuotation] = useState(quotationToEdit);
+
+  useEffect(() => {
+    setCurrentQuotation(quotationToEdit);
+  }, [quotationToEdit]);
   
   // View mode: 'split' or 'form'
   const [editorTab, setEditorTab] = useState('split'); 
@@ -719,153 +724,179 @@ export default function QuickQuoteModal({
     }));
   };
 
-  const handleFormSubmit = async (e) => {
-    e.preventDefault();
+  const performSaveQuotation = async () => {
     if (formItems.length === 0) {
-      setFormError('Debe agregar al menos un servicio o ítem.');
-      return;
+      throw new Error('Debe agregar al menos un servicio o ítem.');
     }
     if (!formHeader.author_name.trim()) {
-      setFormError('El nombre del autor o destinatario es requerido.');
-      return;
+      throw new Error('El nombre del autor o destinatario es requerido.');
     }
+
+    const orgId = await getValidOrgId();
+    const totals = getTotals();
+
+    const startConditionItems = Object.keys(startRequirements)
+      .filter(k => startRequirements[k])
+      .map(k => {
+        const optionsMap = {
+          aceptacion: 'Aceptación propuesta',
+          firma: 'Firma de contrato',
+          pago: 'Pago inicial',
+          manuscrito: 'Recepción manuscrito',
+          materiales: 'Recepción portada/archivos',
+          datos: 'Datos del autor'
+        };
+        return optionsMap[k];
+      });
+
+    const valDays = Number(formHeader.validity_days) || 15;
+    let issueDateStr = normalizeDate(formHeader.issue_date) || new Date().toISOString().slice(0, 10);
+    let validUntilStr = normalizeDate(formHeader.valid_until);
+    if (!validUntilStr) {
+      const issueDateObj = new Date(issueDateStr + 'T12:00:00');
+      issueDateObj.setDate(issueDateObj.getDate() + valDays);
+      validUntilStr = issueDateObj.toISOString().slice(0, 10);
+    }
+
+    const payload = {
+      organization_id: orgId,
+      client_id: clientId || null,
+      prospect_id: prospectId || null,
+      author_name: formHeader.author_name,
+      author_email: formHeader.author_email || null,
+      author_phone: formHeader.author_phone || null,
+      author_instagram: formHeader.author_instagram || null,
+      origin: formHeader.origin,
+      country: formHeader.country || null,
+      city: formHeader.city || null,
+      object: formHeader.object,
+      quote_number: formHeader.quote_number,
+      issue_date: issueDateStr,
+      valid_until: validUntilStr,
+      validity_days: valDays,
+      manuscript_pages: Number(formHeader.manuscript_pages) || 0,
+      extension_adjustment_type: formHeader.extension_adjustment_type,
+      extension_adjustment_value: Number(formHeader.extension_adjustment_value) || 0,
+      subtotal: totals.subtotal || 0,
+      discount: totals.discount || 0,
+      tax_amount: totals.vat || 0,
+      total: totals.total || 0,
+      currency: formHeader.currency,
+      includes_iva: formHeader.iva_mode === 'IVA incluido',
+      payment_terms: formHeader.payment_terms || null,
+      work_timeline: formHeader.work_timeline || null,
+      includes_notes: formHeader.includes_notes || null,
+      excludes_notes: formHeader.excludes_notes || null,
+      start_conditions: formHeader.start_conditions || null,
+      legal_notes: formHeader.legal_notes || null,
+      other_notes: formHeader.other_notes || null,
+      notes: formHeader.notes || null,
+      status: formHeader.status,
+      accepted_at: formHeader.status === 'aceptada' ? new Date().toISOString() : normalizeTimestamp(currentQuotation?.accepted_at),
+      rejected_at: formHeader.status === 'rechazada' ? new Date().toISOString() : normalizeTimestamp(currentQuotation?.rejected_at),
+      sent_at: normalizeTimestamp(currentQuotation?.sent_at),
+      converted_at: normalizeTimestamp(currentQuotation?.converted_at),
+
+      iva_mode: formHeader.iva_mode,
+      tax_rate: Number(formHeader.tax_rate) || 19,
+      net_amount: totals.net || 0,
+      payment_plan_type: paymentType,
+      upfront_percentage: Number(paymentAdvancePct) || 0,
+      installments: Number(paymentInstallments) || 0,
+      included_items: includedItems || [],
+      excluded_items: excludedItems || [],
+      start_condition_items: startConditionItems || [],
+      proposal_format: formHeader.proposal_format,
+      show_signatures: formHeader.show_signatures,
+      has_alternatives: formHeader.has_alternatives
+    };
+
+    const cleanPayload = {
+      ...payload,
+      organization_id: normalizeUuid(payload.organization_id) || orgId,
+      client_id: normalizeUuid(formHeader.client_id || clientId),
+      prospect_id: normalizeUuid(formHeader.prospect_id || prospectId),
+      service_id: normalizeUuid(formHeader.service_id),
+      converted_prospect_id: normalizeUuid(formHeader.converted_prospect_id),
+      converted_client_id: normalizeUuid(formHeader.converted_client_id)
+    };
+
+    console.log("payload limpio PDF", cleanPayload);
+
+    let quoteId = '';
+    let savedData = null;
+    if (currentQuotation) {
+      quoteId = normalizeUuid(currentQuotation.id);
+      if (!quoteId) {
+        throw new Error("ID de propuesta inválido para actualización.");
+      }
+      const { error } = await supabase.from('quotations').update(cleanPayload).eq('id', quoteId);
+      if (error) throw error;
+      await supabase.from('quotation_items').delete().eq('quotation_id', quoteId);
+      savedData = { ...cleanPayload, id: quoteId };
+    } else {
+      const { data, error } = await supabase.from('quotations').insert([cleanPayload]).select().single();
+      if (error) throw error;
+      quoteId = normalizeUuid(data.id);
+      savedData = data;
+    }
+
+    const itemsPayload = formItems.map((item, index) => ({
+      organization_id: orgId,
+      quotation_id: quoteId,
+      catalog_id: normalizeUuid(item.catalog_id),
+      pack_id: normalizeUuid(item.pack_id),
+      concept: item.concept,
+      description: item.description,
+      unit_price: Number(item.unit_price) || 0,
+      quantity: Number(item.quantity) || 0,
+      total: (Number(item.unit_price) || 0) * (Number(item.quantity) || 0),
+      source_type: item.source_type,
+      display_order: index
+    }));
+
+    const cleanItems = itemsPayload;
+    console.log("items limpios PDF", cleanItems);
+
+    const { error: itemsErr } = await supabase.from('quotation_items').insert(itemsPayload);
+    if (itemsErr) throw itemsErr;
+
+    setCurrentQuotation(savedData);
+    setFormHeader(prev => ({ ...prev, id: quoteId }));
+
+    return savedData;
+  };
+
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
 
     setIsSubmitting(true);
     setFormError('');
 
     try {
-      const orgId = await getValidOrgId();
-      const totals = getTotals();
-
-      const startConditionItems = Object.keys(startRequirements)
-        .filter(k => startRequirements[k])
-        .map(k => {
-          const optionsMap = {
-            aceptacion: 'Aceptación propuesta',
-            firma: 'Firma de contrato',
-            pago: 'Pago inicial',
-            manuscrito: 'Recepción manuscrito',
-            materiales: 'Recepción portada/archivos',
-            datos: 'Datos del autor'
-          };
-          return optionsMap[k];
-        });
-
-      const valDays = Number(formHeader.validity_days) || 15;
-      let issueDateStr = normalizeDate(formHeader.issue_date) || new Date().toISOString().slice(0, 10);
-      let validUntilStr = normalizeDate(formHeader.valid_until);
-      if (!validUntilStr) {
-        const issueDateObj = new Date(issueDateStr + 'T12:00:00');
-        issueDateObj.setDate(issueDateObj.getDate() + valDays);
-        validUntilStr = issueDateObj.toISOString().slice(0, 10);
-      }
-
-      const payload = {
-        organization_id: orgId,
-        client_id: clientId || null,
-        prospect_id: prospectId || null,
-        author_name: formHeader.author_name,
-        author_email: formHeader.author_email || null,
-        author_phone: formHeader.author_phone || null,
-        author_instagram: formHeader.author_instagram || null,
-        origin: formHeader.origin,
-        country: formHeader.country || null,
-        city: formHeader.city || null,
-        object: formHeader.object,
-        quote_number: formHeader.quote_number,
-        issue_date: issueDateStr,
-        valid_until: validUntilStr,
-        validity_days: valDays,
-        manuscript_pages: Number(formHeader.manuscript_pages) || 0,
-        extension_adjustment_type: formHeader.extension_adjustment_type,
-        extension_adjustment_value: Number(formHeader.extension_adjustment_value) || 0,
-        subtotal: totals.subtotal || 0,
-        discount: totals.discount || 0,
-        tax_amount: totals.vat || 0,
-        total: totals.total || 0,
-        currency: formHeader.currency,
-        includes_iva: formHeader.iva_mode === 'IVA incluido',
-        payment_terms: formHeader.payment_terms || null,
-        work_timeline: formHeader.work_timeline || null,
-        includes_notes: formHeader.includes_notes || null,
-        excludes_notes: formHeader.excludes_notes || null,
-        start_conditions: formHeader.start_conditions || null,
-        legal_notes: formHeader.legal_notes || null,
-        other_notes: formHeader.other_notes || null,
-        notes: formHeader.notes || null,
-        status: formHeader.status,
-        accepted_at: formHeader.status === 'aceptada' ? new Date().toISOString() : normalizeTimestamp(quotationToEdit?.accepted_at),
-        rejected_at: formHeader.status === 'rechazada' ? new Date().toISOString() : normalizeTimestamp(quotationToEdit?.rejected_at),
-        sent_at: normalizeTimestamp(quotationToEdit?.sent_at),
-        converted_at: normalizeTimestamp(quotationToEdit?.converted_at),
-
-        // NEW COLUMNS
-        iva_mode: formHeader.iva_mode,
-        tax_rate: Number(formHeader.tax_rate) || 19,
-        net_amount: totals.net || 0,
-        payment_plan_type: paymentType,
-        upfront_percentage: Number(paymentAdvancePct) || 0,
-        installments: Number(paymentInstallments) || 0,
-        included_items: includedItems || [],
-        excluded_items: excludedItems || [],
-        start_condition_items: startConditionItems || [],
-        proposal_format: formHeader.proposal_format,
-        show_signatures: formHeader.show_signatures,
-        has_alternatives: formHeader.has_alternatives
-      };
-
-      const cleanPayload = {
-        ...payload,
-        organization_id: normalizeUuid(payload.organization_id) || orgId,
-        client_id: normalizeUuid(formHeader.client_id || clientId),
-        prospect_id: normalizeUuid(formHeader.prospect_id || prospectId),
-        service_id: normalizeUuid(formHeader.service_id),
-        converted_prospect_id: normalizeUuid(formHeader.converted_prospect_id),
-        converted_client_id: normalizeUuid(formHeader.converted_client_id)
-      };
-
-      console.log("payload limpio PDF", cleanPayload);
-
-      let quoteId = '';
-      if (quotationToEdit) {
-        quoteId = normalizeUuid(quotationToEdit.id);
-        if (!quoteId) {
-          throw new Error("ID de propuesta inválido para actualización.");
-        }
-        const { error } = await supabase.from('quotations').update(cleanPayload).eq('id', quoteId);
-        if (error) throw error;
-        await supabase.from('quotation_items').delete().eq('quotation_id', quoteId);
-      } else {
-        const { data, error } = await supabase.from('quotations').insert([cleanPayload]).select().single();
-        if (error) throw error;
-        quoteId = normalizeUuid(data.id);
-      }
-
-      const itemsPayload = formItems.map((item, index) => ({
-        organization_id: orgId,
-        quotation_id: quoteId,
-        catalog_id: normalizeUuid(item.catalog_id),
-        pack_id: normalizeUuid(item.pack_id),
-        concept: item.concept,
-        description: item.description,
-        unit_price: Number(item.unit_price) || 0,
-        quantity: Number(item.quantity) || 0,
-        total: (Number(item.unit_price) || 0) * (Number(item.quantity) || 0),
-        source_type: item.source_type,
-        display_order: index
-      }));
-
-      const cleanItems = itemsPayload;
-      console.log("items limpios PDF", cleanItems);
-
-      const { error: itemsErr } = await supabase.from('quotation_items').insert(itemsPayload);
-      if (itemsErr) throw itemsErr;
-
+      await performSaveQuotation();
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
       console.error(err);
       setFormError(err.message || 'Error al guardar la propuesta.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDownloadPDFClick = async (forceNoLogo = false) => {
+    setFormError('');
+    setIsSubmitting(true);
+    try {
+      const savedQuote = await performSaveQuotation();
+      if (onSuccess) onSuccess();
+      await handleDownloadPDF(savedQuote, forceNoLogo);
+    } catch (err) {
+      console.error("Error al guardar borrador previo a PDF:", err);
+      setFormError(err.message || 'Error al guardar borrador previo a la descarga.');
+      alert('No se pudo guardar la propuesta antes de descargar el PDF: ' + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -2514,11 +2545,7 @@ export default function QuickQuoteModal({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => handleDownloadPDF({
-                    ...formHeader,
-                    subtotal: totals.subtotal,
-                    total: totals.total
-                  })}
+                  onClick={() => handleDownloadPDFClick(false)}
                   className="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   <Download className="w-4 h-4" />
@@ -2526,11 +2553,7 @@ export default function QuickQuoteModal({
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDownloadPDF({
-                    ...formHeader,
-                    subtotal: totals.subtotal,
-                    total: totals.total
-                  }, true)}
+                  onClick={() => handleDownloadPDFClick(true)}
                   className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-[10px] font-medium flex items-center gap-1 cursor-pointer"
                   title="Descarga la propuesta omitiendo el logo en caso de errores de formato"
                 >
