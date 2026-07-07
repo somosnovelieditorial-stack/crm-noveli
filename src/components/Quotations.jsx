@@ -277,7 +277,8 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
 • Esta cotización no constituye factura ni boleta.
 • Los valores indicados son referenciales hasta la aceptación formal del cliente y confirmación de pago.`,
     other_notes: '',
-    notes: ''
+    notes: '',
+    pdf_compact: true
   });
 
   const [formItems, setFormItems] = useState([]);
@@ -1178,27 +1179,49 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       const showSigs = quote.show_signatures !== false;
       const isExec = format === 'Resumen ejecutivo';
       const hasAlts = quote.has_alternatives || format === 'Con alternativas';
+      const isCompact = quote.pdf_compact !== false;
+
+      // Layout measurements
+      const lm = isCompact ? 15 : 20;
+      const rm = isCompact ? 195 : 190;
+      const cw = rm - lm;
+      const bodyFontSize = isCompact ? 7.5 : 8.5;
+      const titleFontSize = isCompact ? 11 : 12;
+      const headingFontSize = isCompact ? 9.5 : 10;
+      const rowSpacing = isCompact ? 5 : 6.5;
+
+      let currentPage = 1;
+      let currentY = 32;
 
       const writeHeader = (pageNumber) => {
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(7.5);
         doc.setTextColor(148, 163, 184);
-        doc.text('Noveli Editorial / Propuesta comercial preliminar', 20, 12);
+        doc.text('Noveli Editorial / Propuesta comercial preliminar', lm, 12);
         doc.setDrawColor(226, 232, 240);
-        doc.line(20, 14, 190, 14);
+        doc.line(lm, 14, rm, 14);
         
         doc.setFont('Helvetica', 'normal');
-        doc.text(`Página ${pageNumber}`, 180, 12);
+        doc.text(`Página ${pageNumber}`, rm - 12, 12);
       };
 
       const writeFooter = () => {
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(148, 163, 184);
-        doc.text(companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.', 45, 287);
+        doc.text(companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.', lm + 25, 287);
       };
 
-      // PAGE 1
+      const checkPageBreak = (neededH) => {
+        if (currentY + neededH > 272) {
+          doc.addPage();
+          currentPage++;
+          writeHeader(currentPage);
+          currentY = isCompact ? 18 : 22;
+        }
+      };
+
+      // PAGE 1 Start
       writeHeader(1);
 
       let nextY = 32;
@@ -1206,8 +1229,8 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
 
       // Brand Title or Logo
       if (logoImg) {
-        const maxW_mm = 47.6;
-        const maxH_mm = 18.5;
+        const maxW_mm = isCompact ? 40 : 47.6;
+        const maxH_mm = isCompact ? 14 : 18.5;
         let imgW = logoImg.width;
         imgH = logoImg.height;
         const ratio = imgW / imgH;
@@ -1226,123 +1249,125 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         else if (urlLower.includes('.webp')) formatExt = 'WEBP';
         else if (urlLower.includes('.svg')) formatExt = 'SVG';
 
-        doc.addImage(logoImg, formatExt, 20, 18, imgW, imgH);
-        nextY = 18 + imgH + 5;
+        doc.addImage(logoImg, formatExt, lm, 18, imgW, imgH);
+        nextY = 18 + imgH + (isCompact ? 3 : 5);
       } else {
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(18);
+        doc.setFontSize(isCompact ? 15 : 18);
         doc.setTextColor(...primaryColor);
-        doc.text(String(companySettings.company_name || 'EDITORIAL NOVELI').toUpperCase(), 20, 25);
-        nextY = 32;
+        doc.text(String(companySettings.company_name || 'EDITORIAL NOVELI').toUpperCase(), lm, 25);
+        nextY = isCompact ? 28 : 32;
       }
 
       // Title
       doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(12);
+      doc.setFontSize(titleFontSize);
       doc.setTextColor(...secondaryColor);
-      doc.text('PROPUESTA COMERCIAL PRELIMINAR', 115, 23);
+      doc.text('PROPUESTA COMERCIAL PRELIMINAR', lm + (isCompact ? 80 : 95), 23);
 
       doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8.5);
+      doc.setFontSize(bodyFontSize);
       doc.setTextColor(100, 116, 139);
-      doc.text(`Número: ${quote.quote_number || 'S/N'}`, 115, 28);
-      doc.text(`Emisión: ${quote.issue_date || ''}`, 115, 33);
-      doc.text(`Validez: ${quote.validity_days || 15} días`, 115, 38);
+      doc.text(`Número: ${quote.quote_number || 'S/N'}`, lm + (isCompact ? 80 : 95), 28);
+      doc.text(`Emisión: ${quote.issue_date || ''}`, lm + (isCompact ? 80 : 95), 33);
+      doc.text(`Validez: ${quote.validity_days || 15} días`, lm + (isCompact ? 80 : 95), 38);
 
       // Tabla inicial box (Dirigido a, Fecha, Obra, Tipo)
-      let tableY = Math.max(nextY, 43);
+      let tableY = Math.max(nextY, isCompact ? 38 : 43);
+      const tableHeight = isCompact ? 16 : 20;
       doc.setDrawColor(203, 213, 225);
       doc.setFillColor(248, 250, 252);
-      doc.rect(20, tableY, 170, 20, 'FD');
-      doc.line(105, tableY, 105, tableY + 20);
-      doc.line(20, tableY + 10, 190, tableY + 10);
+      doc.rect(lm, tableY, cw, tableHeight, 'FD');
+      doc.line(lm + (cw / 2), tableY, lm + (cw / 2), tableY + tableHeight);
+      doc.line(lm, tableY + (tableHeight / 2), rm, tableY + (tableHeight / 2));
 
       doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(8);
+      doc.setFontSize(isCompact ? 7.5 : 8);
       doc.setTextColor(71, 85, 105);
-      doc.text('Dirigido a:', 23, tableY + 6);
-      doc.text('Obra / Proyecto:', 23, tableY + 16);
-      doc.text('Fecha Emisión:', 108, tableY + 6);
-      doc.text('Tipo de solicitud:', 108, tableY + 16);
+      doc.text('Dirigido a:', lm + 3, tableY + (isCompact ? 5 : 6));
+      doc.text('Obra / Proyecto:', lm + 3, tableY + (isCompact ? 13 : 16));
+      doc.text('Fecha Emisión:', lm + (cw / 2) + 3, tableY + (isCompact ? 5 : 6));
+      doc.text('Tipo de solicitud:', lm + (cw / 2) + 3, tableY + (isCompact ? 13 : 16));
 
       doc.setFont('Helvetica', 'normal');
       doc.setTextColor(30, 41, 59);
-      doc.text(quote.author_name || 'Nuevo Autor', 42, tableY + 6);
-      doc.text(quote.object || 'Proyecto Editorial', 48, tableY + 16, { maxWidth: 55 });
-      doc.text(quote.issue_date || '', 131, tableY + 6);
-      doc.text('Propuesta Comercial', 133, tableY + 16);
+      doc.text(quote.author_name || 'Nuevo Autor', lm + 22, tableY + (isCompact ? 5 : 6));
+      doc.text(quote.object || 'Proyecto Editorial', lm + 28, tableY + (isCompact ? 13 : 16), { maxWidth: (cw / 2) - 32 });
+      doc.text(quote.issue_date || '', lm + (cw / 2) + 26, tableY + (isCompact ? 5 : 6));
+      doc.text('Propuesta Comercial', lm + (cw / 2) + 28, tableY + (isCompact ? 13 : 16));
 
-      let currentY = tableY + 25;
+      currentY = tableY + tableHeight + (isCompact ? 5 : 7);
 
       if (!isExec) {
         // Sección 1: OBJETO
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(10);
+        doc.setFontSize(headingFontSize);
         doc.setTextColor(...primaryColor);
-        doc.text('1. OBJETO', 20, currentY);
+        doc.text('1. OBJETO', lm, currentY);
         doc.setDrawColor(...primaryColor);
-        doc.line(20, currentY + 1.5, 35, currentY + 1.5);
+        doc.line(lm, currentY + 1.5, lm + 15, currentY + 1.5);
 
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(8.5);
+        doc.setFontSize(bodyFontSize);
         doc.setTextColor(51, 65, 85);
         const objetoText = `La presente propuesta tiene como objeto detallar la prestación de servicios editoriales y de producción para la obra "${quote.object || 'Proyecto del Autor'}". El objetivo es lograr un producto editorial de la más alta calidad bajo la marca Noveli Editorial.`;
-        const splitObjeto = doc.splitTextToSize(objetoText, 170);
-        doc.text(splitObjeto, 20, currentY + 6);
+        const splitObjeto = doc.splitTextToSize(objetoText, cw);
+        doc.text(splitObjeto, lm, currentY + 5.5);
 
-        currentY += 22;
+        currentY += isCompact ? 12 : 18;
 
         // Sección 2: SERVICIOS INCLUIDOS
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(10);
+        doc.setFontSize(headingFontSize);
         doc.setTextColor(...primaryColor);
-        doc.text('2. SERVICIOS INCLUIDOS', 20, currentY);
-        doc.line(20, currentY + 1.5, 55, currentY + 1.5);
+        doc.text('2. SERVICIOS INCLUIDOS', lm, currentY);
+        doc.line(lm, currentY + 1.5, lm + 35, currentY + 1.5);
 
-        let itemsY = currentY + 7;
+        let itemsY = currentY + 6;
         const pdfIncludes = (quote.included_items && Array.isArray(quote.included_items) && quote.included_items.length > 0)
           ? quote.included_items
           : parseBulletsToList(quote.includes_notes || '');
 
         pdfIncludes.forEach((itemText, idx) => {
-          if (itemsY > 265) {
+          if (itemsY > (isCompact ? 275 : 265)) {
             doc.addPage();
-            writeHeader(1.5);
-            itemsY = 25;
+            currentPage++;
+            writeHeader(currentPage);
+            itemsY = isCompact ? 20 : 25;
           }
           doc.setFont('Helvetica', 'normal');
-          doc.setFontSize(8.5);
+          doc.setFontSize(bodyFontSize);
           doc.setTextColor(30, 41, 59);
-          doc.text(`${idx + 1}. ${itemText}`, 20, itemsY);
-          itemsY += 6;
+          doc.text(`${idx + 1}. ${itemText}`, lm, itemsY);
+          itemsY += isCompact ? 5 : 6;
         });
 
-        doc.addPage();
-        writeHeader(2);
-        currentY = 22;
+        currentY = itemsY + (isCompact ? 2 : 4);
       }
 
       // Sección 3: VALORES DEL SERVICIO
+      checkPageBreak(25 + ((items || []).length * rowSpacing));
+      
       doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(10);
+      doc.setFontSize(headingFontSize);
       doc.setTextColor(...primaryColor);
-      doc.text(isExec ? '1. VALORES Y SERVICIOS' : '3. ALTERNATIVAS Y VALOR DEL SERVICIO', 20, currentY);
+      doc.text(isExec ? '1. VALORES Y SERVICIOS' : '3. ALTERNATIVAS Y VALOR DEL SERVICIO', lm, currentY);
       doc.setDrawColor(...primaryColor);
-      doc.line(20, currentY + 1.5, isExec ? 55 : 80, currentY + 1.5);
+      doc.line(lm, currentY + 1.5, lm + (isExec ? 35 : 60), currentY + 1.5);
 
       let tableValY = currentY + 6;
       doc.setFillColor(248, 250, 252);
-      doc.rect(20, tableValY, 170, 7, 'F');
+      doc.rect(lm, tableValY, cw, isCompact ? 6 : 7, 'F');
       doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(8);
+      doc.setFontSize(isCompact ? 7.5 : 8);
       doc.setTextColor(71, 85, 105);
-      doc.text(hasAlts ? 'Alternativa / Servicio' : 'Servicio / Concepto', 23, tableValY + 4.5);
-      doc.text('Cant.', 105, tableValY + 4.5);
-      doc.text('Valor Neto', 120, tableValY + 4.5);
-      doc.text(quote.iva_mode === 'Exento / sin IVA' ? 'IVA (Exento)' : 'IVA 19%', 145, tableValY + 4.5);
-      doc.text('Total', 170, tableValY + 4.5);
+      doc.text(hasAlts ? 'Alternativa / Servicio' : 'Servicio / Concepto', lm + 3, tableValY + (isCompact ? 4.2 : 4.5));
+      doc.text('Cant.', lm + (cw - 85), tableValY + (isCompact ? 4.2 : 4.5));
+      doc.text('Valor Neto', lm + (cw - 70), tableValY + (isCompact ? 4.2 : 4.5));
+      doc.text(quote.iva_mode === 'Exento / sin IVA' ? 'IVA (Exento)' : 'IVA 19%', lm + (cw - 45), tableValY + (isCompact ? 4.2 : 4.5));
+      doc.text('Total', lm + (cw - 20), tableValY + (isCompact ? 4.2 : 4.5));
 
-      let rowY = tableValY + 7;
+      let rowY = tableValY + (isCompact ? 6 : 7);
       doc.setFont('Helvetica', 'normal');
       doc.setTextColor(30, 41, 59);
       doc.setDrawColor(241, 245, 249);
@@ -1365,45 +1390,51 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
           vat = 0;
         }
 
-        doc.line(20, rowY + 6, 190, rowY + 6);
-        doc.text(String(item.concept).substring(0, 45), 23, rowY + 4);
-        doc.text(String(item.quantity || 1), 107, rowY + 4);
-        doc.text(formatCurrency(net, quote.currency), 120, rowY + 4);
-        doc.text(ivaMode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, quote.currency), 145, rowY + 4);
-        doc.text(formatCurrency(ivaMode === '+ IVA' ? (net + vat) : total, quote.currency), 170, rowY + 4);
-        rowY += 6;
+        doc.line(lm, rowY + rowSpacing, rm, rowY + rowSpacing);
+        doc.setFontSize(bodyFontSize);
+        doc.text(String(item.concept).substring(0, isCompact ? 52 : 45), lm + 3, rowY + (isCompact ? 3.5 : 4));
+        doc.text(String(item.quantity || 1), lm + (cw - 82), rowY + (isCompact ? 3.5 : 4));
+        doc.text(formatCurrency(net, quote.currency), lm + (cw - 70), rowY + (isCompact ? 3.5 : 4));
+        doc.text(ivaMode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, quote.currency), lm + (cw - 45), rowY + (isCompact ? 3.5 : 4));
+        doc.text(formatCurrency(ivaMode === '+ IVA' ? (net + vat) : total, quote.currency), lm + (cw - 20), rowY + (isCompact ? 3.5 : 4));
+        rowY += rowSpacing;
       });
 
       // Totals display
       if (!hasAlts) {
         doc.setFont('Helvetica', 'bold');
-        doc.text('TOTAL GENERAL:', 110, rowY + 5);
-        doc.text(formatCurrency(quote.total, quote.currency), 170, rowY + 5);
-        rowY += 10;
+        doc.text('TOTAL GENERAL:', lm + (cw - 80), rowY + (isCompact ? 4.5 : 5));
+        doc.text(formatCurrency(quote.total, quote.currency), lm + (cw - 20), rowY + (isCompact ? 4.5 : 5));
+        rowY += isCompact ? 8 : 10;
       } else {
         doc.setFont('Helvetica', 'italic');
         doc.setFontSize(7.5);
-        doc.text('* Valores unitarios por alternativa independiente.', 23, rowY + 5);
-        rowY += 10;
+        doc.text('* Valores unitarios por alternativa independiente.', lm + 3, rowY + (isCompact ? 4.5 : 5));
+        rowY += isCompact ? 8 : 10;
       }
 
-      // Sección 4: FORMA DE PAGO
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(...primaryColor);
-      doc.text(isExec ? '2. CONDICIONES DE PAGO' : '4. FORMA DE PAGO', 20, rowY);
-      doc.line(20, rowY + 1.5, isExec ? 60 : 50, rowY + 1.5);
+      currentY = rowY;
 
-      let payTableY = rowY + 6;
-      doc.setFillColor(248, 250, 252);
-      doc.rect(20, payTableY, 170, 7, 'F');
+      // Sección 4: FORMA DE PAGO
+      checkPageBreak(hasAlts ? 25 + ((items || []).length * rowSpacing) : 30);
+      
       doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(8);
+      doc.setFontSize(headingFontSize);
+      doc.setTextColor(...primaryColor);
+      doc.text(isExec ? '2. CONDICIONES DE PAGO' : '4. FORMA DE PAGO', lm, currentY);
+      doc.setDrawColor(...primaryColor);
+      doc.line(lm, currentY + 1.5, lm + (isExec ? 40 : 30), currentY + 1.5);
+
+      let payTableY = currentY + 6;
+      doc.setFillColor(248, 250, 252);
+      doc.rect(lm, payTableY, cw, isCompact ? 6 : 7, 'F');
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(isCompact ? 7.5 : 8);
       doc.setTextColor(71, 85, 105);
-      doc.text('Alternativa', 23, payTableY + 4.5);
-      doc.text('Total', 60, payTableY + 4.5);
-      doc.text('% Anticipo', 95, payTableY + 4.5);
-      doc.text('Condición de pago', 120, payTableY + 4.5);
+      doc.text('Alternativa', lm + 3, payTableY + (isCompact ? 4.2 : 4.5));
+      doc.text('Total', lm + 40, payTableY + (isCompact ? 4.2 : 4.5));
+      doc.text('% Anticipo', lm + 75, payTableY + (isCompact ? 4.2 : 4.5));
+      doc.text('Condición de pago', lm + 100, payTableY + (isCompact ? 4.2 : 4.5));
 
       doc.setFont('Helvetica', 'normal');
       doc.setTextColor(30, 41, 59);
@@ -1411,146 +1442,157 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       const upfrontPct = quote.upfront_percentage !== undefined ? quote.upfront_percentage : 50;
 
       if (hasAlts) {
-        let pRowY = payTableY + 7;
+        let pRowY = payTableY + (isCompact ? 6 : 7);
         (items || []).forEach(item => {
           const itemTotal = Number(item.unit_price) * Number(item.quantity);
           const finalItemTotal = ivaMode === '+ IVA' ? Math.round(itemTotal * (1 + taxRate/100)) : itemTotal;
-          doc.line(20, pRowY + 6, 190, pRowY + 6);
-          doc.text(String(item.concept).substring(0, 20), 23, pRowY + 4);
-          doc.text(formatCurrency(finalItemTotal, quote.currency), 60, pRowY + 4);
-          doc.text(`${upfrontPct}%`, 97, pRowY + 4);
+          doc.line(lm, pRowY + rowSpacing, rm, pRowY + rowSpacing);
+          doc.setFontSize(bodyFontSize);
+          doc.text(String(item.concept).substring(0, 22), lm + 3, pRowY + (isCompact ? 3.5 : 4));
+          doc.text(formatCurrency(finalItemTotal, quote.currency), lm + 40, pRowY + (isCompact ? 3.5 : 4));
+          doc.text(`${upfrontPct}%`, lm + 77, pRowY + (isCompact ? 3.5 : 4));
           const displayTerms = quote.payment_plan_type === '100_inicio' ? '100% al inicio' :
                                quote.payment_plan_type === '50_inicio_50_termino' ? '50% inicio / 50% término' :
                                quote.payment_plan_type === '50_inicio_50_entrega' ? '50% inicio / 50% contra entrega' :
                                quote.payment_plan_type === 'cuotas' ? `${upfrontPct}% anticipo, saldo en ${quote.installments} cuotas` :
                                String(quote.payment_terms).substring(0, 35);
-          doc.text(displayTerms, 120, pRowY + 4);
-          pRowY += 6;
+          doc.text(displayTerms, lm + 100, pRowY + (isCompact ? 3.5 : 4));
+          pRowY += rowSpacing;
         });
-        rowY = pRowY + 4;
+        currentY = pRowY + (isCompact ? 2 : 4);
       } else {
-        doc.line(20, payTableY + 7 + 10, 190, payTableY + 7 + 10);
-        doc.text('Propuesta Sugerida', 23, payTableY + 13);
-        doc.text(formatCurrency(quote.total, quote.currency), 60, payTableY + 13);
-        doc.text(`${upfrontPct}%`, 97, payTableY + 13);
-        const splitPayTerms = doc.splitTextToSize(quote.payment_terms || '', 68);
-        doc.text(splitPayTerms, 120, payTableY + 11);
-        rowY = payTableY + 7 + 16;
+        doc.line(lm, payTableY + (isCompact ? 6 : 7) + (isCompact ? 8 : 10), rm, payTableY + (isCompact ? 6 : 7) + (isCompact ? 8 : 10));
+        doc.setFontSize(bodyFontSize);
+        doc.text('Propuesta Sugerida', lm + 3, payTableY + (isCompact ? 11 : 13));
+        doc.text(formatCurrency(quote.total, quote.currency), lm + 40, payTableY + (isCompact ? 11 : 13));
+        doc.text(`${upfrontPct}%`, lm + 77, payTableY + (isCompact ? 11 : 13));
+        const splitPayTerms = doc.splitTextToSize(quote.payment_terms || '', cw - 103);
+        doc.text(splitPayTerms, lm + 100, payTableY + (isCompact ? 9.5 : 11));
+        currentY = payTableY + (isCompact ? 6 : 7) + (isCompact ? 14 : 16);
       }
 
       // Sección 5: PLAZO DE TRABAJO
+      checkPageBreak(15);
       doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(10);
+      doc.setFontSize(headingFontSize);
       doc.setTextColor(...primaryColor);
-      doc.text(isExec ? '3. PLAZO DE TRABAJO' : '5. PLAZO DE TRABAJO', 20, rowY);
-      doc.line(20, rowY + 1.5, 55, rowY + 1.5);
+      doc.text(isExec ? '3. PLAZO DE TRABAJO' : '5. PLAZO DE TRABAJO', lm, currentY);
+      doc.setDrawColor(...primaryColor);
+      doc.line(lm, currentY + 1.5, lm + 35, currentY + 1.5);
 
       doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8.5);
+      doc.setFontSize(bodyFontSize);
       doc.setTextColor(51, 65, 85);
-      doc.text(quote.work_timeline || 'A convenir.', 20, rowY + 6);
+      doc.text(quote.work_timeline || 'A convenir.', lm, currentY + 5.5);
 
-      rowY += 13;
+      currentY += isCompact ? 10 : 13;
 
       if (!isExec) {
         // Sección 6: SERVICIOS NO INCLUIDOS Y CONDICIONES
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(10);
-        doc.setTextColor(...primaryColor);
-        doc.text('6. SERVICIOS NO INCLUIDOS Y CONDICIONES', 20, rowY);
-        doc.line(20, rowY + 1.5, 90, rowY + 1.5);
-
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.setTextColor(71, 85, 105);
-        doc.text('Qué no incluye:', 20, rowY + 6);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(100, 116, 139);
         const pdfExcludes = (quote.excluded_items && Array.isArray(quote.excluded_items) && quote.excluded_items.length > 0)
           ? quote.excluded_items
           : parseBulletsToList(quote.excludes_notes || '');
         const excludesText = pdfExcludes.map(e => `• ${e}`).join('\n');
-        const splitExcludes = doc.splitTextToSize(excludesText || '• Exclusiones estándar.', 75);
-        doc.text(splitExcludes, 20, rowY + 10);
+        const splitExcludes = doc.splitTextToSize(excludesText || '• Exclusiones estándar.', (cw / 2) - 5);
+        const splitReqs = doc.splitTextToSize(quote.start_conditions || '• Aceptación de la propuesta.', (cw / 2) - 5);
+        
+        const neededExcludesH = 15 + Math.max(splitExcludes.length, splitReqs.length) * 3.5;
+        checkPageBreak(neededExcludesH);
 
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.setTextColor(71, 85, 105);
-        doc.text('Requisitos para iniciar:', 105, rowY + 6);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(100, 116, 139);
-        const splitReqs = doc.splitTextToSize(quote.start_conditions || '• Aceptación de la propuesta.', 80);
-        doc.text(splitReqs, 105, rowY + 10);
+        doc.setFontSize(headingFontSize);
+        doc.setTextColor(...primaryColor);
+        doc.text('6. SERVICIOS NO INCLUIDOS Y CONDICIONES', lm, currentY);
+        doc.line(lm, currentY + 1.5, lm + 65, currentY + 1.5);
 
-        rowY += 26 + Math.max(splitExcludes.length, splitReqs.length) * 3.5;
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(isCompact ? 7.5 : 8);
+        doc.setTextColor(71, 85, 105);
+        doc.text('Qué no incluye:', lm, currentY + 5.5);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(bodyFontSize);
+        doc.setTextColor(100, 116, 139);
+        doc.text(splitExcludes, lm, currentY + 9.5);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(isCompact ? 7.5 : 8);
+        doc.setTextColor(71, 85, 105);
+        doc.text('Requisitos para iniciar:', lm + (cw / 2) + 3, currentY + 5.5);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(bodyFontSize);
+        doc.setTextColor(100, 116, 139);
+        doc.text(splitReqs, lm + (cw / 2) + 3, currentY + 9.5);
+
+        currentY += 12 + Math.max(splitExcludes.length, splitReqs.length) * (isCompact ? 3.2 : 3.6);
 
         // Sección 7: VIGENCIA
+        checkPageBreak(12);
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(10);
+        doc.setFontSize(headingFontSize);
         doc.setTextColor(...primaryColor);
-        doc.text('7. VIGENCIA', 20, rowY);
-        doc.line(20, rowY + 1.5, 38, rowY + 1.5);
+        doc.text('7. VIGENCIA', lm, currentY);
+        doc.line(lm, currentY + 1.5, lm + 20, currentY + 1.5);
 
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(8);
+        doc.setFontSize(bodyFontSize);
         doc.setTextColor(51, 65, 85);
-        doc.text(`Esta propuesta tiene una validez de ${quote.validity_days || 15} días corridos a contar del ${quote.issue_date || 'su emisión'}.`, 20, rowY + 6);
+        doc.text(`Esta propuesta tiene una validez de ${quote.validity_days || 15} días corridos a contar del ${quote.issue_date || 'su emisión'}.`, lm, currentY + 5.5);
 
-        rowY += 15;
+        currentY += isCompact ? 10 : 12;
 
         // Legal note
-        doc.setFillColor(248, 250, 252);
-        doc.rect(20, rowY, 170, 18, 'F');
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(6.5);
-        doc.setTextColor(148, 163, 184);
-        const splitLegal = doc.splitTextToSize(quote.legal_notes || '', 162);
-        doc.text(splitLegal, 23, rowY + 4);
+        const splitLegal = doc.splitTextToSize(quote.legal_notes || '', cw - 6);
+        const legalBoxH = 6 + splitLegal.length * (isCompact ? 2.8 : 3.2);
+        checkPageBreak(legalBoxH + 5);
 
-        rowY += 25;
+        doc.setFillColor(248, 250, 252);
+        doc.rect(lm, currentY, cw, legalBoxH, 'F');
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(isCompact ? 6 : 6.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text(splitLegal, lm + 3, currentY + 4);
+
+        currentY += legalBoxH + (isCompact ? 5 : 8);
       } else {
         // Compact requirements & validity for Executive Summary
+        checkPageBreak(12);
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(8);
+        doc.setFontSize(isCompact ? 7.5 : 8);
         doc.setTextColor(71, 85, 105);
-        doc.text('Requisitos para iniciar:', 20, rowY + 3);
+        doc.text('Requisitos para iniciar:', lm, currentY + 3);
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(8);
+        doc.setFontSize(bodyFontSize);
         doc.setTextColor(51, 65, 85);
-        doc.text(quote.start_conditions || 'Aceptación propuesta.', 55, rowY + 3);
+        doc.text(quote.start_conditions || 'Aceptación propuesta.', lm + (isCompact ? 32 : 36), currentY + 3);
 
         doc.setFont('Helvetica', 'bold');
-        doc.text('Vigencia:', 130, rowY + 3);
+        doc.text('Vigencia:', lm + (cw - 65), currentY + 3);
         doc.setFont('Helvetica', 'normal');
-        doc.text(`${quote.validity_days || 15} días corridos.`, 145, rowY + 3);
+        doc.text(`${quote.validity_days || 15} días corridos.`, lm + (cw - 50), currentY + 3);
 
-        rowY += 15;
+        currentY += isCompact ? 8 : 12;
       }
 
       // Firmas
       if (showSigs) {
-        if (rowY > 260) {
-          doc.addPage();
-          writeHeader(3);
-          rowY = 30;
-        }
+        checkPageBreak(isCompact ? 18 : 25);
+        
+        const sigLineY = currentY + (isCompact ? 10 : 15);
         doc.setDrawColor(203, 213, 225);
-        doc.line(20, rowY, 80, rowY);
-        doc.line(130, rowY, 190, rowY);
+        doc.line(lm, sigLineY, lm + (isCompact ? 50 : 60), sigLineY);
+        doc.line(rm - (isCompact ? 50 : 60), sigLineY, rm, sigLineY);
 
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(8);
+        doc.setFontSize(isCompact ? 7.5 : 8);
         doc.setTextColor(71, 85, 105);
-        doc.text(companySettings.representative_name || 'Javier Román González', 23, rowY + 4);
-        doc.text('Firma Autor/a', 147, rowY + 4);
+        doc.text(companySettings.representative_name || 'Javier Román González', lm + 3, sigLineY + 4);
+        doc.text('Firma Autor/a', rm - (isCompact ? 47 : 57), sigLineY + 4);
 
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(7.5);
+        doc.setFontSize(isCompact ? 7 : 7.5);
         doc.setTextColor(100, 116, 139);
-        doc.text(companySettings.representative_role || 'Representante Noveli Editorial', 23, rowY + 8);
-        doc.text('Aceptación de Propuesta', 142, rowY + 8);
+        doc.text(companySettings.representative_role || 'Representante Noveli Editorial', lm + 3, sigLineY + 7.5);
+        doc.text('Aceptación de Propuesta', rm - (isCompact ? 47 : 57), sigLineY + 7.5);
       }
 
       writeFooter();
@@ -2154,6 +2196,17 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                       </select>
                     </div>
                     <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">PDF Compacto</label>
+                      <select
+                        value={formHeader.pdf_compact === false ? 'Normal' : 'Compacto'}
+                        onChange={(e) => setFormHeader({...formHeader, pdf_compact: e.target.value === 'Compacto'})}
+                        className="block w-full px-3 py-2 border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-707 text-xs font-bold"
+                      >
+                        <option value="Compacto">Compacto (por defecto)</option>
+                        <option value="Normal">Normal</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-455">Estado Propuesta</label>
                       <select
                         value={formHeader.status}
@@ -2608,8 +2661,8 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                     /* TWO-PAGE FORM (Formal completo, Con alternativas, etc.) */
                     <>
                       {/* PAGE 1 */}
-                      <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 text-xs space-y-6 min-h-[842px] flex flex-col justify-between">
-                        <div className="space-y-6">
+                      <div className={`bg-white dark:bg-slate-900 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 flex flex-col justify-between ${formHeader.pdf_compact === false ? 'p-8 space-y-6 min-h-[842px] text-xs' : 'p-5 space-y-3.5 min-h-[680px] text-[11px]'}`}>
+                        <div className={formHeader.pdf_compact === false ? 'space-y-6' : 'space-y-3.5'}>
                           {/* Encabezado */}
                           <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-b pb-1">
                             <span>Noveli Editorial / Propuesta comercial preliminar</span>
@@ -2688,8 +2741,8 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                       </div>
 
                       {/* PAGE 2 */}
-                      <div className="bg-white dark:bg-slate-900 p-8 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 text-xs space-y-6 min-h-[842px] flex flex-col justify-between">
-                        <div className="space-y-6">
+                      <div className={`bg-white dark:bg-slate-900 shadow-md rounded-xl border border-slate-100 dark:border-slate-850 flex flex-col justify-between ${formHeader.pdf_compact === false ? 'p-8 space-y-6 min-h-[842px] text-xs' : 'p-5 space-y-3.5 min-h-[680px] text-[11px]'}`}>
+                        <div className={formHeader.pdf_compact === false ? 'space-y-6' : 'space-y-3.5'}>
                           {/* Encabezado */}
                           <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider border-b pb-1">
                             <span>Noveli Editorial / Propuesta comercial preliminar</span>
