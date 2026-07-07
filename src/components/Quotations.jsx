@@ -214,42 +214,6 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
     return Array.from(list).filter(item => !includedItems.includes(item) && !excludedItems.includes(item));
   };
 
-  useEffect(() => {
-    if (isPaymentTermsEditedManually) return;
-    let text = '';
-    const total = getTotals().total;
-    if (paymentType === '100_inicio') {
-      text = 'Pago del 100% al inicio del servicio.';
-    } else if (paymentType === '50_inicio_50_termino') {
-      text = '50% al inicio y 50% al término del servicio.';
-    } else if (paymentType === '50_inicio_50_entrega') {
-      text = '50% al inicio y 50% contra entrega de archivos finales.';
-    } else if (paymentType === 'cuotas') {
-      const advanceAmt = Math.round(total * (paymentAdvancePct / 100));
-      const remainingAmt = total - advanceAmt;
-      const installmentAmt = paymentInstallments > 0 ? Math.round(remainingAmt / paymentInstallments) : 0;
-      text = `${paymentAdvancePct}% de anticipo al inicio (${formatCurrency(advanceAmt, formHeader.currency)}) y el saldo en ${paymentInstallments} cuotas de ${formatCurrency(installmentAmt, formHeader.currency)}.`;
-    } else if (paymentType === 'personalizado') {
-      text = paymentCustomText;
-    }
-    setFormHeader(prev => {
-      if (prev.payment_terms !== text) {
-        return { ...prev, payment_terms: text };
-      }
-      return prev;
-    });
-  }, [paymentType, paymentAdvancePct, paymentInstallments, paymentCustomText, formItems, formHeader.discount, formHeader.extension_adjustment_value, formHeader.extension_adjustment_type, formHeader.iva_mode, formHeader.tax_rate, formHeader.currency, isPaymentTermsEditedManually]);
-
-  useEffect(() => {
-    const text = formatStartConditions(startRequirements);
-    setFormHeader(prev => {
-      if (prev.start_conditions !== text) {
-        return { ...prev, start_conditions: text };
-      }
-      return prev;
-    });
-  }, [startRequirements]);
-
   // Company Settings state
   const [companySettings, setCompanySettings] = useState({
     company_name: 'EDITORIAL NOVELI',
@@ -566,7 +530,17 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
     setIncludedItems(inc);
     setExcludedItems(exc);
 
-    const parsedRequirements = parseStartConditions(quote.start_conditions || '');
+    const reqs = quote.start_condition_items && Array.isArray(quote.start_condition_items)
+      ? quote.start_condition_items
+      : parseBulletsToList(quote.start_conditions || '');
+    const parsedRequirements = {
+      aceptacion: reqs.some(r => r.toLowerCase().includes('aceptación') || r.toLowerCase().includes('aceptacion') || r.toLowerCase().includes('propuesta')),
+      firma: reqs.some(r => r.toLowerCase().includes('firma') || r.toLowerCase().includes('contrato')),
+      pago: reqs.some(r => r.toLowerCase().includes('pago') || r.toLowerCase().includes('anticipo') || r.toLowerCase().includes('inicial')),
+      manuscrito: reqs.some(r => r.toLowerCase().includes('manuscrito') || r.toLowerCase().includes('recepción manuscrito')),
+      materiales: reqs.some(r => r.toLowerCase().includes('materiales') || r.toLowerCase().includes('portada') || r.toLowerCase().includes('archivos') || r.toLowerCase().includes('definitivo')),
+      datos: reqs.some(r => r.toLowerCase().includes('datos') || r.toLowerCase().includes('confirmación') || r.toLowerCase().includes('confirmacion') || r.toLowerCase().includes('autor'))
+    };
     setStartRequirements(parsedRequirements);
 
     setFormHeader({
@@ -931,6 +905,42 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       total
     };
   };
+
+  useEffect(() => {
+    if (isPaymentTermsEditedManually) return;
+    let text = '';
+    const total = getTotals().total;
+    if (paymentType === '100_inicio') {
+      text = 'Pago del 100% al inicio del servicio.';
+    } else if (paymentType === '50_inicio_50_termino') {
+      text = '50% al inicio y 50% al término del servicio.';
+    } else if (paymentType === '50_inicio_50_entrega') {
+      text = '50% al inicio y 50% contra entrega de archivos finales.';
+    } else if (paymentType === 'cuotas') {
+      const advanceAmt = Math.round(total * (paymentAdvancePct / 100));
+      const remainingAmt = total - advanceAmt;
+      const installmentAmt = paymentInstallments > 0 ? Math.round(remainingAmt / paymentInstallments) : 0;
+      text = `${paymentAdvancePct}% de anticipo al inicio (${formatCurrency(advanceAmt, formHeader.currency)}) y el saldo en ${paymentInstallments} cuotas de ${formatCurrency(installmentAmt, formHeader.currency)}.`;
+    } else if (paymentType === 'personalizado') {
+      text = paymentCustomText;
+    }
+    setFormHeader(prev => {
+      if (prev.payment_terms !== text) {
+        return { ...prev, payment_terms: text };
+      }
+      return prev;
+    });
+  }, [paymentType, paymentAdvancePct, paymentInstallments, paymentCustomText, formItems, formHeader.discount, formHeader.extension_adjustment_value, formHeader.extension_adjustment_type, formHeader.iva_mode, formHeader.tax_rate, formHeader.currency, isPaymentTermsEditedManually]);
+
+  useEffect(() => {
+    const text = formatStartConditions(startRequirements);
+    setFormHeader(prev => {
+      if (prev.start_conditions !== text) {
+        return { ...prev, start_conditions: text };
+      }
+      return prev;
+    });
+  }, [startRequirements]);
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
@@ -1564,7 +1574,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
             Propuestas Comerciales
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">
-            Redacción, control de tarifas, previsualización interactiva y descarga de cotizaciones editoriales.
+            Creación y seguimiento de propuestas comerciales preliminares.
           </p>
         </div>
         {!isReadOnly && (
@@ -1618,7 +1628,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         </div>
       ) : filteredQuotes.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-12 text-center text-slate-400 italic">
-          No se encontraron propuestas comerciales registradas.
+          No hay propuestas comerciales registradas.
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">

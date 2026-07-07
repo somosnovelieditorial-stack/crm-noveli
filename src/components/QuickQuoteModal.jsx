@@ -216,77 +216,6 @@ export default function QuickQuoteModal({
     setExcludedItems(excludedItems.filter((_, i) => i !== idx));
   };
 
-  // Keep includes_notes and excludes_notes updated
-  useEffect(() => {
-    setFormHeader(prev => ({
-      ...prev,
-      includes_notes: includedItems.map(item => `• ${item}`).join('\n'),
-      excludes_notes: excludedItems.map(item => `• ${item}`).join('\n')
-    }));
-  }, [includedItems, excludedItems]);
-
-  // Keep payment terms updated
-  useEffect(() => {
-    if (isPaymentTermsEditedManually) return;
-    let text = '';
-    const totals = getTotals();
-    const formattedTotal = formatCurrency(totals.total, formHeader.currency);
-    const advanceAmount = Math.round(totals.total * (paymentAdvancePct / 100));
-    const formattedAdvance = formatCurrency(advanceAmount, formHeader.currency);
-
-    if (paymentType === '100_inicio') {
-      text = `Pago del 100% de la propuesta sugerida al inicio del proyecto (${formattedTotal}).`;
-    } else if (paymentType === '55_inicio_55_termino' || paymentType === '50_inicio_50_termino') {
-      const restPct = 100 - paymentAdvancePct;
-      const restAmount = totals.total - advanceAmount;
-      const formattedRest = formatCurrency(restAmount, formHeader.currency);
-      text = `${paymentAdvancePct}% al inicio del proyecto (${formattedAdvance}) y ${restPct}% al término de los servicios contra entrega (${formattedRest}).`;
-    } else if (paymentType === '50_inicio_50_entrega') {
-      const restPct = 100 - paymentAdvancePct;
-      const restAmount = totals.total - advanceAmount;
-      const formattedRest = formatCurrency(restAmount, formHeader.currency);
-      text = `${paymentAdvancePct}% al inicio del proyecto (${formattedAdvance}) y ${restPct}% contra entrega del manuscrito diagramado listo para imprenta (${formattedRest}).`;
-    } else if (paymentType === 'cuotas') {
-      const remainingPct = 100 - paymentAdvancePct;
-      const installmentsCount = paymentInstallments || 3;
-      const remainingAmount = totals.total - advanceAmount;
-      const installmentAmount = Math.round(remainingAmount / installmentsCount);
-      const formattedInstallment = formatCurrency(installmentAmount, formHeader.currency);
-      text = `${paymentAdvancePct}% de anticipo (${formattedAdvance}) y saldo del ${remainingPct}% cancelado en ${installmentsCount} cuotas consecutivas mensuales de ${formattedInstallment} cada una.`;
-    } else {
-      text = formHeader.payment_terms;
-    }
-
-    setFormHeader(prev => ({ ...prev, payment_terms: text }));
-  }, [paymentType, paymentAdvancePct, paymentInstallments, formItems, formHeader.currency, formHeader.extension_adjustment_type, formHeader.extension_adjustment_value, formHeader.discount]);
-
-  useEffect(() => {
-    const active = Object.keys(startRequirements)
-      .filter(k => startRequirements[k])
-      .map(k => {
-        const labelsMap = {
-          aceptacion: 'Aceptación propuesta',
-          firma: 'Firma de contrato',
-          pago: 'Pago inicial',
-          manuscrito: 'Recepción manuscrito',
-          materiales: 'Recepción portada/archivos',
-          datos: 'Datos del autor'
-        };
-        return labelsMap[k];
-      });
-    setFormHeader(prev => ({
-      ...prev,
-      start_conditions: active.length > 0 ? active.map(item => `• ${item}`).join('\n') : 'A convenir.'
-    }));
-  }, [startRequirements]);
-
-  const handleProposalFormatChange = (fmt) => {
-    setFormHeader(prev => ({
-      ...prev,
-      proposal_format: fmt,
-      has_alternatives: fmt === 'Con alternativas'
-    }));
-  };
 
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -352,14 +281,16 @@ export default function QuickQuoteModal({
         setPaymentInstallments(quotationToEdit.installments || 3);
         setIsPaymentTermsEditedManually(true);
 
-        const reqs = quotationToEdit.start_condition_items || parseBulletsToList(quotationToEdit.start_conditions || '');
+        const reqs = quotationToEdit.start_condition_items && Array.isArray(quotationToEdit.start_condition_items)
+          ? quotationToEdit.start_condition_items
+          : parseBulletsToList(quotationToEdit.start_conditions || '');
         setStartRequirements({
-          aceptacion: reqs.includes('Aceptación propuesta') || reqs.includes('Aceptación formal de la propuesta.'),
-          firma: reqs.includes('Firma de contrato'),
-          pago: reqs.includes('Pago inicial') || reqs.includes('Pago del anticipo inicial'),
-          manuscrito: reqs.includes('Recepción manuscrito'),
-          materiales: reqs.includes('Recepción portada/archivos') || reqs.includes('envío del manuscrito definitivo'),
-          datos: reqs.includes('Datos del autor')
+          aceptacion: reqs.some(r => r.toLowerCase().includes('aceptación') || r.toLowerCase().includes('aceptacion') || r.toLowerCase().includes('propuesta')),
+          firma: reqs.some(r => r.toLowerCase().includes('firma') || r.toLowerCase().includes('contrato')),
+          pago: reqs.some(r => r.toLowerCase().includes('pago') || r.toLowerCase().includes('anticipo') || r.toLowerCase().includes('inicial')),
+          manuscrito: reqs.some(r => r.toLowerCase().includes('manuscrito') || r.toLowerCase().includes('recepción manuscrito')),
+          materiales: reqs.some(r => r.toLowerCase().includes('materiales') || r.toLowerCase().includes('portada') || r.toLowerCase().includes('archivos') || r.toLowerCase().includes('definitivo')),
+          datos: reqs.some(r => r.toLowerCase().includes('datos') || r.toLowerCase().includes('confirmación') || r.toLowerCase().includes('confirmacion') || r.toLowerCase().includes('autor'))
         });
 
         fetchQuotationItems(quotationToEdit.id);
@@ -697,6 +628,78 @@ export default function QuickQuoteModal({
       vat,
       total
     };
+  };
+
+  // Keep includes_notes and excludes_notes updated
+  useEffect(() => {
+    setFormHeader(prev => ({
+      ...prev,
+      includes_notes: includedItems.map(item => `• ${item}`).join('\n'),
+      excludes_notes: excludedItems.map(item => `• ${item}`).join('\n')
+    }));
+  }, [includedItems, excludedItems]);
+
+  // Keep payment terms updated
+  useEffect(() => {
+    if (isPaymentTermsEditedManually) return;
+    let text = '';
+    const totals = getTotals();
+    const formattedTotal = formatCurrency(totals.total, formHeader.currency);
+    const advanceAmount = Math.round(totals.total * (paymentAdvancePct / 100));
+    const formattedAdvance = formatCurrency(advanceAmount, formHeader.currency);
+
+    if (paymentType === '100_inicio') {
+      text = `Pago del 100% de la propuesta sugerida al inicio del proyecto (${formattedTotal}).`;
+    } else if (paymentType === '55_inicio_55_termino' || paymentType === '50_inicio_50_termino') {
+      const restPct = 100 - paymentAdvancePct;
+      const restAmount = totals.total - advanceAmount;
+      const formattedRest = formatCurrency(restAmount, formHeader.currency);
+      text = `${paymentAdvancePct}% al inicio del proyecto (${formattedAdvance}) y ${restPct}% al término de los servicios contra entrega (${formattedRest}).`;
+    } else if (paymentType === '50_inicio_50_entrega') {
+      const restPct = 100 - paymentAdvancePct;
+      const restAmount = totals.total - advanceAmount;
+      const formattedRest = formatCurrency(restAmount, formHeader.currency);
+      text = `${paymentAdvancePct}% al inicio del proyecto (${formattedAdvance}) y ${restPct}% contra entrega del manuscrito diagramado listo para imprenta (${formattedRest}).`;
+    } else if (paymentType === 'cuotas') {
+      const remainingPct = 100 - paymentAdvancePct;
+      const installmentsCount = paymentInstallments || 3;
+      const remainingAmount = totals.total - advanceAmount;
+      const installmentAmount = Math.round(remainingAmount / installmentsCount);
+      const formattedInstallment = formatCurrency(installmentAmount, formHeader.currency);
+      text = `${paymentAdvancePct}% de anticipo (${formattedAdvance}) y saldo del ${remainingPct}% cancelado en ${installmentsCount} cuotas consecutivas mensuales de ${formattedInstallment} cada una.`;
+    } else {
+      text = formHeader.payment_terms;
+    }
+
+    setFormHeader(prev => ({ ...prev, payment_terms: text }));
+  }, [paymentType, paymentAdvancePct, paymentInstallments, formItems, formHeader.currency, formHeader.extension_adjustment_type, formHeader.extension_adjustment_value, formHeader.discount]);
+
+  useEffect(() => {
+    const active = Object.keys(startRequirements)
+      .filter(k => startRequirements[k])
+      .map(k => {
+        const labelsMap = {
+          aceptacion: 'Aceptación propuesta',
+          firma: 'Firma de contrato',
+          pago: 'Pago inicial',
+          manuscrito: 'Recepción manuscrito',
+          materiales: 'Recepción portada/archivos',
+          datos: 'Datos del autor'
+        };
+        return labelsMap[k];
+      });
+    setFormHeader(prev => ({
+      ...prev,
+      start_conditions: active.length > 0 ? active.map(item => `• ${item}`).join('\n') : 'A convenir.'
+    }));
+  }, [startRequirements]);
+
+  const handleProposalFormatChange = (fmt) => {
+    setFormHeader(prev => ({
+      ...prev,
+      proposal_format: fmt,
+      has_alternatives: fmt === 'Con alternativas'
+    }));
   };
 
   const handleFormSubmit = async (e) => {

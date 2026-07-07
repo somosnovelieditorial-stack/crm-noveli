@@ -19,7 +19,8 @@ import Documents from './components/Documents';
 import Reports from './components/Reports';
 import Integrations from './components/Integrations';
 import CompletedSales from './components/CompletedSales';
-import Quotations from './components/Quotations';
+import CommercialProposals from './components/CommercialProposals';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // New Phase Components
 import CurrencyRates from './components/CurrencyRates';
@@ -214,6 +215,9 @@ function SeguimientosView({ isReadOnly }) {
 const getTabFromPath = (path) => {
   const cleanPath = path.toLowerCase().replace(/^\/|\/$/g, '');
   
+  if (cleanPath === 'propuestas-comerciales') return 'quotations';
+  if (cleanPath === 'quotations') return 'quotations';
+  if (cleanPath === 'propuestas') return 'quotations';
   if (cleanPath === 'sitio-web/configuracion') return 'website-configuracion';
   if (cleanPath === 'sitio-web/servicios') return 'website-servicios';
   if (cleanPath === 'sitio-web/libros') return 'website-libros';
@@ -273,6 +277,7 @@ const getPathFromTab = (tab) => {
     'agenda': '/agenda',
     'clients': '/clientes',
     'prospects': '/prospects',
+    'quotations': '/propuestas-comerciales',
     'services': '/services',
     'completed_sales': '/completed_sales',
     'catalog': '/catalogo',
@@ -991,84 +996,92 @@ export default function App() {
     else if (path === 'secciones') setActiveTab('website-secciones');
   };
 
-  // Render current tab content with dynamic roles and write access checks
+  // Render current tab content
   const renderTabContent = () => {
     const isReadOnly = !hasPermission(userRole, activeTab);
     const commonProps = { isReadOnly, userRole, organizationId, realtimeTrigger };
 
-    switch (activeTab) {
-      case 'dashboard': return <Dashboard {...commonProps} />;
-      case 'quotations': return <Quotations {...commonProps} />;
-      case 'clients': return <Clients {...commonProps} />;
-      case 'prospects': return <Prospects {...commonProps} />;
-      case 'services': return <Services {...commonProps} />;
-      case 'completed_sales': return <CompletedSales {...commonProps} />;
-      case 'catalog': return <Catalog {...commonProps} />;
-      case 'packs': return <Packs {...commonProps} />;
-      case 'incomes': return <Incomes {...commonProps} />;
-      case 'expenses': return <Expenses {...commonProps} />;
-      case 'currency_rates': return <CurrencyRates {...commonProps} />;
-      case 'providers': return <Providers {...commonProps} />;
-      case 'staff': return <Staff {...commonProps} defaultSubTab="members" />;
-      case 'reserve': return <Staff {...commonProps} defaultSubTab="reserve" />;
-      case 'website': return <Website {...commonProps} initialPath="dashboard" onChangePath={handleWebsitePathChange} />;
-      case 'website-servicios': return <Website {...commonProps} initialPath="servicios" onChangePath={handleWebsitePathChange} />;
-      case 'website-libros': return <Website {...commonProps} initialPath="libros" onChangePath={handleWebsitePathChange} />;
-      case 'website-configuracion': return <Website {...commonProps} initialPath="configuracion" onChangePath={handleWebsitePathChange} />;
-      case 'website-enlaces': return <Website {...commonProps} initialPath="enlaces" onChangePath={handleWebsitePathChange} />;
-      case 'website-secciones': return <Website {...commonProps} initialPath="secciones" onChangePath={handleWebsitePathChange} />;
-      case 'documents': return <Documents {...commonProps} />;
-      case 'taxes': return <Taxes {...commonProps} />;
-      case 'reports': return <Reports {...commonProps} />;
-      case 'configuration': return <Configuration {...commonProps} />;
-      case 'integrations': return <Integrations {...commonProps} />;
-      case 'notifications': return (
-        <div className="space-y-6 animate-fade-in text-slate-800 dark:text-slate-100">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
-              <Bell className="w-5 h-5 text-brand-500" />
-              Notificaciones y Alertas de Control Interno
-            </h2>
-            <div className="divide-y divide-slate-150 dark:divide-slate-800 text-sm">
-              {notifications.length === 0 ? (
-                <div className="p-12 text-center text-slate-400 font-semibold flex flex-col items-center gap-2">
-                  <CheckCircle className="w-12 h-12 text-emerald-500 shrink-0" />
-                  <span>¡Al día! No se registran alertas de plazos o cobros pendientes hoy.</span>
-                </div>
-              ) : (
-                notifications.map((notif) => (
-                  <div key={notif.id} className="py-4 flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <span className={`p-2 rounded-lg shrink-0 mt-0.5 ${
-                        notif.severity === 'high' 
-                          ? 'bg-rose-50 text-rose-650 dark:bg-rose-950/30' 
-                          : notif.severity === 'medium'
-                            ? 'bg-amber-50 text-amber-650 dark:bg-amber-950/30' 
-                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800'
-                      }`}>
-                        {notif.severity === 'high' ? <AlertTriangle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-                      </span>
-                      <div>
-                        <h4 className="font-bold text-slate-800 dark:text-slate-100">{notif.title}</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{notif.desc}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setActiveTab(notif.tab)}
-                      className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs"
-                    >
-                      Ir al Módulo
-                    </button>
+    const getComponent = () => {
+      switch (activeTab) {
+        case 'dashboard': return <Dashboard {...commonProps} />;
+        case 'quotations': return <CommercialProposals {...commonProps} />;
+        case 'clients': return <Clients {...commonProps} />;
+        case 'prospects': return <Prospects {...commonProps} />;
+        case 'services': return <Services {...commonProps} />;
+        case 'completed_sales': return <CompletedSales {...commonProps} />;
+        case 'catalog': return <Catalog {...commonProps} />;
+        case 'packs': return <Packs {...commonProps} />;
+        case 'incomes': return <Incomes {...commonProps} />;
+        case 'expenses': return <Expenses {...commonProps} />;
+        case 'currency_rates': return <CurrencyRates {...commonProps} />;
+        case 'providers': return <Providers {...commonProps} />;
+        case 'staff': return <Staff {...commonProps} defaultSubTab="members" />;
+        case 'reserve': return <Staff {...commonProps} defaultSubTab="reserve" />;
+        case 'website': return <Website {...commonProps} initialPath="dashboard" onChangePath={handleWebsitePathChange} />;
+        case 'website-servicios': return <Website {...commonProps} initialPath="servicios" onChangePath={handleWebsitePathChange} />;
+        case 'website-libros': return <Website {...commonProps} initialPath="libros" onChangePath={handleWebsitePathChange} />;
+        case 'website-configuracion': return <Website {...commonProps} initialPath="configuracion" onChangePath={handleWebsitePathChange} />;
+        case 'website-enlaces': return <Website {...commonProps} initialPath="enlaces" onChangePath={handleWebsitePathChange} />;
+        case 'website-secciones': return <Website {...commonProps} initialPath="secciones" onChangePath={handleWebsitePathChange} />;
+        case 'documents': return <Documents {...commonProps} />;
+        case 'taxes': return <Taxes {...commonProps} />;
+        case 'reports': return <Reports {...commonProps} />;
+        case 'configuration': return <Configuration {...commonProps} />;
+        case 'integrations': return <Integrations {...commonProps} />;
+        case 'notifications': return (
+          <div className="space-y-6 animate-fade-in text-slate-800 dark:text-slate-100">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
+                <Bell className="w-5 h-5 text-brand-500" />
+                Notificaciones y Alertas de Control Interno
+              </h2>
+              <div className="divide-y divide-slate-150 dark:divide-slate-800 text-sm">
+                {notifications.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400 font-semibold flex flex-col items-center gap-2">
+                    <CheckCircle className="w-12 h-12 text-emerald-500 shrink-0" />
+                    <span>¡Al día! No se registran alertas de plazos o cobros pendientes hoy.</span>
                   </div>
-                ))
-              )}
+                ) : (
+                  notifications.map((notif) => (
+                    <div key={notif.id} className="py-4 flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <span className={`p-2 rounded-lg shrink-0 mt-0.5 ${
+                          notif.severity === 'high' 
+                            ? 'bg-rose-50 text-rose-650 dark:bg-rose-955/30' 
+                            : notif.severity === 'medium'
+                              ? 'bg-amber-50 text-amber-650 dark:bg-amber-955/30' 
+                              : 'bg-slate-100 text-slate-600 dark:bg-slate-800'
+                        }`}>
+                          {notif.severity === 'high' ? <AlertTriangle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                        </span>
+                        <div>
+                          <h4 className="font-bold text-slate-800 dark:text-slate-100">{notif.title}</h4>
+                          <p className="text-xs text-slate-505 dark:text-slate-400 mt-0.5">{notif.desc}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setActiveTab(notif.tab)}
+                        className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-707 dark:text-slate-200 cursor-pointer shadow-xs"
+                      >
+                        Ir al Módulo
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      );
-      case 'seguimientos': return <SeguimientosView isReadOnly={isReadOnly} />;
-      default: return <Dashboard {...commonProps} />;
-    }
+        );
+        case 'seguimientos': return <SeguimientosView isReadOnly={isReadOnly} />;
+        default: return <Dashboard {...commonProps} />;
+      }
+    };
+
+    return (
+      <ErrorBoundary key={activeTab}>
+        {getComponent()}
+      </ErrorBoundary>
+    );
   };
 
   const getActiveTabTitle = () => {
