@@ -78,10 +78,95 @@ const formatStartConditions = (checkedOptions) => {
   
   if (selected.length === 0) return 'Aceptación formal.';
   return selected.join(', ') + '.';
+};const getPreviewRows = (items, totals, formHeader) => {
+  const rate = (Number(formHeader.tax_rate) || 19) / 100;
+  const rows = (items || []).map(item => {
+    const total = Number(item.unit_price) * Number(item.quantity);
+    let net = 0;
+    let vat = 0;
+    let rowTotal = 0;
+    if (formHeader.iva_mode === 'IVA incluido') {
+      net = Math.round(total / (1 + rate));
+      vat = total - net;
+      rowTotal = total;
+    } else if (formHeader.iva_mode === '+ IVA') {
+      net = total;
+      vat = Math.round(net * rate);
+      rowTotal = net + vat;
+    } else {
+      net = total;
+      vat = 0;
+      rowTotal = total;
+    }
+    return {
+      id: item.id,
+      concept: item.concept,
+      quantity: item.quantity,
+      net,
+      vat,
+      total: rowTotal
+    };
+  });
+
+  const adjVal = Number(formHeader.extension_adjustment_value) || 0;
+  if (adjVal !== 0) {
+    const adjAmt = totals.adjustmentAmount;
+    let net = 0;
+    let vat = 0;
+    let total = 0;
+    if (formHeader.iva_mode === 'IVA incluido') {
+      net = Math.round(adjAmt / (1 + rate));
+      vat = adjAmt - net;
+      total = adjAmt;
+    } else if (formHeader.iva_mode === '+ IVA') {
+      net = adjAmt;
+      vat = Math.round(net * rate);
+      total = net + vat;
+    } else {
+      net = adjAmt;
+      vat = 0;
+      total = adjAmt;
+    }
+    rows.push({
+      id: 'adjustment-row',
+      concept: `Ajuste por extensión (${formHeader.manuscript_pages || 0} pág.)`,
+      quantity: 1,
+      net,
+      vat,
+      total
+    });
+  }
+
+  const discVal = Number(formHeader.discount) || 0;
+  if (discVal !== 0) {
+    let net = 0;
+    let vat = 0;
+    let total = 0;
+    if (formHeader.iva_mode === 'IVA incluido') {
+      net = Math.round(discVal / (1 + rate));
+      vat = discVal - net;
+      total = discVal;
+    } else if (formHeader.iva_mode === '+ IVA') {
+      net = discVal;
+      vat = Math.round(net * rate);
+      total = net + vat;
+    } else {
+      net = discVal;
+      vat = 0;
+      total = discVal;
+    }
+    rows.push({
+      id: 'discount-row',
+      concept: `Descuento aplicado`,
+      quantity: 1,
+      net: -net,
+      vat: -vat,
+      total: -total
+    });
+  }
+
+  return rows;
 };
-
-
-
 const normalizeTimestamp = (value) => {
   if (!value || value === '' || value === 'dd-mm-aaaa') return null;
   return value;
@@ -1490,24 +1575,33 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         });
       });
 
-      const adjustmentValue = Number(safeQuote.extension_adjustment_value) || 0;
+      const subtotalVal = (items || []).reduce((sum, item) => sum + (Number(item.unit_price) * Number(item.quantity)), 0);
+      const adjType = safeQuote.extension_adjustment_type;
+      const adjVal = Number(safeQuote.extension_adjustment_value) || 0;
+      let adjustmentAmount = 0;
+      if (adjType === 'percentage') {
+        adjustmentAmount = Math.round(subtotalVal * (adjVal / 100));
+      } else {
+        adjustmentAmount = adjVal;
+      }
+
       let netAdjustment = 0;
       let vatAdjustment = 0;
       let totalAdjustment = 0;
 
-      if (adjustmentValue !== 0) {
+      if (adjustmentAmount !== 0) {
         if (ivaMode === 'IVA incluido') {
-          netAdjustment = Math.round(adjustmentValue / (1 + taxRate / 100));
-          vatAdjustment = adjustmentValue - netAdjustment;
-          totalAdjustment = adjustmentValue;
+          netAdjustment = Math.round(adjustmentAmount / (1 + taxRate / 100));
+          vatAdjustment = adjustmentAmount - netAdjustment;
+          totalAdjustment = adjustmentAmount;
         } else if (ivaMode === '+ IVA') {
-          netAdjustment = adjustmentValue;
+          netAdjustment = adjustmentAmount;
           vatAdjustment = Math.round(netAdjustment * (taxRate / 100));
           totalAdjustment = netAdjustment + vatAdjustment;
         } else {
-          netAdjustment = adjustmentValue;
+          netAdjustment = adjustmentAmount;
           vatAdjustment = 0;
-          totalAdjustment = adjustmentValue;
+          totalAdjustment = adjustmentAmount;
         }
       }
 
@@ -1533,7 +1627,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       }
 
       const finalRows = [...rowItems];
-      if (adjustmentValue !== 0) {
+      if (adjustmentAmount !== 0) {
         finalRows.push({
           concept: `Ajuste por extensión (${safeQuote.manuscript_pages || 0} pág.)`,
           quantity: 1,
@@ -2769,31 +2863,15 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                                 </tr>
                               </thead>
                               <tbody>
-                                {formItems.map(item => {
-                                  const total = item.unit_price * item.quantity;
-                                  const rate = (Number(formHeader.tax_rate) || 19) / 100;
-                                  let net = 0;
-                                  let vat = 0;
-                                  if (formHeader.iva_mode === 'IVA incluido') {
-                                    net = Math.round(total / (1 + rate));
-                                    vat = total - net;
-                                  } else if (formHeader.iva_mode === '+ IVA') {
-                                    net = total;
-                                    vat = Math.round(net * rate);
-                                  } else { // Exento
-                                    net = total;
-                                    vat = 0;
-                                  }
-                                  return (
-                                    <tr key={item.id} className="border-b border-slate-50 dark:border-slate-855">
-                                      <td className="p-2 font-bold">{item.concept}</td>
-                                      <td className="p-2 text-center">{item.quantity}</td>
-                                      <td className="p-2 text-right font-mono">{formatCurrency(net, formHeader.currency)}</td>
-                                      <td className="p-2 text-right font-mono">{formHeader.iva_mode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, formHeader.currency)}</td>
-                                      <td className="p-2 text-right font-mono font-bold text-slate-700 dark:text-slate-300">{formatCurrency(formHeader.iva_mode === '+ IVA' ? (net + vat) : total, formHeader.currency)}</td>
-                                    </tr>
-                                  );
-                                })}
+                                {getPreviewRows(formItems, totals, formHeader).map(row => (
+                                  <tr key={row.id} className="border-b border-slate-50 dark:border-slate-855">
+                                    <td className="p-2 font-bold">{row.concept}</td>
+                                    <td className="p-2 text-center">{row.quantity}</td>
+                                    <td className="p-2 text-right font-mono">{formatCurrency(row.net, formHeader.currency)}</td>
+                                    <td className="p-2 text-right font-mono">{formHeader.iva_mode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(row.vat, formHeader.currency)}</td>
+                                    <td className="p-2 text-right font-mono font-bold text-slate-700 dark:text-slate-300">{formatCurrency(row.total, formHeader.currency)}</td>
+                                  </tr>
+                                ))}
                               </tbody>
                             </table>
                           </div>
@@ -2976,31 +3054,15 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {formItems.map(item => {
-                                    const total = item.unit_price * item.quantity;
-                                    const rate = (Number(formHeader.tax_rate) || 19) / 100;
-                                    let net = 0;
-                                    let vat = 0;
-                                    if (formHeader.iva_mode === 'IVA incluido') {
-                                      net = Math.round(total / (1 + rate));
-                                      vat = total - net;
-                                    } else if (formHeader.iva_mode === '+ IVA') {
-                                      net = total;
-                                      vat = Math.round(net * rate);
-                                    } else { // Exento
-                                      net = total;
-                                      vat = 0;
-                                    }
-                                    return (
-                                      <tr key={item.id} className="border-b border-slate-50 dark:border-slate-850">
-                                        <td className="p-2 font-bold">{item.concept}</td>
-                                        <td className="p-2 text-center">{item.quantity}</td>
-                                        <td className="p-2 text-right font-mono">{formatCurrency(net, formHeader.currency)}</td>
-                                        <td className="p-2 text-right font-mono">{formHeader.iva_mode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, formHeader.currency)}</td>
-                                        <td className="p-2 text-right font-mono font-bold text-slate-700 dark:text-slate-300">{formatCurrency(formHeader.iva_mode === '+ IVA' ? (net + vat) : total, formHeader.currency)}</td>
-                                      </tr>
-                                    );
-                                  })}
+                                  {getPreviewRows(formItems, totals, formHeader).map(row => (
+                                    <tr key={row.id} className="border-b border-slate-50 dark:border-slate-850">
+                                      <td className="p-2 font-bold">{row.concept}</td>
+                                      <td className="p-2 text-center">{row.quantity}</td>
+                                      <td className="p-2 text-right font-mono">{formatCurrency(row.net, formHeader.currency)}</td>
+                                      <td className="p-2 text-right font-mono">{formHeader.iva_mode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(row.vat, formHeader.currency)}</td>
+                                      <td className="p-2 text-right font-mono font-bold text-slate-700 dark:text-slate-300">{formatCurrency(row.total, formHeader.currency)}</td>
+                                    </tr>
+                                  ))}
                                 </tbody>
                               </table>
                             </div>
