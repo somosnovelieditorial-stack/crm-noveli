@@ -857,6 +857,10 @@ export default function QuickQuoteModal({
     try {
       const safeQuote = quote || {};
       const safeCompanySettings = companySettings || {};
+      const safeProposalData = safeQuote;
+      console.log("Datos enviados al PDF", safeProposalData);
+      console.log("Logo usado en PDF", companySettings?.logo_url);
+
       const items = formItems || [];
 
       let logoImg = null;
@@ -1301,9 +1305,9 @@ export default function QuickQuoteModal({
 
       writeFooter();
       doc.save(`Propuesta_${safeQuote.quote_number || 'S_N'}_${(safeQuote.author_name || 'Autor').replace(/\s+/g, '_')}.pdf`);
-    } catch (err) {
-      console.error("Error real generando PDF:", err);
-      alert('Error al generar PDF: ' + (err.message || err));
+    } catch (error) {
+      console.error("Error real generando PDF:", error);
+      alert(`Error generando PDF: ${error?.message || error}`);
     }
   };
 
