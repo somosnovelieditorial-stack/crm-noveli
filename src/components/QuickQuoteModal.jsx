@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase, getValidOrgId, isMock } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit } from '../utils';
 import { jsPDF } from 'jspdf';
+import { normalizeUuid, normalizeNumber, normalizeDate, normalizeArray } from '../utils/normalize';
 import { 
   X, Plus, Trash2, Check, FileText, AlertTriangle, Download, Calendar, Sparkles, Building2
 } from 'lucide-react';
@@ -16,10 +17,7 @@ const loadImage = (url) => {
   });
 };
 
-const normalizeDate = (value) => {
-  if (!value || value === '' || value === 'dd-mm-aaaa') return null;
-  return value;
-};
+
 
 const normalizeTimestamp = (value) => {
   if (!value || value === '' || value === 'dd-mm-aaaa') return null;

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase, getValidOrgId, isMock } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit, formatDate } from '../utils';
 import { jsPDF } from 'jspdf';
+import { normalizeUuid, normalizeNumber, normalizeDate, normalizeArray } from '../utils/normalize';
 import { 
   Plus, Search, Edit2, Trash2, X, FileText, Check, AlertTriangle,
   User, Sparkles, Download, DollarSign, Eye, RefreshCw, Calendar, Trash, FolderOpen, Building2
@@ -79,10 +80,7 @@ const formatStartConditions = (checkedOptions) => {
   return selected.join(', ') + '.';
 };
 
-const normalizeDate = (value) => {
-  if (!value || value === '' || value === 'dd-mm-aaaa') return null;
-  return value;
-};
+
 
 const normalizeTimestamp = (value) => {
   if (!value || value === '' || value === 'dd-mm-aaaa') return null;
