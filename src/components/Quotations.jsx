@@ -89,6 +89,12 @@ const normalizeTimestamp = (value) => {
   return value;
 };
 
+const isPdfImageCompatible = (url) => {
+  if (!url) return false;
+  const clean = url.toLowerCase().split('?')[0];
+  return clean.endsWith('.png') || clean.endsWith('.jpg') || clean.endsWith('.jpeg');
+};
+
 export default function Quotations({ isReadOnly = false, userRole = 'administrador', realtimeTrigger }) {
   const [quotations, setQuotations] = useState([]);
   const [catalog, setCatalog] = useState([]);
@@ -1151,20 +1157,23 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
     }
   };
 
-  const handleDownloadPDF = async (quote) => {
+  const handleDownloadPDF = async (quote, forceNoLogo = false) => {
     try {
-      const { data: items, error: itemsErr } = await supabase
+      const safeQuote = quote || {};
+      const safeCompanySettings = companySettings || {};
+      const { data: rawItems, error: itemsErr } = await supabase
         .from('quotation_items')
         .select('*')
-        .eq('quotation_id', quote.id)
+        .eq('quotation_id', safeQuote.id)
         .order('display_order', { ascending: true });
 
       if (itemsErr) throw itemsErr;
+      const items = rawItems || [];
 
       let logoImg = null;
-      if (companySettings.logo_url) {
+      if (safeCompanySettings.logo_url && isPdfImageCompatible(safeCompanySettings.logo_url) && !forceNoLogo) {
         try {
-          logoImg = await loadImage(companySettings.logo_url);
+          logoImg = await loadImage(safeCompanySettings.logo_url);
         } catch (err) {
           console.error("Error loading logo image for PDF:", err);
         }
@@ -1175,11 +1184,11 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       const secondaryColor = [30, 41, 59]; // Slate-800
       const lightBg = [248, 250, 252]; // Slate-50
 
-      const format = quote.proposal_format || 'Formal completo';
-      const showSigs = quote.show_signatures !== false;
+      const format = safeQuote.proposal_format || 'Formal completo';
+      const showSigs = safeQuote.show_signatures !== false;
       const isExec = format === 'Resumen ejecutivo';
-      const hasAlts = quote.has_alternatives || format === 'Con alternativas';
-      const isCompact = quote.pdf_compact !== false;
+      const hasAlts = safeQuote.has_alternatives || format === 'Con alternativas';
+      const isCompact = safeQuote.pdf_compact !== false;
 
       // Layout measurements
       const lm = isCompact ? 15 : 20;
@@ -1209,7 +1218,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(148, 163, 184);
-        doc.text(companySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.', lm + 25, 287);
+        doc.text(safeCompanySettings.default_footer_text || 'Los derechos de la obra pertenecen siempre al autor.', lm + 25, 287);
       };
 
       const checkPageBreak = (neededH) => {
@@ -1228,34 +1237,41 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       let imgH = 0;
 
       // Brand Title or Logo
-      if (logoImg) {
-        const maxW_mm = isCompact ? 40 : 47.6;
-        const maxH_mm = isCompact ? 14 : 18.5;
-        let imgW = logoImg.width;
-        imgH = logoImg.height;
-        const ratio = imgW / imgH;
+      if (logoImg && !forceNoLogo) {
+        try {
+          const maxW_mm = isCompact ? 40 : 47.6;
+          const maxH_mm = isCompact ? 14 : 18.5;
+          let imgW = logoImg.width;
+          imgH = logoImg.height;
+          const ratio = imgW / imgH;
 
-        if (ratio > maxW_mm / maxH_mm) {
-          imgW = maxW_mm;
-          imgH = maxW_mm / ratio;
-        } else {
-          imgH = maxH_mm;
-          imgW = maxH_mm * ratio;
+          if (ratio > maxW_mm / maxH_mm) {
+            imgW = maxW_mm;
+            imgH = maxW_mm / ratio;
+          } else {
+            imgH = maxH_mm;
+            imgW = maxH_mm * ratio;
+          }
+          
+          let formatExt = 'PNG';
+          const urlLower = String(safeCompanySettings.logo_url).toLowerCase();
+          if (urlLower.includes('.jpg') || urlLower.includes('.jpeg')) formatExt = 'JPEG';
+          else if (urlLower.includes('.webp')) formatExt = 'WEBP';
+          else if (urlLower.includes('.svg')) formatExt = 'SVG';
+
+          doc.addImage(logoImg, formatExt, lm, 18, imgW, imgH);
+          nextY = 18 + imgH + (isCompact ? 3 : 5);
+        } catch (logoErr) {
+          console.error("Error drawing logo to PDF (falling back to text):", logoErr);
+          logoImg = null; // Forces fallback to text rendering
         }
-        
-        let formatExt = 'PNG';
-        const urlLower = String(companySettings.logo_url).toLowerCase();
-        if (urlLower.includes('.jpg') || urlLower.includes('.jpeg')) formatExt = 'JPEG';
-        else if (urlLower.includes('.webp')) formatExt = 'WEBP';
-        else if (urlLower.includes('.svg')) formatExt = 'SVG';
+      }
 
-        doc.addImage(logoImg, formatExt, lm, 18, imgW, imgH);
-        nextY = 18 + imgH + (isCompact ? 3 : 5);
-      } else {
+      if (!logoImg || forceNoLogo) {
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(isCompact ? 15 : 18);
         doc.setTextColor(...primaryColor);
-        doc.text(String(companySettings.company_name || 'EDITORIAL NOVELI').toUpperCase(), lm, 25);
+        doc.text(String(safeCompanySettings.company_name || 'EDITORIAL NOVELI').toUpperCase(), lm, 25);
         nextY = isCompact ? 28 : 32;
       }
 
@@ -1268,9 +1284,9 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(bodyFontSize);
       doc.setTextColor(100, 116, 139);
-      doc.text(`Número: ${quote.quote_number || 'S/N'}`, lm + (isCompact ? 80 : 95), 28);
-      doc.text(`Emisión: ${quote.issue_date || ''}`, lm + (isCompact ? 80 : 95), 33);
-      doc.text(`Validez: ${quote.validity_days || 15} días`, lm + (isCompact ? 80 : 95), 38);
+      doc.text(`Número: ${safeQuote.quote_number || 'S/N'}`, lm + (isCompact ? 80 : 95), 28);
+      doc.text(`Emisión: ${safeQuote.issue_date || ''}`, lm + (isCompact ? 80 : 95), 33);
+      doc.text(`Validez: ${safeQuote.validity_days || 15} días`, lm + (isCompact ? 80 : 95), 38);
 
       // Tabla inicial box (Dirigido a, Fecha, Obra, Tipo)
       let tableY = Math.max(nextY, isCompact ? 38 : 43);
@@ -1291,9 +1307,9 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
 
       doc.setFont('Helvetica', 'normal');
       doc.setTextColor(30, 41, 59);
-      doc.text(quote.author_name || 'Nuevo Autor', lm + 22, tableY + (isCompact ? 5 : 6));
-      doc.text(quote.object || 'Proyecto Editorial', lm + 28, tableY + (isCompact ? 13 : 16), { maxWidth: (cw / 2) - 32 });
-      doc.text(quote.issue_date || '', lm + (cw / 2) + 26, tableY + (isCompact ? 5 : 6));
+      doc.text(safeQuote.author_name || 'Nuevo Autor', lm + 22, tableY + (isCompact ? 5 : 6));
+      doc.text(safeQuote.object || 'Proyecto Editorial', lm + 28, tableY + (isCompact ? 13 : 16), { maxWidth: (cw / 2) - 32 });
+      doc.text(safeQuote.issue_date || '', lm + (cw / 2) + 26, tableY + (isCompact ? 5 : 6));
       doc.text('Propuesta Comercial', lm + (cw / 2) + 28, tableY + (isCompact ? 13 : 16));
 
       currentY = tableY + tableHeight + (isCompact ? 5 : 7);
@@ -1310,7 +1326,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(bodyFontSize);
         doc.setTextColor(51, 65, 85);
-        const objetoText = `La presente propuesta tiene como objeto detallar la prestación de servicios editoriales y de producción para la obra "${quote.object || 'Proyecto del Autor'}". El objetivo es lograr un producto editorial de la más alta calidad bajo la marca Noveli Editorial.`;
+        const objetoText = `La presente propuesta tiene como objeto detallar la prestación de servicios editoriales y de producción para la obra "${safeQuote.object || 'Proyecto del Autor'}". El objetivo es lograr un producto editorial de la más alta calidad bajo la marca Noveli Editorial.`;
         const splitObjeto = doc.splitTextToSize(objetoText, cw);
         doc.text(splitObjeto, lm, currentY + 5.5);
 
@@ -1324,9 +1340,9 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         doc.line(lm, currentY + 1.5, lm + 35, currentY + 1.5);
 
         let itemsY = currentY + 6;
-        const pdfIncludes = (quote.included_items && Array.isArray(quote.included_items) && quote.included_items.length > 0)
-          ? quote.included_items
-          : parseBulletsToList(quote.includes_notes || '');
+        const pdfIncludes = (safeQuote.included_items && Array.isArray(safeQuote.included_items) && safeQuote.included_items.length > 0)
+          ? safeQuote.included_items
+          : parseBulletsToList(safeQuote.includes_notes || '');
 
         pdfIncludes.forEach((itemText, idx) => {
           if (itemsY > (isCompact ? 275 : 265)) {
@@ -1364,7 +1380,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.text(hasAlts ? 'Alternativa / Servicio' : 'Servicio / Concepto', lm + 3, tableValY + (isCompact ? 4.2 : 4.5));
       doc.text('Cant.', lm + (cw - 85), tableValY + (isCompact ? 4.2 : 4.5));
       doc.text('Valor Neto', lm + (cw - 70), tableValY + (isCompact ? 4.2 : 4.5));
-      doc.text(quote.iva_mode === 'Exento / sin IVA' ? 'IVA (Exento)' : 'IVA 19%', lm + (cw - 45), tableValY + (isCompact ? 4.2 : 4.5));
+      doc.text(safeQuote.iva_mode === 'Exento / sin IVA' ? 'IVA (Exento)' : 'IVA 19%', lm + (cw - 45), tableValY + (isCompact ? 4.2 : 4.5));
       doc.text('Total', lm + (cw - 20), tableValY + (isCompact ? 4.2 : 4.5));
 
       let rowY = tableValY + (isCompact ? 6 : 7);
@@ -1372,8 +1388,8 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.setTextColor(30, 41, 59);
       doc.setDrawColor(241, 245, 249);
 
-      const ivaMode = quote.iva_mode || (quote.includes_iva ? 'IVA incluido' : 'Exento / sin IVA');
-      const taxRate = Number(quote.tax_rate) || 19;
+      const ivaMode = safeQuote.iva_mode || (safeQuote.includes_iva ? 'IVA incluido' : 'Exento / sin IVA');
+      const taxRate = Number(safeQuote.tax_rate) || 19;
 
       (items || []).forEach(item => {
         const total = Number(item.unit_price) * Number(item.quantity);
@@ -1394,9 +1410,9 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         doc.setFontSize(bodyFontSize);
         doc.text(String(item.concept).substring(0, isCompact ? 52 : 45), lm + 3, rowY + (isCompact ? 3.5 : 4));
         doc.text(String(item.quantity || 1), lm + (cw - 82), rowY + (isCompact ? 3.5 : 4));
-        doc.text(formatCurrency(net, quote.currency), lm + (cw - 70), rowY + (isCompact ? 3.5 : 4));
-        doc.text(ivaMode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, quote.currency), lm + (cw - 45), rowY + (isCompact ? 3.5 : 4));
-        doc.text(formatCurrency(ivaMode === '+ IVA' ? (net + vat) : total, quote.currency), lm + (cw - 20), rowY + (isCompact ? 3.5 : 4));
+        doc.text(formatCurrency(net, safeQuote.currency), lm + (cw - 70), rowY + (isCompact ? 3.5 : 4));
+        doc.text(ivaMode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, safeQuote.currency), lm + (cw - 45), rowY + (isCompact ? 3.5 : 4));
+        doc.text(formatCurrency(ivaMode === '+ IVA' ? (net + vat) : total, safeQuote.currency), lm + (cw - 20), rowY + (isCompact ? 3.5 : 4));
         rowY += rowSpacing;
       });
 
@@ -1404,7 +1420,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       if (!hasAlts) {
         doc.setFont('Helvetica', 'bold');
         doc.text('TOTAL GENERAL:', lm + (cw - 80), rowY + (isCompact ? 4.5 : 5));
-        doc.text(formatCurrency(quote.total, quote.currency), lm + (cw - 20), rowY + (isCompact ? 4.5 : 5));
+        doc.text(formatCurrency(safeQuote.total || 0, safeQuote.currency), lm + (cw - 20), rowY + (isCompact ? 4.5 : 5));
         rowY += isCompact ? 8 : 10;
       } else {
         doc.setFont('Helvetica', 'italic');
@@ -1439,7 +1455,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.setFont('Helvetica', 'normal');
       doc.setTextColor(30, 41, 59);
 
-      const upfrontPct = quote.upfront_percentage !== undefined ? quote.upfront_percentage : 50;
+      const upfrontPct = safeQuote.upfront_percentage !== undefined ? safeQuote.upfront_percentage : 50;
 
       if (hasAlts) {
         let pRowY = payTableY + (isCompact ? 6 : 7);
@@ -1449,13 +1465,13 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
           doc.line(lm, pRowY + rowSpacing, rm, pRowY + rowSpacing);
           doc.setFontSize(bodyFontSize);
           doc.text(String(item.concept).substring(0, 22), lm + 3, pRowY + (isCompact ? 3.5 : 4));
-          doc.text(formatCurrency(finalItemTotal, quote.currency), lm + 40, pRowY + (isCompact ? 3.5 : 4));
+          doc.text(formatCurrency(finalItemTotal, safeQuote.currency), lm + 40, pRowY + (isCompact ? 3.5 : 4));
           doc.text(`${upfrontPct}%`, lm + 77, pRowY + (isCompact ? 3.5 : 4));
-          const displayTerms = quote.payment_plan_type === '100_inicio' ? '100% al inicio' :
-                               quote.payment_plan_type === '50_inicio_50_termino' ? '50% inicio / 50% término' :
-                               quote.payment_plan_type === '50_inicio_50_entrega' ? '50% inicio / 50% contra entrega' :
-                               quote.payment_plan_type === 'cuotas' ? `${upfrontPct}% anticipo, saldo en ${quote.installments} cuotas` :
-                               String(quote.payment_terms).substring(0, 35);
+          const displayTerms = safeQuote.payment_plan_type === '100_inicio' ? '100% al inicio' :
+                               safeQuote.payment_plan_type === '50_inicio_50_termino' ? '50% inicio / 50% término' :
+                               safeQuote.payment_plan_type === '50_inicio_50_entrega' ? '50% inicio / 50% contra entrega' :
+                               safeQuote.payment_plan_type === 'cuotas' ? `${upfrontPct}% anticipo, saldo en ${safeQuote.installments} cuotas` :
+                               String(safeQuote.payment_terms).substring(0, 35);
           doc.text(displayTerms, lm + 100, pRowY + (isCompact ? 3.5 : 4));
           pRowY += rowSpacing;
         });
@@ -1464,9 +1480,9 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         doc.line(lm, payTableY + (isCompact ? 6 : 7) + (isCompact ? 8 : 10), rm, payTableY + (isCompact ? 6 : 7) + (isCompact ? 8 : 10));
         doc.setFontSize(bodyFontSize);
         doc.text('Propuesta Sugerida', lm + 3, payTableY + (isCompact ? 11 : 13));
-        doc.text(formatCurrency(quote.total, quote.currency), lm + 40, payTableY + (isCompact ? 11 : 13));
+        doc.text(formatCurrency(safeQuote.total || 0, safeQuote.currency), lm + 40, payTableY + (isCompact ? 11 : 13));
         doc.text(`${upfrontPct}%`, lm + 77, payTableY + (isCompact ? 11 : 13));
-        const splitPayTerms = doc.splitTextToSize(quote.payment_terms || '', cw - 103);
+        const splitPayTerms = doc.splitTextToSize(safeQuote.payment_terms || '', cw - 103);
         doc.text(splitPayTerms, lm + 100, payTableY + (isCompact ? 9.5 : 11));
         currentY = payTableY + (isCompact ? 6 : 7) + (isCompact ? 14 : 16);
       }
@@ -1483,18 +1499,18 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(bodyFontSize);
       doc.setTextColor(51, 65, 85);
-      doc.text(quote.work_timeline || 'A convenir.', lm, currentY + 5.5);
+      doc.text(safeQuote.work_timeline || 'A convenir.', lm, currentY + 5.5);
 
       currentY += isCompact ? 10 : 13;
 
       if (!isExec) {
         // Sección 6: SERVICIOS NO INCLUIDOS Y CONDICIONES
-        const pdfExcludes = (quote.excluded_items && Array.isArray(quote.excluded_items) && quote.excluded_items.length > 0)
-          ? quote.excluded_items
-          : parseBulletsToList(quote.excludes_notes || '');
+        const pdfExcludes = (safeQuote.excluded_items && Array.isArray(safeQuote.excluded_items) && safeQuote.excluded_items.length > 0)
+          ? safeQuote.excluded_items
+          : parseBulletsToList(safeQuote.excludes_notes || '');
         const excludesText = pdfExcludes.map(e => `• ${e}`).join('\n');
         const splitExcludes = doc.splitTextToSize(excludesText || '• Exclusiones estándar.', (cw / 2) - 5);
-        const splitReqs = doc.splitTextToSize(quote.start_conditions || '• Aceptación de la propuesta.', (cw / 2) - 5);
+        const splitReqs = doc.splitTextToSize(safeQuote.start_conditions || '• Aceptación de la propuesta.', (cw / 2) - 5);
         
         const neededExcludesH = 15 + Math.max(splitExcludes.length, splitReqs.length) * 3.5;
         checkPageBreak(neededExcludesH);
@@ -1536,12 +1552,12 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(bodyFontSize);
         doc.setTextColor(51, 65, 85);
-        doc.text(`Esta propuesta tiene una validez de ${quote.validity_days || 15} días corridos a contar del ${quote.issue_date || 'su emisión'}.`, lm, currentY + 5.5);
+        doc.text(`Esta propuesta tiene una validez de ${safeQuote.validity_days || 15} días corridos a contar del ${safeQuote.issue_date || 'su emisión'}.`, lm, currentY + 5.5);
 
         currentY += isCompact ? 10 : 12;
 
         // Legal note
-        const splitLegal = doc.splitTextToSize(quote.legal_notes || '', cw - 6);
+        const splitLegal = doc.splitTextToSize(safeQuote.legal_notes || '', cw - 6);
         const legalBoxH = 6 + splitLegal.length * (isCompact ? 2.8 : 3.2);
         checkPageBreak(legalBoxH + 5);
 
@@ -1563,12 +1579,12 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(bodyFontSize);
         doc.setTextColor(51, 65, 85);
-        doc.text(quote.start_conditions || 'Aceptación propuesta.', lm + (isCompact ? 32 : 36), currentY + 3);
+        doc.text(safeQuote.start_conditions || 'Aceptación propuesta.', lm + (isCompact ? 32 : 36), currentY + 3);
 
         doc.setFont('Helvetica', 'bold');
         doc.text('Vigencia:', lm + (cw - 65), currentY + 3);
         doc.setFont('Helvetica', 'normal');
-        doc.text(`${quote.validity_days || 15} días corridos.`, lm + (cw - 50), currentY + 3);
+        doc.text(`${safeQuote.validity_days || 15} días corridos.`, lm + (cw - 50), currentY + 3);
 
         currentY += isCompact ? 8 : 12;
       }
@@ -1585,21 +1601,21 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(isCompact ? 7.5 : 8);
         doc.setTextColor(71, 85, 105);
-        doc.text(companySettings.representative_name || 'Javier Román González', lm + 3, sigLineY + 4);
+        doc.text(safeCompanySettings.representative_name || 'Javier Román González', lm + 3, sigLineY + 4);
         doc.text('Firma Autor/a', rm - (isCompact ? 47 : 57), sigLineY + 4);
 
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(isCompact ? 7 : 7.5);
         doc.setTextColor(100, 116, 139);
-        doc.text(companySettings.representative_role || 'Representante Noveli Editorial', lm + 3, sigLineY + 7.5);
+        doc.text(safeCompanySettings.representative_role || 'Representante Noveli Editorial', lm + 3, sigLineY + 7.5);
         doc.text('Aceptación de Propuesta', rm - (isCompact ? 47 : 57), sigLineY + 7.5);
       }
 
       writeFooter();
-      doc.save(`Propuesta_${quote.quote_number || 'S_N'}_${quote.author_name.replace(/\s+/g, '_')}.pdf`);
+      doc.save(`Propuesta_${safeQuote.quote_number || 'S_N'}_${(safeQuote.author_name || 'Autor').replace(/\s+/g, '_')}.pdf`);
     } catch (err) {
-      console.error(err);
-      alert('Error generando PDF.');
+      console.error("Error real generando PDF:", err);
+      alert('Error al generar PDF: ' + (err.message || err));
     }
   };
 
@@ -2946,18 +2962,32 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
             <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 sticky bottom-0 z-10">
               <div>
                 {formItems.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadPDF({
-                      ...formHeader,
-                      subtotal: totals.subtotal,
-                      total: totals.total
-                    })}
-                    className="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Descargar Propuesta PDF</span>
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPDF({
+                        ...formHeader,
+                        subtotal: totals.subtotal,
+                        total: totals.total
+                      })}
+                      className="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Descargar Propuesta PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPDF({
+                        ...formHeader,
+                        subtotal: totals.subtotal,
+                        total: totals.total
+                      }, true)}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-[10px] font-medium flex items-center gap-1 cursor-pointer"
+                      title="Descarga la propuesta omitiendo el logo en caso de errores de formato"
+                    >
+                      <span>Descargar sin logo</span>
+                    </button>
+                  </div>
                 )}
               </div>
               
