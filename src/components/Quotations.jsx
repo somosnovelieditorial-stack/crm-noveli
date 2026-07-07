@@ -1244,9 +1244,8 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       }
 
       const doc = new jsPDF();
-      const primaryColor = [79, 70, 229]; // Indigo-600
-      const secondaryColor = [30, 41, 59]; // Slate-800
-      const lightBg = [248, 250, 252]; // Slate-50
+      const primaryColor = [23, 37, 84]; // Deep Navy Blue
+      const secondaryColor = [51, 65, 85]; // Slate-700
 
       const format = safeQuote.proposal_format || 'Formal completo';
       const showSigs = safeQuote.show_signatures !== false;
@@ -1300,11 +1299,11 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       let nextY = 32;
       let imgH = 0;
 
-      // Brand Title or Logo
+      // Brand Title or Logo (top-left)
       if (logoImg && !forceNoLogo) {
         try {
-          const maxW_mm = isCompact ? 40 : 47.6;
-          const maxH_mm = isCompact ? 14 : 18.5;
+          const maxW_mm = isCompact ? 35 : 42;
+          const maxH_mm = isCompact ? 12 : 16;
           let imgW = logoImg.width;
           imgH = logoImg.height;
           const ratio = imgW / imgH;
@@ -1324,33 +1323,41 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
           else if (urlLower.includes('.svg')) formatExt = 'SVG';
 
           doc.addImage(logoImg, formatExt, lm, 18, imgW, imgH);
-          nextY = 18 + imgH + (isCompact ? 3 : 5);
+          nextY = 18 + imgH + (isCompact ? 2 : 4);
         } catch (logoErr) {
           console.error("Error drawing logo to PDF (falling back to text):", logoErr);
-          logoImg = null; // Forces fallback to text rendering
+          logoImg = null; 
         }
       }
 
       if (!logoImg || forceNoLogo) {
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(isCompact ? 15 : 18);
+        doc.setFontSize(isCompact ? 14 : 16);
         doc.setTextColor(...primaryColor);
         doc.text(String(safeCompanySettings.company_name || 'EDITORIAL NOVELI').toUpperCase(), lm, 25);
         nextY = isCompact ? 28 : 32;
       }
 
-      // Title
+      let headerY = 23;
+      if (logoImg && !forceNoLogo) {
+        headerY = Math.max(23, 18 + imgH + (isCompact ? 3 : 5));
+      } else {
+        headerY = 25;
+      }
+
+      // Title Centred
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(titleFontSize);
-      doc.setTextColor(...secondaryColor);
-      doc.text('PROPUESTA COMERCIAL PRELIMINAR', lm + (isCompact ? 80 : 95), 23);
+      doc.setTextColor(...primaryColor);
+      doc.text('PROPUESTA COMERCIAL PRELIMINAR', 105, headerY, { align: 'center' });
 
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(bodyFontSize);
       doc.setTextColor(100, 116, 139);
-      doc.text(`Número: ${safeQuote.quote_number || 'S/N'}`, lm + (isCompact ? 80 : 95), 28);
-      doc.text(`Emisión: ${safeQuote.issue_date || ''}`, lm + (isCompact ? 80 : 95), 33);
-      doc.text(`Validez: ${safeQuote.validity_days || 15} días`, lm + (isCompact ? 80 : 95), 38);
+      doc.text(`Número: ${safeQuote.quote_number || 'S/N'}  |  Emisión: ${safeQuote.issue_date || ''}`, 105, headerY + 4.5, { align: 'center' });
+      doc.text(`Validez: ${safeQuote.validity_days || 15} días corridos`, 105, headerY + 8.5, { align: 'center' });
+
+      nextY = headerY + 13;
 
       // Tabla inicial box (Dirigido a, Fecha, Obra, Tipo)
       let tableY = Math.max(nextY, isCompact ? 38 : 43);
@@ -1371,10 +1378,10 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
 
       doc.setFont('Helvetica', 'normal');
       doc.setTextColor(30, 41, 59);
-      doc.text(safeQuote.author_name || 'Nuevo Autor', lm + 22, tableY + (isCompact ? 5 : 6));
+      doc.text(safeQuote.author_name || 'Nuevo Autor', lm + 24, tableY + (isCompact ? 5 : 6));
       doc.text(safeQuote.object || 'Proyecto Editorial', lm + 28, tableY + (isCompact ? 13 : 16), { maxWidth: (cw / 2) - 32 });
-      doc.text(safeQuote.issue_date || '', lm + (cw / 2) + 26, tableY + (isCompact ? 5 : 6));
-      doc.text('Propuesta Comercial', lm + (cw / 2) + 28, tableY + (isCompact ? 13 : 16));
+      doc.text(safeQuote.issue_date || '', lm + (cw / 2) + 28, tableY + (isCompact ? 5 : 6));
+      doc.text('Propuesta Comercial', lm + (cw / 2) + 30, tableY + (isCompact ? 13 : 16));
 
       currentY = tableY + tableHeight + (isCompact ? 5 : 7);
 
@@ -1394,9 +1401,9 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         const splitObjeto = doc.splitTextToSize(objetoText, cw);
         doc.text(splitObjeto, lm, currentY + 5.5);
 
-        currentY += isCompact ? 12 : 18;
+        currentY += isCompact ? 15 : 22;
 
-        // Sección 2: SERVICIOS INCLUIDOS
+        // Sección 2: SERVICIOS INCLUIDOS (desglosado)
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(headingFontSize);
         doc.setTextColor(...primaryColor);
@@ -1409,24 +1416,147 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
           : parseBulletsToList(safeQuote.includes_notes || '');
 
         pdfIncludes.forEach((itemText, idx) => {
-          if (itemsY > (isCompact ? 275 : 265)) {
+          let title = itemText;
+          let desc = '';
+          const colonIdx = itemText.indexOf(':');
+          if (colonIdx > -1) {
+            title = itemText.substring(0, colonIdx).trim();
+            desc = itemText.substring(colonIdx + 1).trim();
+          }
+
+          const splitTitle = doc.splitTextToSize(`${idx + 1}. ${title}`, cw);
+          const splitDesc = desc ? doc.splitTextToSize(desc, cw - 5) : [];
+          const neededH = (splitTitle.length * (isCompact ? 3.5 : 4)) + (splitDesc.length * (isCompact ? 3 : 3.5)) + (isCompact ? 2 : 3);
+
+          if (itemsY + neededH > (isCompact ? 275 : 265)) {
             doc.addPage();
             currentPage++;
             writeHeader(currentPage);
             itemsY = isCompact ? 20 : 25;
           }
-          doc.setFont('Helvetica', 'normal');
+
+          doc.setFont('Helvetica', 'bold');
           doc.setFontSize(bodyFontSize);
           doc.setTextColor(30, 41, 59);
-          doc.text(`${idx + 1}. ${itemText}`, lm, itemsY);
-          itemsY += isCompact ? 5 : 6;
+          doc.text(splitTitle, lm, itemsY);
+          itemsY += splitTitle.length * (isCompact ? 3.5 : 4);
+
+          if (desc) {
+            doc.setFont('Helvetica', 'normal');
+            doc.setFontSize(bodyFontSize - 0.5);
+            doc.setTextColor(71, 85, 105);
+            doc.text(splitDesc, lm + 5, itemsY);
+            itemsY += splitDesc.length * (isCompact ? 3 : 3.5);
+          }
+          itemsY += isCompact ? 1.5 : 2.5;
         });
 
         currentY = itemsY + (isCompact ? 2 : 4);
       }
 
       // Sección 3: VALORES DEL SERVICIO
-      checkPageBreak(25 + ((items || []).length * rowSpacing));
+      const rowItems = [];
+      let totalNetFromItems = 0;
+      const ivaMode = safeQuote.iva_mode || (safeQuote.includes_iva ? 'IVA incluido' : 'Exento / sin IVA');
+      const taxRate = Number(safeQuote.tax_rate) || 19;
+
+      (items || []).forEach(item => {
+        const itemNetTotal = Number(item.unit_price) * Number(item.quantity);
+        let net = 0;
+        let vat = 0;
+        let rowTotal = 0;
+
+        if (ivaMode === 'IVA incluido') {
+          net = Math.round(itemNetTotal / (1 + taxRate / 100));
+          vat = itemNetTotal - net;
+          rowTotal = itemNetTotal;
+        } else if (ivaMode === '+ IVA') {
+          net = itemNetTotal;
+          vat = Math.round(net * (taxRate / 100));
+          rowTotal = net + vat;
+        } else { 
+          net = itemNetTotal;
+          vat = 0;
+          rowTotal = itemNetTotal;
+        }
+
+        totalNetFromItems += net;
+        rowItems.push({
+          concept: item.concept,
+          quantity: item.quantity,
+          net: net,
+          vat: vat,
+          total: rowTotal
+        });
+      });
+
+      const adjustmentValue = Number(safeQuote.extension_adjustment_value) || 0;
+      let netAdjustment = 0;
+      let vatAdjustment = 0;
+      let totalAdjustment = 0;
+
+      if (adjustmentValue !== 0) {
+        if (ivaMode === 'IVA incluido') {
+          netAdjustment = Math.round(adjustmentValue / (1 + taxRate / 100));
+          vatAdjustment = adjustmentValue - netAdjustment;
+          totalAdjustment = adjustmentValue;
+        } else if (ivaMode === '+ IVA') {
+          netAdjustment = adjustmentValue;
+          vatAdjustment = Math.round(netAdjustment * (taxRate / 100));
+          totalAdjustment = netAdjustment + vatAdjustment;
+        } else {
+          netAdjustment = adjustmentValue;
+          vatAdjustment = 0;
+          totalAdjustment = adjustmentValue;
+        }
+      }
+
+      const discountValue = Number(safeQuote.discount) || 0;
+      let netDiscount = 0;
+      let vatDiscount = 0;
+      let totalDiscount = 0;
+
+      if (discountValue !== 0) {
+        if (ivaMode === 'IVA incluido') {
+          netDiscount = Math.round(discountValue / (1 + taxRate / 100));
+          vatDiscount = discountValue - netDiscount;
+          totalDiscount = discountValue;
+        } else if (ivaMode === '+ IVA') {
+          netDiscount = discountValue;
+          vatDiscount = Math.round(netDiscount * (taxRate / 100));
+          totalDiscount = netDiscount + vatDiscount;
+        } else {
+          netDiscount = discountValue;
+          vatDiscount = 0;
+          totalDiscount = discountValue;
+        }
+      }
+
+      const finalRows = [...rowItems];
+      if (adjustmentValue !== 0) {
+        finalRows.push({
+          concept: `Ajuste por extensión (${safeQuote.manuscript_pages || 0} pág.)`,
+          quantity: 1,
+          net: netAdjustment,
+          vat: vatAdjustment,
+          total: totalAdjustment
+        });
+      }
+      if (discountValue !== 0) {
+        finalRows.push({
+          concept: `Descuento aplicado`,
+          quantity: 1,
+          net: -netDiscount,
+          vat: -vatDiscount,
+          total: -totalDiscount
+        });
+      }
+
+      const finalNetSum = totalNetFromItems + netAdjustment - netDiscount;
+      const finalVatSum = rowItems.reduce((acc, r) => acc + r.vat, 0) + vatAdjustment - vatDiscount;
+      const finalTotalSum = rowItems.reduce((acc, r) => acc + r.total, 0) + totalAdjustment - totalDiscount;
+
+      checkPageBreak(25 + (finalRows.length * rowSpacing));
       
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(headingFontSize);
@@ -1444,7 +1574,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.text(hasAlts ? 'Alternativa / Servicio' : 'Servicio / Concepto', lm + 3, tableValY + (isCompact ? 4.2 : 4.5));
       doc.text('Cant.', lm + (cw - 85), tableValY + (isCompact ? 4.2 : 4.5));
       doc.text('Valor Neto', lm + (cw - 70), tableValY + (isCompact ? 4.2 : 4.5));
-      doc.text(safeQuote.iva_mode === 'Exento / sin IVA' ? 'IVA (Exento)' : 'IVA 19%', lm + (cw - 45), tableValY + (isCompact ? 4.2 : 4.5));
+      doc.text(ivaMode === 'Exento / sin IVA' ? 'IVA (Exento)' : 'IVA 19%', lm + (cw - 45), tableValY + (isCompact ? 4.2 : 4.5));
       doc.text('Total', lm + (cw - 20), tableValY + (isCompact ? 4.2 : 4.5));
 
       let rowY = tableValY + (isCompact ? 6 : 7);
@@ -1452,39 +1582,21 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.setTextColor(30, 41, 59);
       doc.setDrawColor(241, 245, 249);
 
-      const ivaMode = safeQuote.iva_mode || (safeQuote.includes_iva ? 'IVA incluido' : 'Exento / sin IVA');
-      const taxRate = Number(safeQuote.tax_rate) || 19;
-
-      (items || []).forEach(item => {
-        const total = Number(item.unit_price) * Number(item.quantity);
-        let net = 0;
-        let vat = 0;
-        if (ivaMode === 'IVA incluido') {
-          net = Math.round(total / (1 + taxRate / 100));
-          vat = total - net;
-        } else if (ivaMode === '+ IVA') {
-          net = total;
-          vat = Math.round(net * (taxRate / 100));
-        } else { // Exento
-          net = total;
-          vat = 0;
-        }
-
+      finalRows.forEach(row => {
         doc.line(lm, rowY + rowSpacing, rm, rowY + rowSpacing);
         doc.setFontSize(bodyFontSize);
-        doc.text(String(item.concept).substring(0, isCompact ? 52 : 45), lm + 3, rowY + (isCompact ? 3.5 : 4));
-        doc.text(String(item.quantity || 1), lm + (cw - 82), rowY + (isCompact ? 3.5 : 4));
-        doc.text(formatCurrency(net, safeQuote.currency), lm + (cw - 70), rowY + (isCompact ? 3.5 : 4));
-        doc.text(ivaMode === 'Exento / sin IVA' ? 'Exento' : formatCurrency(vat, safeQuote.currency), lm + (cw - 45), rowY + (isCompact ? 3.5 : 4));
-        doc.text(formatCurrency(ivaMode === '+ IVA' ? (net + vat) : total, safeQuote.currency), lm + (cw - 20), rowY + (isCompact ? 3.5 : 4));
+        doc.text(String(row.concept).substring(0, isCompact ? 52 : 45), lm + 3, rowY + (isCompact ? 3.5 : 4));
+        doc.text(String(row.quantity), lm + (cw - 82), rowY + (isCompact ? 3.5 : 4));
+        doc.text(formatCurrency(row.net, safeQuote.currency), lm + (cw - 70), rowY + (isCompact ? 3.5 : 4));
+        doc.text(ivaMode === 'Exento / sin IVA' && row.vat === 0 ? 'Exento' : formatCurrency(row.vat, safeQuote.currency), lm + (cw - 45), rowY + (isCompact ? 3.5 : 4));
+        doc.text(formatCurrency(row.total, safeQuote.currency), lm + (cw - 20), rowY + (isCompact ? 3.5 : 4));
         rowY += rowSpacing;
       });
 
-      // Totals display
       if (!hasAlts) {
         doc.setFont('Helvetica', 'bold');
         doc.text('TOTAL GENERAL:', lm + (cw - 80), rowY + (isCompact ? 4.5 : 5));
-        doc.text(formatCurrency(safeQuote.total || 0, safeQuote.currency), lm + (cw - 20), rowY + (isCompact ? 4.5 : 5));
+        doc.text(formatCurrency(finalTotalSum, safeQuote.currency), lm + (cw - 20), rowY + (isCompact ? 4.5 : 5));
         rowY += isCompact ? 8 : 10;
       } else {
         doc.setFont('Helvetica', 'italic');
@@ -1496,7 +1608,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       currentY = rowY;
 
       // Sección 4: FORMA DE PAGO
-      checkPageBreak(hasAlts ? 25 + ((items || []).length * rowSpacing) : 30);
+      checkPageBreak(hasAlts ? 25 + (finalRows.length * rowSpacing) : 30);
       
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(headingFontSize);
@@ -1519,7 +1631,10 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       doc.setFont('Helvetica', 'normal');
       doc.setTextColor(30, 41, 59);
 
-      const upfrontPct = safeQuote.upfront_percentage !== undefined ? safeQuote.upfront_percentage : 50;
+      let upfrontPct = safeQuote.upfront_percentage !== undefined ? safeQuote.upfront_percentage : 50;
+      if (safeQuote.payment_plan_type === '100_inicio') {
+        upfrontPct = 100;
+      }
 
       if (hasAlts) {
         let pRowY = payTableY + (isCompact ? 6 : 7);
@@ -1531,11 +1646,11 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
           doc.text(String(item.concept).substring(0, 22), lm + 3, pRowY + (isCompact ? 3.5 : 4));
           doc.text(formatCurrency(finalItemTotal, safeQuote.currency), lm + 40, pRowY + (isCompact ? 3.5 : 4));
           doc.text(`${upfrontPct}%`, lm + 77, pRowY + (isCompact ? 3.5 : 4));
-          const displayTerms = safeQuote.payment_plan_type === '100_inicio' ? '100% al inicio' :
+          const displayTerms = safeQuote.payment_plan_type === '100_inicio' ? 'Pago del 100% al inicio del servicio.' :
                                safeQuote.payment_plan_type === '50_inicio_50_termino' ? '50% inicio / 50% término' :
                                safeQuote.payment_plan_type === '50_inicio_50_entrega' ? '50% inicio / 50% contra entrega' :
                                safeQuote.payment_plan_type === 'cuotas' ? `${upfrontPct}% anticipo, saldo en ${safeQuote.installments} cuotas` :
-                               String(safeQuote.payment_terms).substring(0, 35);
+                               String(safeQuote.payment_terms || '').substring(0, 35);
           doc.text(displayTerms, lm + 100, pRowY + (isCompact ? 3.5 : 4));
           pRowY += rowSpacing;
         });
@@ -1544,9 +1659,14 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         doc.line(lm, payTableY + (isCompact ? 6 : 7) + (isCompact ? 8 : 10), rm, payTableY + (isCompact ? 6 : 7) + (isCompact ? 8 : 10));
         doc.setFontSize(bodyFontSize);
         doc.text('Propuesta Sugerida', lm + 3, payTableY + (isCompact ? 11 : 13));
-        doc.text(formatCurrency(safeQuote.total || 0, safeQuote.currency), lm + 40, payTableY + (isCompact ? 11 : 13));
+        doc.text(formatCurrency(finalTotalSum, safeQuote.currency), lm + 40, payTableY + (isCompact ? 11 : 13));
         doc.text(`${upfrontPct}%`, lm + 77, payTableY + (isCompact ? 11 : 13));
-        const splitPayTerms = doc.splitTextToSize(safeQuote.payment_terms || '', cw - 103);
+        const displayTerms = safeQuote.payment_plan_type === '100_inicio' ? 'Pago del 100% al inicio del servicio.' :
+                             safeQuote.payment_plan_type === '50_inicio_50_termino' ? '50% inicio / 50% término' :
+                             safeQuote.payment_plan_type === '50_inicio_50_entrega' ? '50% inicio / 50% contra entrega' :
+                             safeQuote.payment_plan_type === 'cuotas' ? `${upfrontPct}% anticipo, saldo en ${safeQuote.installments} cuotas` :
+                             safeQuote.payment_terms || '';
+        const splitPayTerms = doc.splitTextToSize(displayTerms, cw - 103);
         doc.text(splitPayTerms, lm + 100, payTableY + (isCompact ? 9.5 : 11));
         currentY = payTableY + (isCompact ? 6 : 7) + (isCompact ? 14 : 16);
       }
@@ -1634,7 +1754,6 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
 
         currentY += legalBoxH + (isCompact ? 5 : 8);
       } else {
-        // Compact requirements & validity for Executive Summary
         checkPageBreak(12);
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(isCompact ? 7.5 : 8);
@@ -1655,9 +1774,9 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
 
       // Firmas
       if (showSigs) {
-        checkPageBreak(isCompact ? 18 : 25);
+        checkPageBreak(isCompact ? 22 : 30);
         
-        const sigLineY = currentY + (isCompact ? 10 : 15);
+        const sigLineY = currentY + (isCompact ? 12 : 18);
         doc.setDrawColor(203, 213, 225);
         doc.line(lm, sigLineY, lm + (isCompact ? 50 : 60), sigLineY);
         doc.line(rm - (isCompact ? 50 : 60), sigLineY, rm, sigLineY);
@@ -2803,12 +2922,25 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                               {includedItems.length === 0 ? (
                                 <p className="text-slate-400 italic">No se han seleccionado conceptos.</p>
                               ) : (
-                                includedItems.map((item, index) => (
-                                  <div key={index} className="text-[11px] py-1 border-b border-slate-50 dark:border-slate-850 pb-1.5 flex gap-2">
-                                    <span className="font-bold text-indigo-650 dark:text-indigo-400">{index + 1}.</span>
-                                    <span className="text-slate-700 dark:text-slate-300 font-medium">{item}</span>
-                                  </div>
-                                ))
+                                includedItems.map((item, index) => {
+                                  let title = item;
+                                  let desc = '';
+                                  const colonIdx = item.indexOf(':');
+                                  if (colonIdx > -1) {
+                                    title = item.substring(0, colonIdx).trim();
+                                    desc = item.substring(colonIdx + 1).trim();
+                                  }
+                                  return (
+                                    <div key={index} className="text-[11px] py-1 border-b border-slate-50 dark:border-slate-850 pb-1 flex flex-col gap-0.5">
+                                      <div className="flex gap-2">
+                                        <span className="font-bold text-slate-800 dark:text-slate-200">{index + 1}. {title}</span>
+                                      </div>
+                                      {desc && (
+                                        <p className="text-[10px] text-slate-500 dark:text-slate-400 pl-4">{desc}</p>
+                                      )}
+                                    </div>
+                                  );
+                                })
                               )}
                             </div>
                           </div>
