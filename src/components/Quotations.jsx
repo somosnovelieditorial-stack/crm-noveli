@@ -79,6 +79,16 @@ const formatStartConditions = (checkedOptions) => {
   return selected.join(', ') + '.';
 };
 
+const normalizeDate = (value) => {
+  if (!value || value === '' || value === 'dd-mm-aaaa') return null;
+  return value;
+};
+
+const normalizeTimestamp = (value) => {
+  if (!value || value === '' || value === 'dd-mm-aaaa') return null;
+  return value;
+};
+
 export default function Quotations({ isReadOnly = false, userRole = 'administrador', realtimeTrigger }) {
   const [quotations, setQuotations] = useState([]);
   const [catalog, setCatalog] = useState([]);
@@ -974,51 +984,62 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
           return optionsMap[k];
         });
 
+      const valDays = Number(formHeader.validity_days) || 15;
+      let issueDateStr = normalizeDate(formHeader.issue_date) || new Date().toISOString().slice(0, 10);
+      let validUntilStr = normalizeDate(formHeader.valid_until);
+      if (!validUntilStr) {
+        const issueDateObj = new Date(issueDateStr + 'T12:00:00');
+        issueDateObj.setDate(issueDateObj.getDate() + valDays);
+        validUntilStr = issueDateObj.toISOString().slice(0, 10);
+      }
+
       const payload = {
         organization_id: orgId,
         author_name: formHeader.author_name,
-        author_email: formHeader.author_email,
-        author_phone: formHeader.author_phone,
-        author_instagram: formHeader.author_instagram,
+        author_email: formHeader.author_email || null,
+        author_phone: formHeader.author_phone || null,
+        author_instagram: formHeader.author_instagram || null,
         origin: formHeader.origin,
-        country: formHeader.country,
-        city: formHeader.city,
+        country: formHeader.country || null,
+        city: formHeader.city || null,
         object: formHeader.object,
         quote_number: formHeader.quote_number,
-        issue_date: formHeader.issue_date,
-        valid_until: formHeader.valid_until,
-        validity_days: Number(formHeader.validity_days) || 15,
+        issue_date: issueDateStr,
+        valid_until: validUntilStr,
+        validity_days: valDays,
         manuscript_pages: Number(formHeader.manuscript_pages) || 0,
         extension_adjustment_type: formHeader.extension_adjustment_type,
         extension_adjustment_value: Number(formHeader.extension_adjustment_value) || 0,
-        subtotal: totals.subtotal,
-        discount: totals.discount,
-        tax_amount: totals.vat,
-        total: totals.total,
+        subtotal: totals.subtotal || 0,
+        discount: totals.discount || 0,
+        tax_amount: totals.vat || 0,
+        total: totals.total || 0,
         currency: formHeader.currency,
         includes_iva: formHeader.iva_mode === 'IVA incluido',
-        payment_terms: formHeader.payment_terms,
-        work_timeline: formHeader.work_timeline,
-        includes_notes: formHeader.includes_notes,
-        excludes_notes: formHeader.excludes_notes,
-        start_conditions: formHeader.start_conditions,
-        legal_notes: formHeader.legal_notes,
-        other_notes: formHeader.other_notes,
-        notes: formHeader.notes,
+        payment_terms: formHeader.payment_terms || null,
+        work_timeline: formHeader.work_timeline || null,
+        includes_notes: formHeader.includes_notes || null,
+        excludes_notes: formHeader.excludes_notes || null,
+        start_conditions: formHeader.start_conditions || null,
+        legal_notes: formHeader.legal_notes || null,
+        other_notes: formHeader.other_notes || null,
+        notes: formHeader.notes || null,
         status: formHeader.status,
-        accepted_at: formHeader.status === 'aceptada' ? new Date().toISOString() : selectedQuotation?.accepted_at || null,
-        rejected_at: formHeader.status === 'rechazada' ? new Date().toISOString() : selectedQuotation?.rejected_at || null,
+        accepted_at: formHeader.status === 'aceptada' ? new Date().toISOString() : normalizeTimestamp(selectedQuotation?.accepted_at),
+        rejected_at: formHeader.status === 'rechazada' ? new Date().toISOString() : normalizeTimestamp(selectedQuotation?.rejected_at),
+        sent_at: normalizeTimestamp(selectedQuotation?.sent_at),
+        converted_at: normalizeTimestamp(selectedQuotation?.converted_at),
         
         // NEW COLUMNS
         iva_mode: formHeader.iva_mode,
         tax_rate: Number(formHeader.tax_rate) || 19,
-        net_amount: totals.net,
+        net_amount: totals.net || 0,
         payment_plan_type: paymentType,
-        upfront_percentage: Number(paymentAdvancePct),
-        installments: Number(paymentInstallments),
-        included_items: includedItems,
-        excluded_items: excludedItems,
-        start_condition_items: startConditionItems,
+        upfront_percentage: Number(paymentAdvancePct) || 0,
+        installments: Number(paymentInstallments) || 0,
+        included_items: includedItems || [],
+        excluded_items: excludedItems || [],
+        start_condition_items: startConditionItems || [],
         proposal_format: formHeader.proposal_format,
         show_signatures: formHeader.show_signatures,
         has_alternatives: formHeader.has_alternatives
@@ -1874,6 +1895,24 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                         type="number"
                         value={formHeader.validity_days}
                         onChange={(e) => setFormHeader({...formHeader, validity_days: Number(e.target.value)})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-450">Fecha de Emisión</label>
+                      <input
+                        type="date"
+                        value={formHeader.issue_date || ''}
+                        onChange={(e) => setFormHeader({...formHeader, issue_date: e.target.value || null})}
+                        className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-450">Fecha de Vencimiento</label>
+                      <input
+                        type="date"
+                        value={formHeader.valid_until || ''}
+                        onChange={(e) => setFormHeader({...formHeader, valid_until: e.target.value || null})}
                         className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20 rounded-xl text-slate-707 text-xs"
                       />
                     </div>
