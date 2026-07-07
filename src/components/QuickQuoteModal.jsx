@@ -814,31 +814,49 @@ export default function QuickQuoteModal({
         has_alternatives: formHeader.has_alternatives
       };
 
+      const cleanPayload = {
+        ...payload,
+        organization_id: normalizeUuid(payload.organization_id) || orgId,
+        client_id: normalizeUuid(formHeader.client_id || clientId),
+        prospect_id: normalizeUuid(formHeader.prospect_id || prospectId),
+        service_id: normalizeUuid(formHeader.service_id),
+        converted_prospect_id: normalizeUuid(formHeader.converted_prospect_id),
+        converted_client_id: normalizeUuid(formHeader.converted_client_id)
+      };
+
+      console.log("payload limpio PDF", cleanPayload);
+
       let quoteId = '';
       if (quotationToEdit) {
-        quoteId = quotationToEdit.id;
-        const { error } = await supabase.from('quotations').update(payload).eq('id', quoteId);
+        quoteId = normalizeUuid(quotationToEdit.id);
+        if (!quoteId) {
+          throw new Error("ID de propuesta inválido para actualización.");
+        }
+        const { error } = await supabase.from('quotations').update(cleanPayload).eq('id', quoteId);
         if (error) throw error;
         await supabase.from('quotation_items').delete().eq('quotation_id', quoteId);
       } else {
-        const { data, error } = await supabase.from('quotations').insert([payload]).select().single();
+        const { data, error } = await supabase.from('quotations').insert([cleanPayload]).select().single();
         if (error) throw error;
-        quoteId = data.id;
+        quoteId = normalizeUuid(data.id);
       }
 
       const itemsPayload = formItems.map((item, index) => ({
         organization_id: orgId,
         quotation_id: quoteId,
-        catalog_id: item.catalog_id,
-        pack_id: item.pack_id,
+        catalog_id: normalizeUuid(item.catalog_id),
+        pack_id: normalizeUuid(item.pack_id),
         concept: item.concept,
         description: item.description,
-        unit_price: item.unit_price,
-        quantity: item.quantity,
-        total: item.unit_price * item.quantity,
+        unit_price: Number(item.unit_price) || 0,
+        quantity: Number(item.quantity) || 0,
+        total: (Number(item.unit_price) || 0) * (Number(item.quantity) || 0),
         source_type: item.source_type,
         display_order: index
       }));
+
+      const cleanItems = itemsPayload;
+      console.log("items limpios PDF", cleanItems);
 
       const { error: itemsErr } = await supabase.from('quotation_items').insert(itemsPayload);
       if (itemsErr) throw itemsErr;
@@ -857,7 +875,9 @@ export default function QuickQuoteModal({
     try {
       const safeQuote = quote || {};
       const safeCompanySettings = companySettings || {};
+      const proposal = safeQuote;
       const safeProposalData = safeQuote;
+      console.log("proposal id para PDF", proposal?.id);
       console.log("Datos enviados al PDF", safeProposalData);
       console.log("Logo usado en PDF", companySettings?.logo_url);
 

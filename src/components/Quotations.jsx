@@ -603,10 +603,15 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
 
     // Fetch items
     try {
+      const normalizedQuoteId = normalizeUuid(quote.id);
+      if (!normalizedQuoteId) {
+        setFormItems([]);
+        return;
+      }
       const { data, error } = await supabase
         .from('quotation_items')
         .select('*')
-        .eq('quotation_id', quote.id)
+        .eq('quotation_id', normalizedQuoteId)
         .order('display_order', { ascending: true });
       if (error) throw error;
       setFormItems(data.map((item, idx) => ({
@@ -627,7 +632,9 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
   const handleDeleteQuotation = async (id) => {
     if (!window.confirm('¿Estás seguro de que deseas eliminar esta propuesta comercial?')) return;
     try {
-      const { error } = await supabase.from('quotations').delete().eq('id', id);
+      const normalizedId = normalizeUuid(id);
+      if (!normalizedId) throw new Error("ID de propuesta no válido.");
+      const { error } = await supabase.from('quotations').delete().eq('id', normalizedId);
       if (error) throw error;
       setQuotations(quotations.filter(q => q.id !== id));
     } catch (err) {
@@ -1052,33 +1059,51 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
         has_alternatives: formHeader.has_alternatives
       };
 
+      const cleanPayload = {
+        ...payload,
+        organization_id: normalizeUuid(payload.organization_id) || orgId,
+        client_id: normalizeUuid(formHeader.client_id),
+        prospect_id: normalizeUuid(formHeader.prospect_id),
+        service_id: normalizeUuid(formHeader.service_id),
+        converted_prospect_id: normalizeUuid(formHeader.converted_prospect_id),
+        converted_client_id: normalizeUuid(formHeader.converted_client_id)
+      };
+
+      console.log("payload limpio PDF", cleanPayload);
+
       let quoteId = '';
       if (selectedQuotation) {
-        quoteId = selectedQuotation.id;
-        const { error } = await supabase.from('quotations').update(payload).eq('id', quoteId);
+        quoteId = normalizeUuid(selectedQuotation.id);
+        if (!quoteId) {
+          throw new Error("ID de propuesta inválido para actualización.");
+        }
+        const { error } = await supabase.from('quotations').update(cleanPayload).eq('id', quoteId);
         if (error) throw error;
 
         // Delete and replace items
         await supabase.from('quotation_items').delete().eq('quotation_id', quoteId);
       } else {
-        const { data, error } = await supabase.from('quotations').insert([payload]).select().single();
+        const { data, error } = await supabase.from('quotations').insert([cleanPayload]).select().single();
         if (error) throw error;
-        quoteId = data.id;
+        quoteId = normalizeUuid(data.id);
       }
 
       const itemsPayload = formItems.map((item, index) => ({
         organization_id: orgId,
         quotation_id: quoteId,
-        catalog_id: item.catalog_id,
-        pack_id: item.pack_id,
+        catalog_id: normalizeUuid(item.catalog_id),
+        pack_id: normalizeUuid(item.pack_id),
         concept: item.concept,
         description: item.description,
-        unit_price: item.unit_price,
-        quantity: item.quantity,
-        total: item.unit_price * item.quantity,
+        unit_price: Number(item.unit_price) || 0,
+        quantity: Number(item.quantity) || 0,
+        total: (Number(item.unit_price) || 0) * (Number(item.quantity) || 0),
         source_type: item.source_type,
         display_order: index
       }));
+
+      const cleanItems = itemsPayload;
+      console.log("items limpios PDF", cleanItems);
 
       const { error: itemsErr } = await supabase.from('quotation_items').insert(itemsPayload);
       if (itemsErr) throw itemsErr;
@@ -1100,10 +1125,12 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
       const orgId = await getValidOrgId();
 
       // Retrieve items to serialize services
+      const normalizedQuoteId = normalizeUuid(quote.id);
+      if (!normalizedQuoteId) throw new Error("ID de propuesta no válido.");
       const { data: items, error: itemsErr } = await supabase
         .from('quotation_items')
         .select('*')
-        .eq('quotation_id', quote.id);
+        .eq('quotation_id', normalizedQuoteId);
 
       if (itemsErr) throw itemsErr;
 
@@ -1145,7 +1172,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
           converted_at: new Date().toISOString(),
           status: 'convertida a prospecto'
         })
-        .eq('id', quote.id);
+        .eq('id', normalizedQuoteId);
 
       if (quoteUpdateErr) throw quoteUpdateErr;
 
@@ -1161,18 +1188,27 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
     try {
       const safeQuote = quote || {};
       const safeCompanySettings = companySettings || {};
+      const proposal = safeQuote;
       const safeProposalData = safeQuote;
+      console.log("proposal id para PDF", proposal?.id);
       console.log("Datos enviados al PDF", safeProposalData);
       console.log("Logo usado en PDF", companySettings?.logo_url);
 
-      const { data: rawItems, error: itemsErr } = await supabase
-        .from('quotation_items')
-        .select('*')
-        .eq('quotation_id', safeQuote.id)
-        .order('display_order', { ascending: true });
+      const normalizedQuoteId = normalizeUuid(proposal?.id);
 
-      if (itemsErr) throw itemsErr;
-      const items = rawItems || [];
+      let items = [];
+      if (normalizedQuoteId) {
+        const { data: rawItems, error: itemsErr } = await supabase
+          .from('quotation_items')
+          .select('*')
+          .eq('quotation_id', normalizedQuoteId)
+          .order('display_order', { ascending: true });
+
+        if (itemsErr) throw itemsErr;
+        items = rawItems || [];
+      } else {
+        items = formItems || [];
+      }
 
       let logoImg = null;
       if (safeCompanySettings.logo_url && isPdfImageCompatible(safeCompanySettings.logo_url) && !forceNoLogo) {
