@@ -8,6 +8,40 @@ import {
   Activity, Database, Terminal, RefreshCw, Layers, Server, Shield, FileText, UserCheck
 } from 'lucide-react';
 
+const parseQAError = (errorMessage, tableName = '') => {
+  const msgLower = String(errorMessage || '').toLowerCase();
+  let text = errorMessage;
+  let recommendation = '';
+
+  if (msgLower.includes('violates check constraint')) {
+    text = 'La restricción CHECK no permite el valor enviado.';
+    const constraintMatch = errorMessage.match(/constraint "([^"]+)"/i);
+    const constraintName = constraintMatch ? constraintMatch[1] : 'desconocida';
+    recommendation = `La tabla "${tableName || 'afectada'}" tiene una restricción CHECK ("${constraintName}") que no permite insertar el valor enviado en alguno de los campos de estado o categorías.`;
+  } else if (msgLower.includes('could not find the column') || (msgLower.includes('column') && msgLower.includes('does not exist'))) {
+    text = 'Falta columna en Supabase.';
+    const colMatch = errorMessage.match(/column "([^"]+)"|column '([^']+)'|find the '([^']+)' column/i);
+    const colName = colMatch ? (colMatch[1] || colMatch[2] || colMatch[3]) : 'desconocida';
+    recommendation = `Falta la columna "${colName}" en la tabla "${tableName || 'afectada'}". Sugerencia: Ejecute un script ALTER TABLE ${tableName || 'tabla'} ADD COLUMN IF NOT EXISTS ${colName} [TIPO]; o corra la migración supabase_migration_schema_guard.sql.`;
+  } else if (msgLower.includes('invalid input syntax for type uuid')) {
+    text = 'Se envió un UUID vacío/undefined.';
+    recommendation = 'Sugerencia: Use la función de ayuda normalizeUuid() para limpiar strings vacíos, o envíe un valor UUID válido (o null si el campo lo acepta) en lugar de un string vacío o undefined.';
+  } else if (msgLower.includes('invalid input syntax for type date') || msgLower.includes('invalid input syntax for type timestamp')) {
+    text = 'Se envió fecha vacía.';
+    recommendation = 'Sugerencia: Envíe null en lugar de un string vacío o undefined para los campos de tipo DATE o TIMESTAMP.';
+  } else if (msgLower.includes('row-level security') || msgLower.includes('rls') || msgLower.includes('violates row-level security')) {
+    text = 'Bloqueo RLS.';
+    recommendation = `Sugerencia: Revise las políticas de Row Level Security (RLS) en Supabase para la tabla "${tableName || 'afectada'}". Asegúrese de filtrar correctamente por organization_id.`;
+  } else if (msgLower.includes('violates foreign key')) {
+    text = 'Relación inválida.';
+    recommendation = 'Sugerencia: Revise que el ID del registro relacionado (foreign key) exista en la tabla principal y no esté vacío.';
+  } else {
+    recommendation = 'Verifique las políticas de RLS, la existencia de tablas, o ejecute la migración supabase_migration_schema_guard.sql';
+  }
+
+  return { text, recommendation };
+};
+
 export default function AuditTestingCenter({ organizationId, userRole }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loadingDiag, setLoadingDiag] = useState(true);
@@ -686,8 +720,12 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
           const computed = calculateProposalTotals(sampleProposal, sampleItems);
           
           // Verify totals: 490000 + 30% (147000) = 637000 subtotal net. With 19% IVA (121030) = 758030
-          if (computed.subtotal !== 637000 || computed.total !== 758030) {
-            throw new Error(`Cálculos incorrectos: subtotal=${computed.subtotal} (esperado 637000), total=${computed.total} (esperado 758030)`);
+          if (computed.subtotal !== 490000 || 
+              computed.adjustmentAmount !== 147000 || 
+              computed.net !== 637000 || 
+              computed.vat !== 121030 || 
+              computed.total !== 758030) {
+            throw new Error(`Cálculos incorrectos: subtotal_base=${computed.subtotal} (esp. 490000), adjustment=${computed.adjustmentAmount} (esp. 147000), net_amount=${computed.net} (esp. 637000), tax_amount=${computed.vat} (esp. 121030), total=${computed.total} (esp. 758030)`);
           }
 
           result.status = 'OK';
@@ -699,17 +737,35 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
         case 11: { // Probar usuario administrador secundario
           result.table = 'organization_members (policies)';
 
-          const { data: admins, error: admErr } = await supabase
+          const { data: members, error: admErr } = await supabase
             .from('organization_members')
-            .select('id, user_id, role')
+            .select('*')
             .eq('organization_id', organizationId)
-            .eq('role', 'administrador');
+            .eq('active', true);
 
           if (admErr) throw admErr;
 
-          result.status = 'OK';
-          result.record = `Encontrados ${admins ? admins.length : 0} administradores en la organización.`;
-          result.recommendation = 'Políticas RLS e índices de roles de administrador comprobados con éxito.';
+          const admins = (members || []).filter(m => {
+            const r = String(m.role || '').toLowerCase();
+            const hasAllPerm = m.permissions && (m.permissions.all === true || m.permissions.all === 'true');
+            return r === 'admin' || r === 'administrador' || hasAllPerm;
+          });
+
+          if (admins.length === 0) {
+            result.status = 'Error';
+            result.message = 'No hay administradores activos en la organización.';
+            result.recommendation = 'Asegúrese de registrar al menos un miembro con rol "administrador" y active = true.';
+          } else {
+            result.status = 'OK';
+            const adminList = admins.map(a => {
+              if (currentUser && a.user_id === currentUser.id) {
+                return `${currentUser.email} (tú, ${a.role})`;
+              }
+              return `ID: ${a.user_id.slice(0, 8)}... (${a.role})`;
+            }).join(', ');
+            result.record = `Encontrados ${admins.length} administradores activos en la organización: ${adminList}`;
+            result.recommendation = 'Políticas RLS e índices de roles de administrador comprobados con éxito.';
+          }
           break;
         }
 
@@ -719,8 +775,9 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
     } catch (err) {
       console.error(`Error running test ${testNumber}:`, err);
       result.status = 'Error';
-      result.message = err.message;
-      result.recommendation = 'Verifique las políticas de RLS, la existencia de tablas, o ejecute la migración supabase_migration_schema_guard.sql';
+      const parsed = parseQAError(err.message, result.table);
+      result.message = parsed.text;
+      result.recommendation = parsed.recommendation;
     } finally {
       setTestResults(prev => ({ ...prev, [testNumber]: result }));
       setRunningTests(prev => ({ ...prev, [testNumber]: false }));
