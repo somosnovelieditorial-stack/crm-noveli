@@ -4,8 +4,9 @@ import {
   Settings2, Building2, Landmark, ShieldAlert,
   Save, Plus, Trash2, Edit2, CheckCircle2, AlertTriangle, ArrowUpDown
 } from 'lucide-react';
+import AuditTestingCenter from './AuditTestingCenter';
 
-export default function Configuration() {
+export default function Configuration({ isReadOnly, userRole, organizationId }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState({
@@ -453,6 +454,18 @@ export default function Configuration() {
         >
           Roles y Permisos
         </button>
+        {userRole === 'administrador' && (
+          <button
+            onClick={() => setActiveTab('audit')}
+            className={`px-4 py-2.5 font-bold text-xs border-b-2 transition-all cursor-pointer ${
+              activeTab === 'audit' 
+                ? 'border-brand-500 text-brand-600 dark:text-brand-450' 
+                : 'border-transparent text-slate-400 hover:text-slate-655'
+            }`}
+          >
+            Centro de Pruebas (Auditoría)
+          </button>
+        )}
       </div>
 
       {/* Tab Contents */}
@@ -1146,6 +1159,10 @@ export default function Configuration() {
             </form>
           </div>
         </div>
+      )}
+
+      {activeTab === 'audit' && userRole === 'administrador' && (
+        <AuditTestingCenter organizationId={organizationId} userRole={userRole} />
       )}
     </div>
   );
