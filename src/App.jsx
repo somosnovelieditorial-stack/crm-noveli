@@ -27,6 +27,7 @@ import CurrencyRates from './components/CurrencyRates';
 import Configuration from './components/Configuration';
 import Staff from './components/Staff';
 import Website from './components/Website';
+import CRMAudit from './components/CRMAudit';
 
 // Permission Helper
 import { hasPermission, formatCurrency, canAccessModule, canPerformAction } from './utils';
@@ -120,7 +121,8 @@ const menuGroups = [
     icon: <Settings2 className="w-4 h-4" />,
     items: [
       { id: 'configuration', label: 'Configuración General', tab: 'configuration' },
-      { id: 'integrations', label: 'Integraciones', tab: 'integrations' }
+      { id: 'integrations', label: 'Integraciones', tab: 'integrations' },
+      { id: 'settings-audit', label: 'Auditoría del CRM', tab: 'settings-audit' }
     ]
   }
 ];
@@ -215,6 +217,9 @@ function SeguimientosView({ isReadOnly }) {
 const getTabFromPath = (path) => {
   const cleanPath = path.toLowerCase().replace(/^\/|\/$/g, '');
   
+  if (cleanPath === 'configuracion/auditoria') return 'settings-audit';
+  if (cleanPath === 'configuracion/auditoría') return 'settings-audit';
+  if (cleanPath === 'audit') return 'settings-audit';
   if (cleanPath === 'propuestas-comerciales') return 'quotations';
   if (cleanPath === 'quotations') return 'quotations';
   if (cleanPath === 'propuestas') return 'quotations';
@@ -265,7 +270,8 @@ const getTabFromPath = (path) => {
     'integraciones': 'integrations',
     'notifications': 'notifications',
     'notificaciones': 'notifications',
-    'seguimientos': 'seguimientos'
+    'seguimientos': 'seguimientos',
+    'settings-audit': 'settings-audit'
   };
 
   return mapping[cleanPath] || 'dashboard';
@@ -300,7 +306,8 @@ const getPathFromTab = (tab) => {
     'website-servicios': '/sitio-web/servicios',
     'website-libros': '/sitio-web/libros',
     'website-enlaces': '/sitio-web/enlaces',
-    'website-secciones': '/sitio-web/secciones'
+    'website-secciones': '/sitio-web/secciones',
+    'settings-audit': '/configuracion/auditoria'
   };
 
   return mapping[tab] || '/';
@@ -1028,6 +1035,16 @@ export default function App() {
         case 'reports': return <Reports {...commonProps} />;
         case 'configuration': return <Configuration {...commonProps} />;
         case 'integrations': return <Integrations {...commonProps} />;
+        case 'settings-audit': {
+          if (userRole !== 'administrador' && userRole !== 'admin') {
+            return (
+              <div className="p-8 text-center text-rose-500 font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                No tienes permiso para acceder a Auditoría del CRM.
+              </div>
+            );
+          }
+          return <CRMAudit {...commonProps} />;
+        }
         case 'notifications': return (
           <div className="space-y-6 animate-fade-in text-slate-800 dark:text-slate-100">
             <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
