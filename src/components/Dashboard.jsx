@@ -3,7 +3,7 @@ import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit, convertToClp, filterByPeriod } from '../utils';
 import PeriodFilter from './PeriodFilter';
 import { 
-  TrendingUp, TrendingDown, DollarSign, Percent, 
+  TrendingUp, TrendingDown, DollarSign, Percent, X,
   Users, UserCheck, BookOpen, AlertCircle, Calendar,
   Clock, CheckCircle, Award, Landmark, PiggyBank, FileText, ArrowUpRight, ShieldCheck, ChevronRight
 } from 'lucide-react';
@@ -11,6 +11,17 @@ import {
 export default function Dashboard({ organizationId, realtimeTrigger }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('finanzas'); // 'finanzas' | 'operativa'
+  const [activeDetailCard, setActiveDetailCard] = useState(null);
+  const [rawData, setRawData] = useState({
+    incomes: [],
+    expenses: [],
+    payroll: [],
+    clients: [],
+    prospects: [],
+    services: [],
+    reserveMovements: [],
+    allocations: []
+  });
   const [stats, setStats] = useState({
     financials: {
       incomesTotal: 0,
@@ -531,12 +542,660 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         recentServices
       });
 
+      setRawData({
+        incomes,
+        expenses,
+        payroll,
+        clients,
+        prospects,
+        services,
+        reserveMovements,
+        allocations
+      });
+
     } catch (error) {
       console.error("Error loading dashboard data:", error);
     } finally {
       setLoading(false);
     }
   }, [period, realtimeTrigger]);
+
+  const navigateToModule = (path) => {
+    window.history.pushState(null, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
+  const exportToCSV = (filename, headers, rows) => {
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF"
+      + [headers.join(","), ...rows.map(r => r.map(val => `"${String(val || '').replace(/"/g, '""')}"`).join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const getDetailItems = () => {
+    const { incomes, expenses, payroll, clients, prospects, services, reserveMovements, allocations } = rawData;
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    const getNormalizedAmount = (item) => {
+      if (!item) return 0;
+      const val = item.amount !== undefined && item.amount !== null ? item.amount :
+                  item.value !== undefined && item.value !== null ? item.value :
+                  item.total !== undefined && item.total !== null ? item.total :
+                  item.calculated_amount !== undefined && item.calculated_amount !== null ? item.calculated_amount :
+                  item.total_agreed_amount !== undefined && item.total_agreed_amount !== null ? item.total_agreed_amount :
+                  item.agreed_amount !== undefined && item.agreed_amount !== null ? item.agreed_amount : 0;
+      return parseFloat(val) || 0;
+    };
+
+    const monthIncomes = filterByPeriod(incomes || [], 'date', period);
+    const monthExpenses = filterByPeriod(expenses || [], 'date', period);
+    const monthPayroll = filterByPeriod(payroll || [], 'date', period);
+    const periodMovements = filterByPeriod(reserveMovements || [], 'date', period);
+
+    const periodAllocations = (allocations || []).filter(alloc => {
+      const parentIncome = (incomes || []).find(inc => inc.id === alloc.income_id);
+      if (!parentIncome) return false;
+      const filtered = filterByPeriod([parentIncome], 'date', period);
+      return filtered.length > 0;
+    });
+
+    switch (activeDetailCard) {
+      case 'total_disponible': {
+        const list = [];
+        monthIncomes.forEach(i => {
+          if (i.status !== 'pagado') return;
+          const amt = getNormalizedAmount(i);
+          list.push({
+            date: i.date,
+            concept: i.concept,
+            type: 'Ingreso (+)',
+            amount: convertToClp(amt, i.currency)
+          });
+        });
+        monthExpenses.forEach(e => {
+          const isTax = e.tax_payment || e.category === 'impuestos';
+          if (e.affects_cashflow === false) return;
+          list.push({
+            date: e.date,
+            concept: `${isTax ? 'Impuesto: ' : ''}${e.concept || ''}`,
+            type: 'Gasto (-)',
+            amount: -convertToClp(getNormalizedAmount(e), e.currency)
+          });
+        });
+        monthPayroll.forEach(p => {
+          if (p.status !== 'pagado') return;
+          list.push({
+            date: p.date,
+            concept: `Pago Personal: ${p.concept || ''}`,
+            type: 'Sueldo (-)',
+            amount: -convertToClp(getNormalizedAmount(p), p.currency)
+          });
+        });
+        periodMovements.forEach(m => {
+          const amt = convertToClp(getNormalizedAmount(m), m.currency);
+          list.push({
+            date: m.date,
+            concept: `Retención Reserva: ${m.concept || ''}`,
+            type: m.type === 'entrada' || m.type === 'ajuste' ? 'Reserva (+)' : 'Reserva (-)',
+            amount: m.type === 'entrada' || m.type === 'ajuste' ? amt : -amt
+          });
+        });
+        return {
+          title: 'Total Disponible Estimado',
+          description: 'Desglose del saldo líquido en caja disponible para operaciones en el periodo.',
+          formula: 'Ingresos netos pagados - Gastos afectos a caja - Sueldos pagados - Impuestos pagados + Movimientos de reserva',
+          headers: ['Fecha', 'Concepto', 'Clasificación', 'Monto (CLP)'],
+          rows: list.sort((a,b) => new Date(b.date) - new Date(a.date)).map(item => [
+            item.date || '-',
+            item.concept || 'Sin concepto',
+            item.type,
+            formatCurrency(item.amount, 'CLP')
+          ]),
+          rawRows: list,
+          modulePath: '/ingresos'
+        };
+      }
+
+      case 'utility': {
+        const list = [];
+        monthIncomes.forEach(i => {
+          if (i.status !== 'pagado') return;
+          const split = calculateVatSplit(getNormalizedAmount(i), i.includes_vat);
+          list.push({
+            date: i.date,
+            concept: i.concept,
+            type: 'Ingreso Neto (+)',
+            amount: convertToClp(split.net, i.currency)
+          });
+        });
+        monthExpenses.forEach(e => {
+          const isTax = e.tax_payment || e.category === 'impuestos';
+          if (isTax) return;
+          const split = calculateVatSplit(getNormalizedAmount(e), e.includes_vat);
+          const amt = e.deductible ? convertToClp(split.net, e.currency) : convertToClp(getNormalizedAmount(e), e.currency);
+          list.push({
+            date: e.date,
+            concept: e.concept,
+            type: e.deductible ? 'Gasto Neto Deducible (-)' : 'Gasto Neto No Deducible (-)',
+            amount: -amt
+          });
+        });
+        monthPayroll.forEach(p => {
+          if (p.status !== 'pagado') return;
+          list.push({
+            date: p.date,
+            concept: `Honorarios: ${p.concept || ''}`,
+            type: 'Sueldo (-)',
+            amount: -convertToClp(getNormalizedAmount(p), p.currency)
+          });
+        });
+        monthExpenses.forEach(e => {
+          const isTax = e.tax_payment || e.category === 'impuestos';
+          if (!isTax) return;
+          list.push({
+            date: e.date,
+            concept: `Impuestos: ${e.concept || ''}`,
+            type: 'Impuestos (-)',
+            amount: -convertToClp(getNormalizedAmount(e), e.currency)
+          });
+        });
+
+        return {
+          title: 'Utilidad Neta Estimada',
+          description: 'Resultado neto antes del cierre financiero en el periodo.',
+          formula: 'Ingresos netos - Gastos netos - Pagos personal - Impuestos pagados',
+          headers: ['Fecha', 'Concepto', 'Clasificación', 'Monto (CLP)'],
+          rows: list.sort((a,b) => new Date(b.date) - new Date(a.date)).map(item => [
+            item.date || '-',
+            item.concept || 'Sin concepto',
+            item.type,
+            formatCurrency(item.amount, 'CLP')
+          ]),
+          rawRows: list,
+          modulePath: '/gastos'
+        };
+      }
+
+      case 'reserve': {
+        const list = [];
+        periodAllocations.forEach(a => {
+          const parentIncome = (incomes || []).find(inc => inc.id === a.income_id);
+          const rate = parentIncome ? Number(parentIncome.exchange_rate || 1) : 1;
+          list.push({
+            date: parentIncome?.date || '-',
+            concept: `Retención sobre Ingreso: ${parentIncome?.concept || ''}`,
+            type: 'Retención de Venta',
+            amount: Number(a.calculated_amount) * rate
+          });
+        });
+        periodMovements.forEach(m => {
+          const amt = convertToClp(getNormalizedAmount(m), m.currency);
+          list.push({
+            date: m.date,
+            concept: m.concept,
+            type: m.type === 'entrada' || m.type === 'ajuste' ? 'Ajuste Entrada' : 'Salida de Reserva',
+            amount: m.type === 'entrada' || m.type === 'ajuste' ? amt : -amt
+          });
+        });
+        return {
+          title: 'Reserva Operacional',
+          description: 'Movimientos y retenciones destinadas a la reserva de contingencia.',
+          formula: 'Retenciones del periodo + Entradas/Ajustes manuales - Salidas manuales',
+          headers: ['Fecha', 'Concepto', 'Tipo Movimiento', 'Monto (CLP)'],
+          rows: list.sort((a,b) => new Date(b.date) - new Date(a.date)).map(item => [
+            item.date || '-',
+            item.concept || 'Sin concepto',
+            item.type,
+            formatCurrency(item.amount, 'CLP')
+          ]),
+          rawRows: list,
+          modulePath: '/reserva'
+        };
+      }
+
+      case 'incomes': {
+        return {
+          title: 'Detalle de Ingresos',
+          description: 'Listado de ingresos recibidos durante el periodo.',
+          headers: ['Fecha', 'Cliente / Prospecto', 'Concepto', 'Monto Bruto', 'Monto Neto', 'IVA', 'Método'],
+          rows: monthIncomes.map(i => {
+            const client = (clients || []).find(c => c.id === i.client_id) || (prospects || []).find(p => p.id === i.client_id);
+            const amt = getNormalizedAmount(i);
+            const split = calculateVatSplit(amt, i.includes_vat);
+            return [
+              i.date || '-',
+              client ? client.name : 'Venta externa',
+              i.concept || 'Sin concepto',
+              formatCurrency(amt, i.currency),
+              formatCurrency(split.net, i.currency),
+              formatCurrency(split.vat, i.currency),
+              i.payment_method || '-'
+            ];
+          }),
+          rawRows: monthIncomes,
+          modulePath: '/ingresos'
+        };
+      }
+
+      case 'expenses': {
+        return {
+          title: 'Detalle de Gastos',
+          description: 'Gastos generales y operacionales registrados en el periodo.',
+          headers: ['Fecha', 'Categoría', 'Proveedor', 'Concepto', 'Monto', 'Deducible', 'Afecta Caja'],
+          rows: monthExpenses.map(e => [
+            e.date || '-',
+            e.category || '-',
+            e.provider || '-',
+            e.concept || '-',
+            formatCurrency(getNormalizedAmount(e), e.currency),
+            e.deductible ? 'Sí' : 'No',
+            e.affects_cashflow !== false ? 'Sí' : 'No'
+          ]),
+          rawRows: monthExpenses,
+          modulePath: '/gastos'
+        };
+      }
+
+      case 'payroll': {
+        const paidPayroll = monthPayroll.filter(p => p.status === 'pagado');
+        return {
+          title: 'Pagos a Personal',
+          description: 'Liquidaciones de sueldo y honorarios pagados en el periodo.',
+          headers: ['Nombre Colaborador', 'Rol', 'Fecha Pago', 'Monto', 'Periodo'],
+          rows: paidPayroll.map(p => [
+            p.staff_name || p.member_name || 'Colaborador',
+            p.role || '-',
+            p.date || p.payment_date || '-',
+            formatCurrency(getNormalizedAmount(p), p.currency),
+            p.period || '-'
+          ]),
+          rawRows: paidPayroll,
+          modulePath: '/personal'
+        };
+      }
+
+      case 'vat': {
+        const list = [];
+        monthIncomes.forEach(i => {
+          if (i.status !== 'pagado') return;
+          const amt = getNormalizedAmount(i);
+          const split = calculateVatSplit(amt, i.includes_vat);
+          if (split.vat > 0) {
+            list.push({
+              date: i.date,
+              concept: `Débito: ${i.concept || ''}`,
+              type: 'Débito Fiscal (Venta)',
+              amount: convertToClp(split.vat, i.currency)
+            });
+          }
+        });
+        monthExpenses.forEach(e => {
+          if (!e.deductible) return;
+          const amt = getNormalizedAmount(e);
+          const split = calculateVatSplit(amt, e.includes_vat);
+          if (split.vat > 0) {
+            list.push({
+              date: e.date,
+              concept: `Crédito: ${e.concept || ''}`,
+              type: 'Crédito Fiscal (Compra)',
+              amount: -convertToClp(split.vat, e.currency)
+            });
+          }
+        });
+
+        return {
+          title: 'IVA por Pagar Estimado',
+          description: 'Balance estimado entre IVA devengado en ventas y compras en el periodo.',
+          formula: 'IVA Débito (Ventas) - IVA Crédito (Compras Deducibles) = IVA por Pagar',
+          headers: ['Fecha', 'Concepto', 'Clasificación', 'Monto (CLP)'],
+          rows: list.sort((a,b) => new Date(b.date) - new Date(a.date)).map(item => [
+            item.date || '-',
+            item.concept || 'Sin concepto',
+            item.type,
+            formatCurrency(item.amount, 'CLP')
+          ]),
+          rawRows: list,
+          modulePath: '/gastos'
+        };
+      }
+
+      case 'taxes': {
+        const taxExpenses = monthExpenses.filter(e => e.tax_payment || e.category === 'impuestos');
+        return {
+          title: 'Impuestos Pagados',
+          description: 'Gastos clasificados como obligaciones tributarias en el periodo.',
+          headers: ['Fecha', 'Tipo Impuesto', 'Concepto', 'Monto (CLP)', 'Categoría'],
+          rows: taxExpenses.map(t => [
+            t.date || '-',
+            t.concept || 'Pago Impuesto',
+            t.concept || '-',
+            formatCurrency(getNormalizedAmount(t), t.currency),
+            t.category || '-'
+          ]),
+          rawRows: taxExpenses,
+          modulePath: '/gastos'
+        };
+      }
+
+      case 'receivables': {
+        const list = [];
+        const periodClients = filterByPeriod(clients || [], 'created_at', period);
+        periodClients.forEach(c => {
+          const payStatus = String(c.payment_status || '').toLowerCase().trim();
+          if (payStatus === 'pagado') return;
+          if (c.balance_due !== null && c.balance_due !== undefined && parseFloat(c.balance_due) <= 0) return;
+          const notLost = !['perdido', 'perdido / rechazado'].includes(String(c.status || '').toLowerCase().trim());
+          if (!notLost) return;
+
+          let pendingAmt = 0;
+          let totalAgreed = 0;
+          if (c.balance_due !== null && c.balance_due !== undefined) {
+            pendingAmt = parseFloat(c.balance_due);
+            totalAgreed = parseFloat(c.total_agreed_amount || c.amount || c.agreed_amount || 0);
+          } else {
+            totalAgreed = parseFloat(c.total_agreed_amount || c.amount || c.agreed_amount || 0);
+            pendingAmt = totalAgreed - (parseFloat(c.amount_paid) || 0);
+          }
+          if (pendingAmt > 0) {
+            list.push({
+              name: c.name,
+              type: 'Cliente / Venta',
+              agreed: totalAgreed,
+              paid: totalAgreed - pendingAmt,
+              due: pendingAmt,
+              currency: c.currency || c.preferred_currency || 'CLP'
+            });
+          }
+        });
+        const periodServices = filterByPeriod(services || [], 'start_date', period);
+        periodServices.forEach(s => {
+          const payStatus = String(s.payment_status || '').toLowerCase().trim();
+          if (payStatus === 'pagado') return;
+          if (s.balance_due !== null && s.balance_due !== undefined && parseFloat(s.balance_due) <= 0) return;
+          const notClosed = !['cerrado', 'entregado', 'finalizado'].includes(String(s.status || '').toLowerCase().trim());
+          if (!notClosed) return;
+
+          let pendingAmt = 0;
+          let totalAgreed = 0;
+          if (s.balance_due !== null && s.balance_due !== undefined) {
+            pendingAmt = parseFloat(s.balance_due);
+            totalAgreed = parseFloat(s.total_agreed_amount || s.value || s.amount || 0);
+          } else {
+            totalAgreed = parseFloat(s.total_agreed_amount || s.value || s.amount || 0);
+            pendingAmt = totalAgreed - (parseFloat(s.amount_paid) || 0);
+          }
+          if (pendingAmt > 0) {
+            list.push({
+              name: s.book_title || s.title || 'Servicio Editorial',
+              type: 'Proyecto Contratado',
+              agreed: totalAgreed,
+              paid: totalAgreed - pendingAmt,
+              due: pendingAmt,
+              currency: s.currency || 'CLP'
+            });
+          }
+        });
+
+        return {
+          title: 'Detalle de Cuentas por Cobrar',
+          description: 'Saldos pendientes de clientes y proyectos iniciados en el periodo.',
+          headers: ['Nombre / Concepto', 'Tipo', 'Total Acordado', 'Monto Pagado', 'Saldo Pendiente'],
+          rows: list.map(item => [
+            item.name || '-',
+            item.type,
+            formatCurrency(item.agreed, item.currency),
+            formatCurrency(item.paid, item.currency),
+            formatCurrency(item.due, item.currency)
+          ]),
+          rawRows: list,
+          modulePath: '/ingresos'
+        };
+      }
+
+      case 'active_clients': {
+        const activeList = (clients || []).filter(c => {
+          const status = String(c.status || '').toLowerCase().trim();
+          const activeStatuses = [
+            'cliente', 'activo', 'pago recibido', 'listo para iniciar', 'en proceso',
+            'en proceso editorial', 'esperando manuscrito/archivos',
+            'esperando archivos/materiales', 'contrato firmado recibido'
+          ];
+          return activeStatuses.includes(status);
+        });
+
+        return {
+          title: 'Clientes Activos',
+          description: 'Listado completo de clientes activos en producción o con contrato vigente.',
+          headers: ['Nombre', 'Estado', 'País / Región', 'Fecha de Creación'],
+          rows: activeList.map(c => [
+            c.name || '-',
+            c.status || '-',
+            c.country || c.city || '-',
+            c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'
+          ]),
+          rawRows: activeList,
+          modulePath: '/clientes'
+        };
+      }
+
+      case 'active_prospects': {
+        const activePros = (prospects || []).filter(p => {
+          const status = String(p.status || '').toLowerCase().trim();
+          const isConvertedOrExcluded = 
+            p.converted_to_client_id || 
+            p.converted_client_id || 
+            p.converted_to_client === true || 
+            ['convertido', 'cliente', 'finalizado', 'perdido', 'perdido / rechazado'].includes(status);
+          return !isConvertedOrExcluded;
+        });
+
+        return {
+          title: 'Prospectos Activos',
+          description: 'Oportunidades comerciales abiertas y cotizaciones en seguimiento.',
+          headers: ['Nombre Prospecto', 'Etapa / Estado', 'Contacto', 'Fecha de Registro'],
+          rows: activePros.map(p => [
+            p.name || '-',
+            p.status || '-',
+            p.email || p.phone || '-',
+            p.created_at ? new Date(p.created_at).toLocaleDateString() : '-'
+          ]),
+          rawRows: activePros,
+          modulePath: '/prospects'
+        };
+      }
+
+      case 'services_process': {
+        const processList = (services || []).filter(s => {
+          const status = String(s.status || '').toLowerCase().trim();
+          return !['cerrado', 'entregado', 'finalizado'].includes(status);
+        });
+
+        return {
+          title: 'Servicios en Proceso',
+          description: 'Proyectos editoriales en producción activa actualmente.',
+          headers: ['Título del Libro', 'Tipo Servicio', 'Avance %', 'Etapa Actual', 'Entrega Estimada'],
+          rows: processList.map(s => [
+            s.book_title || s.title || '-',
+            s.type || s.service_type || '-',
+            `${s.progress || s.advance_percent || 0}%`,
+            s.status || '-',
+            s.estimated_delivery_date || s.estimated_delivery || '-'
+          ]),
+          rawRows: processList,
+          modulePath: '/services'
+        };
+      }
+
+      case 'avg_progress': {
+        const activeServicesList = (services || []).filter(s => {
+          return !['cerrado', 'entregado', 'finalizado'].includes(String(s.status || '').toLowerCase().trim());
+        });
+
+        return {
+          title: 'Avance Promedio de Servicios',
+          description: 'Proyectos editoriales activos considerados para promediar el progreso general.',
+          headers: ['Título del Libro', 'Tipo', 'Progreso Individual', 'Etapa Actual'],
+          rows: activeServicesList.map(s => [
+            s.book_title || s.title || '-',
+            s.type || s.service_type || '-',
+            `${s.progress || s.advance_percent || 0}%`,
+            s.status || '-'
+          ]),
+          rawRows: activeServicesList,
+          modulePath: '/services'
+        };
+      }
+
+      case 'atrasados': {
+        const overdueList = (services || []).filter(s => {
+          const status = String(s.status || '').toLowerCase().trim();
+          const isClosed = ['cerrado', 'entregado', 'finalizado'].includes(status);
+          const deliveryDateStr = s.estimated_delivery_date || s.estimated_delivery;
+          if (isClosed || !deliveryDateStr) return false;
+          return new Date(deliveryDateStr) < new Date(todayStr);
+        });
+
+        return {
+          title: 'Servicios Atrasados',
+          description: 'Proyectos en proceso que han superado su fecha de entrega estimada.',
+          headers: ['Título del Libro', 'Etapa Actual', 'Fecha de Entrega Estimada', 'Avance %'],
+          rows: overdueList.map(s => [
+            s.book_title || s.title || '-',
+            s.status || '-',
+            s.estimated_delivery_date || s.estimated_delivery || '-',
+            `${s.progress || s.advance_percent || 0}%`
+          ]),
+          rawRows: overdueList,
+          modulePath: '/services'
+        };
+      }
+
+      case 'proximos': {
+        const upcomingList = (services || []).filter(s => {
+          const status = String(s.status || '').toLowerCase().trim();
+          const isClosed = ['cerrado', 'entregado', 'finalizado'].includes(status);
+          const deliveryDateStr = s.estimated_delivery_date || s.estimated_delivery;
+          if (isClosed || !deliveryDateStr) return false;
+          const diffTime = new Date(deliveryDateStr) - new Date(todayStr);
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          return diffDays >= 0 && diffDays <= 15;
+        });
+
+        return {
+          title: 'Servicios Próximos a Vencer (15 días)',
+          description: 'Servicios en proceso cuyos plazos vencen en los siguientes 15 días.',
+          headers: ['Título del Libro', 'Etapa Actual', 'Entrega Estimada', 'Días Restantes'],
+          rows: upcomingList.map(s => {
+            const diffTime = new Date(s.estimated_delivery_date || s.estimated_delivery) - new Date(todayStr);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return [
+              s.book_title || s.title || '-',
+              s.status || '-',
+              s.estimated_delivery_date || s.estimated_delivery || '-',
+              `${diffDays} días`
+            ];
+          }),
+          rawRows: upcomingList,
+          modulePath: '/services'
+        };
+      }
+
+      case 'finalizados': {
+        const closedList = (services || []).filter(s => {
+          const status = String(s.status || '').toLowerCase().trim();
+          return ['cerrado', 'entregado', 'finalizado'].includes(status);
+        });
+
+        return {
+          title: 'Servicios Finalizados',
+          description: 'Proyectos editoriales concluidos y entregados satisfactoriamente.',
+          headers: ['Título del Libro', 'Tipo', 'Etapa de Cierre', 'Fecha Cierre / Modificación'],
+          rows: closedList.map(s => [
+            s.book_title || s.title || '-',
+            s.type || s.service_type || '-',
+            s.status || '-',
+            s.updated_at ? new Date(s.updated_at).toLocaleDateString() : '-'
+          ]),
+          rawRows: closedList,
+          modulePath: '/services'
+        };
+      }
+
+      case 'pending_contracts': {
+        const pendingContractsList = (clients || []).filter(c => {
+          const notLost = !['perdido', 'perdido / rechazado'].includes(String(c.status || '').toLowerCase().trim());
+          return notLost && c.contract_sent && !c.contract_signed_received;
+        });
+
+        return {
+          title: 'Contratos Pendientes de Firma',
+          description: 'Clientes con propuesta aceptada y contrato enviado pero aún no firmado.',
+          headers: ['Cliente', 'Estado', 'País / Ciudad', 'Fecha Creación'],
+          rows: pendingContractsList.map(c => [
+            c.name || '-',
+            c.status || '-',
+            c.country || c.city || '-',
+            c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'
+          ]),
+          rawRows: pendingContractsList,
+          modulePath: '/clientes'
+        };
+      }
+
+      case 'pending_files': {
+        const pendingFilesList = (clients || []).filter(c => {
+          const notLost = !['perdido', 'perdido / rechazado'].includes(String(c.status || '').toLowerCase().trim());
+          if (!notLost) return false;
+          const servicesList = Array.isArray(c.selected_services) ? c.selected_services : [];
+          const reqManuscript = servicesList.some(s => s && s.requires_manuscript);
+          const reqMaterials = servicesList.some(s => s && s.requires_materials);
+          return (reqManuscript && !c.files_received) || (reqMaterials && !c.materials_received);
+        });
+
+        return {
+          title: 'Manuscritos o Archivos Pendientes',
+          description: 'Clientes que no han entregado sus archivos de manuscrito o materiales requeridos para iniciar la producción.',
+          headers: ['Cliente', 'Estado de Recepción', 'País / Ciudad', 'Fecha Creación'],
+          rows: pendingFilesList.map(c => {
+            const servicesList = Array.isArray(c.selected_services) ? c.selected_services : [];
+            const reqManuscript = servicesList.some(s => s && s.requires_manuscript);
+            const reqMaterials = servicesList.some(s => s && s.requires_materials);
+            const statusStr = [
+              reqManuscript && !c.files_received ? 'Falta Manuscrito' : '',
+              reqMaterials && !c.materials_received ? 'Falta Materiales' : ''
+            ].filter(Boolean).join(' y ');
+            return [
+              c.name || '-',
+              statusStr || 'Pendiente de entrega',
+              c.country || c.city || '-',
+              c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'
+            ];
+          }),
+          rawRows: pendingFilesList,
+          modulePath: '/clientes'
+        };
+      }
+
+      default:
+        return null;
+    }
+  };
+
+  const handleCSVExport = () => {
+    const details = getDetailItems();
+    if (!details) return;
+    exportToCSV(
+      `${details.title.toLowerCase().replace(/\s+/g, '_')}_detalle.csv`,
+      details.headers,
+      details.rows
+    );
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -614,7 +1273,10 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
               {/* Tarjetas Principales */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Total Disponible Estimado */}
-                <div className="bg-gradient-to-br from-amber-50/70 to-white dark:from-slate-900 dark:to-slate-900/40 p-6 rounded-2xl border-2 border-amber-200/60 dark:border-amber-900/50 shadow-xs flex flex-col justify-between group hover:shadow-md transition-all relative overflow-hidden">
+                <div 
+                  onClick={() => handleCardClick('total_disponible')}
+                  className="bg-gradient-to-br from-amber-50/70 to-white dark:from-slate-900 dark:to-slate-900/40 p-6 rounded-2xl border-2 border-amber-200/60 dark:border-amber-900/50 shadow-xs flex flex-col justify-between group hover:shadow-lg hover:-translate-y-0.5 cursor-pointer transition-all duration-300 relative overflow-hidden"
+                >
                   <div className="absolute top-0 right-0 w-24 h-24 bg-amber-300/10 rounded-full blur-xl pointer-events-none"></div>
                   <div className="flex justify-between items-start">
                     <div>
@@ -627,13 +1289,22 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
                       <Landmark className="w-5 h-5" />
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-4 font-medium border-t border-amber-200/40 pt-3">
-                    Caja Disponible Estimada (Utilidad + Reserva)
-                  </p>
+                  <div className="flex justify-between items-center mt-4 border-t border-amber-200/40 pt-3">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                      Caja Disponible Estimada
+                    </p>
+                    <span className="text-[10px] text-amber-700 dark:text-amber-400 font-bold flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-all">
+                      Ver detalle
+                      <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    </span>
+                  </div>
                 </div>
 
                 {/* Utilidad Estimada */}
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:shadow-md transition-all">
+                <div 
+                  onClick={() => handleCardClick('utility')}
+                  className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between group hover:shadow-lg hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Utilidad Neta Estimada</span>
@@ -645,13 +1316,22 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
                       <TrendingUp className="w-5 h-5" />
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-4 font-medium border-t border-slate-100 dark:border-slate-800/60 pt-3">
-                    Ingresos Netos - Gastos Netos - Sueldos Pagados
-                  </p>
+                  <div className="flex justify-between items-center mt-4 border-t border-slate-100 dark:border-slate-800/60 pt-3">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                      Ingresos - Gastos - Sueldos
+                    </p>
+                    <span className="text-[10px] text-indigo-650 dark:text-indigo-400 font-bold flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-all">
+                      Ver detalle
+                      <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    </span>
+                  </div>
                 </div>
 
                 {/* Reserva Operacional */}
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:shadow-md transition-all">
+                <div 
+                  onClick={() => handleCardClick('reserve')}
+                  className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between group hover:shadow-lg hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Reserva Operacional</span>
@@ -663,90 +1343,119 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
                       <PiggyBank className="w-5 h-5" />
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-4 font-medium border-t border-slate-100 dark:border-slate-800/60 pt-3">
-                    Movimientos y retenciones del periodo
-                  </p>
+                  <div className="flex justify-between items-center mt-4 border-t border-slate-100 dark:border-slate-800/60 pt-3">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                      Retenciones y movimientos
+                    </p>
+                    <span className="text-[10px] text-indigo-650 dark:text-indigo-400 font-bold flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-all">
+                      Ver detalle
+                      <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    </span>
+                  </div>
                 </div>
               </div>
 
               {/* Detalle Financiero Secundario */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                 {/* Ingresos del periodo */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between">
+                <div 
+                  onClick={() => handleCardClick('incomes')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
                   <div>
                     <span className="text-[10px] font-semibold text-slate-400 uppercase">Ingresos</span>
                     <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
                       {formatCurrency(stats.financials.incomesTotal, 'CLP')}
                     </div>
                   </div>
-                  <div className="text-[10px] text-emerald-600 dark:text-emerald-500 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 space-y-1">
-                    <div>Neto: {formatCurrency(stats.financials.incomesNet, 'CLP')}</div>
+                  <div className="text-[10px] text-emerald-600 dark:text-emerald-500 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex justify-between items-center">
+                    <span>Neto: {formatCurrency(stats.financials.incomesNet, 'CLP')}</span>
+                    <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </div>
 
                 {/* Gastos del periodo */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between">
+                <div 
+                  onClick={() => handleCardClick('expenses')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
                   <div>
                     <span className="text-[10px] font-semibold text-slate-400 uppercase">Gastos</span>
                     <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
                       {formatCurrency(stats.financials.expensesTotal, 'CLP')}
                     </div>
                   </div>
-                  <div className="text-[10px] text-rose-500 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 space-y-1">
-                    <div>Ded: {formatCurrency(stats.financials.expensesDeductible, 'CLP')}</div>
-                    <div className="text-slate-500">No Ded: {formatCurrency(stats.financials.expensesNoDeductible, 'CLP')}</div>
+                  <div className="text-[10px] text-rose-500 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex justify-between items-center">
+                    <span>Ded: {formatCurrency(stats.financials.expensesDeductible, 'CLP')}</span>
+                    <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </div>
 
                 {/* Sueldos */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/85 shadow-2xs flex flex-col justify-between">
+                <div 
+                  onClick={() => handleCardClick('payroll')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/85 shadow-2xs flex flex-col justify-between group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
                   <div>
                     <span className="text-[10px] font-semibold text-slate-400 uppercase">Pagos a Personal</span>
                     <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
                       {formatCurrency(stats.financials.payrollTotal, 'CLP')}
                     </div>
                   </div>
-                  <div className="text-[10px] text-slate-450 dark:text-slate-400 font-medium mt-2 pt-2 border-t border-slate-50 dark:border-slate-850">
-                    Honorarios liquidados
+                  <div className="text-[10px] text-slate-450 dark:text-slate-400 font-medium mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex justify-between items-center">
+                    <span>Honorarios liquidados</span>
+                    <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </div>
 
                 {/* IVA Estimado */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between">
+                <div 
+                  onClick={() => handleCardClick('vat')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
                   <div>
                     <span className="text-[10px] font-semibold text-slate-400 uppercase">IVA por Pagar</span>
                     <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
                       {formatCurrency(stats.financials.vatToPay, 'CLP')}
                     </div>
                   </div>
-                  <div className="text-[10px] text-slate-450 dark:text-slate-400 font-medium mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 truncate" title={`Débito: ${stats.financials.incomesVat} - Crédito: ${stats.financials.expensesVat}`}>
-                    D: {formatCurrency(stats.financials.incomesVat, 'CLP')} | C: {formatCurrency(stats.financials.expensesVat, 'CLP')}
+                  <div className="text-[10px] text-slate-450 dark:text-slate-400 font-medium mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex justify-between items-center truncate" title={`Débito: ${stats.financials.incomesVat} - Crédito: ${stats.financials.expensesVat}`}>
+                    <span>D: {formatCurrency(stats.financials.incomesVat, 'CLP')} | C: {formatCurrency(stats.financials.expensesVat, 'CLP')}</span>
+                    <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   </div>
                 </div>
 
                 {/* Impuestos Pagados */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between">
+                <div 
+                  onClick={() => handleCardClick('taxes')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
                   <div>
                     <span className="text-[10px] font-semibold text-slate-400 uppercase">Impuestos Pagados</span>
                     <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
                       {formatCurrency(stats.financials.taxesPaidTotal, 'CLP')}
                     </div>
                   </div>
-                  <div className="text-[10px] text-slate-450 dark:text-slate-400 font-medium mt-2 pt-2 border-t border-slate-50 dark:border-slate-850">
-                    PPM, patentes y otros
+                  <div className="text-[10px] text-slate-450 dark:text-slate-400 font-medium mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex justify-between items-center">
+                    <span>PPM y patentes</span>
+                    <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </div>
 
                 {/* Por cobrar */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between">
+                <div 
+                  onClick={() => handleCardClick('receivables')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
                   <div>
                     <span className="text-[10px] font-semibold text-slate-400 uppercase">Por Cobrar (Per.)</span>
                     <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
                       {formatCurrency(stats.financials.pendingPaymentsVal, 'CLP')}
                     </div>
                   </div>
-                  <div className="text-[10px] text-amber-600 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850">
-                    {stats.financials.pendingPaymentsCount} cuentas
+                  <div className="text-[10px] text-amber-600 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex justify-between items-center">
+                    <span>{stats.financials.pendingPaymentsCount} cuentas</span>
+                    <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </div>
               </div>
@@ -766,42 +1475,66 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
               {/* Fila Principal de la Operación */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
                 {/* Clientes Activos */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-4 rounded-xl flex items-center gap-4 shadow-2xs">
-                  <div className="p-2.5 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 rounded-lg">
-                    <Users className="w-5 h-5" />
+                <div 
+                  onClick={() => handleCardClick('active_clients')}
+                  className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-4 rounded-xl flex items-center justify-between shadow-2xs group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2.5 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 rounded-lg">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-2xl font-black text-slate-800 dark:text-slate-100">{stats.counts.activeClients}</h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Clientes Activos</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-2xl font-black text-slate-800 dark:text-slate-100">{stats.counts.activeClients}</h4>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Clientes Activos</p>
-                  </div>
+                  <ArrowUpRight className="w-4 h-4 text-slate-350 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
 
                 {/* Prospectos Activos */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-4 rounded-xl flex items-center gap-4 shadow-2xs">
-                  <div className="p-2.5 bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400 rounded-lg">
-                    <UserCheck className="w-5 h-5" />
+                <div 
+                  onClick={() => handleCardClick('active_prospects')}
+                  className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-4 rounded-xl flex items-center justify-between shadow-2xs group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2.5 bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400 rounded-lg">
+                      <UserCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-2xl font-black text-slate-800 dark:text-slate-100">{stats.counts.activeProspects}</h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Prospectos Activos</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-2xl font-black text-slate-800 dark:text-slate-100">{stats.counts.activeProspects}</h4>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Prospectos Activos</p>
-                  </div>
+                  <ArrowUpRight className="w-4 h-4 text-slate-350 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
 
                 {/* Servicios en Proceso */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-4 rounded-xl flex items-center gap-4 shadow-2xs">
-                  <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 rounded-lg">
-                    <BookOpen className="w-5 h-5" />
+                <div 
+                  onClick={() => handleCardClick('services_process')}
+                  className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-4 rounded-xl flex items-center justify-between shadow-2xs group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 rounded-lg">
+                      <BookOpen className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-2xl font-black text-slate-800 dark:text-slate-100">{stats.counts.servicesInProcess}</h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Servicios en Proceso</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-2xl font-black text-slate-800 dark:text-slate-100">{stats.counts.servicesInProcess}</h4>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Servicios en Proceso</p>
-                  </div>
+                  <ArrowUpRight className="w-4 h-4 text-slate-350 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
 
                 {/* Avance Promedio */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-4 rounded-xl shadow-2xs flex flex-col justify-center">
+                <div 
+                  onClick={() => handleCardClick('avg_progress')}
+                  className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-4 rounded-xl shadow-2xs flex flex-col justify-center group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
                   <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Avance Promedio</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
+                      Avance Promedio
+                      <ArrowUpRight className="w-3.5 h-3.5 text-slate-350 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </span>
                     <span className="text-xs font-bold text-amber-700 dark:text-amber-400">{stats.counts.avgProgress}%</span>
                   </div>
                   <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
@@ -816,47 +1549,93 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
               {/* Fila Operativa Secundaria */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
                 {/* Atrasados */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Atrasados</span>
-                  <span className="text-xl font-extrabold text-rose-500 block mt-1">{stats.counts.servicesAtrasados}</span>
-                  <span className="text-[9px] text-slate-450 dark:text-slate-400 block mt-1">Entrega vencida</span>
+                <div 
+                  onClick={() => handleCardClick('atrasados')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300 flex flex-col justify-between"
+                >
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Atrasados</span>
+                    <span className="text-xl font-extrabold text-rose-500 block mt-1">{stats.counts.servicesAtrasados}</span>
+                  </div>
+                  <div className="text-[9px] text-slate-450 dark:text-slate-400 mt-2 border-t border-slate-50 dark:border-slate-850 pt-1.5 flex justify-between items-center">
+                    <span>Entrega vencida</span>
+                    <ArrowUpRight className="w-3 h-3 text-slate-350 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </div>
 
                 {/* Próximos */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">A Vencer (15d)</span>
-                  <span className="text-xl font-extrabold text-amber-600 block mt-1">{stats.counts.servicesProximos}</span>
-                  <span className="text-[9px] text-slate-450 dark:text-slate-400 block mt-1">Próximos plazos</span>
+                <div 
+                  onClick={() => handleCardClick('proximos')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300 flex flex-col justify-between"
+                >
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">A Vencer (15d)</span>
+                    <span className="text-xl font-extrabold text-amber-600 block mt-1">{stats.counts.servicesProximos}</span>
+                  </div>
+                  <div className="text-[9px] text-slate-450 dark:text-slate-400 mt-2 border-t border-slate-50 dark:border-slate-850 pt-1.5 flex justify-between items-center">
+                    <span>Próximos plazos</span>
+                    <ArrowUpRight className="w-3 h-3 text-slate-350 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </div>
 
                 {/* Finalizados */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Finalizados</span>
-                  <span className="text-xl font-extrabold text-slate-700 dark:text-slate-300 block mt-1">{stats.counts.servicesFinalizados}</span>
-                  <span className="text-[9px] text-slate-450 dark:text-slate-400 block mt-1">Entregas totales</span>
+                <div 
+                  onClick={() => handleCardClick('finalizados')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300 flex flex-col justify-between"
+                >
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Finalizados</span>
+                    <span className="text-xl font-extrabold text-slate-700 dark:text-slate-300 block mt-1">{stats.counts.servicesFinalizados}</span>
+                  </div>
+                  <div className="text-[9px] text-slate-450 dark:text-slate-400 mt-2 border-t border-slate-50 dark:border-slate-850 pt-1.5 flex justify-between items-center">
+                    <span>Entregas totales</span>
+                    <ArrowUpRight className="w-3 h-3 text-slate-350 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </div>
 
                 {/* Pagos Pendientes */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Pagos Pendientes</span>
-                  <span className="text-xl font-extrabold text-amber-600 block mt-1">{stats.counts.pendingPaymentsCount}</span>
-                  <span className="text-[9px] text-slate-450 dark:text-slate-400 block mt-1 truncate" title={formatCurrency(stats.counts.pendingPaymentsVal, 'CLP')}>
-                    {formatCurrency(stats.counts.pendingPaymentsVal, 'CLP')}
-                  </span>
+                <div 
+                  onClick={() => handleCardClick('receivables')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300 flex flex-col justify-between"
+                >
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Pagos Pendientes</span>
+                    <span className="text-xl font-extrabold text-amber-600 block mt-1">{stats.counts.pendingPaymentsCount}</span>
+                  </div>
+                  <div className="text-[9px] text-slate-450 dark:text-slate-400 mt-2 border-t border-slate-50 dark:border-slate-850 pt-1.5 flex justify-between items-center truncate" title={formatCurrency(stats.counts.pendingPaymentsVal, 'CLP')}>
+                    <span className="truncate">{formatCurrency(stats.counts.pendingPaymentsVal, 'CLP')}</span>
+                    <ArrowUpRight className="w-3 h-3 text-slate-350 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                  </div>
                 </div>
 
                 {/* Contratos Pendientes */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Contratos Pend.</span>
-                  <span className="text-xl font-extrabold text-slate-700 dark:text-slate-350 block mt-1">{stats.counts.pendingContracts}</span>
-                  <span className="text-[9px] text-slate-450 dark:text-slate-400 block mt-1">Por firmar</span>
+                <div 
+                  onClick={() => handleCardClick('pending_contracts')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300 flex flex-col justify-between"
+                >
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Contratos Pend.</span>
+                    <span className="text-xl font-extrabold text-slate-700 dark:text-slate-355 block mt-1">{stats.counts.pendingContracts}</span>
+                  </div>
+                  <div className="text-[9px] text-slate-450 dark:text-slate-400 mt-2 border-t border-slate-50 dark:border-slate-850 pt-1.5 flex justify-between items-center">
+                    <span>Por firmar</span>
+                    <ArrowUpRight className="w-3 h-3 text-slate-350 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </div>
 
                 {/* Archivos Pendientes */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Archivos Pend.</span>
-                  <span className="text-xl font-extrabold text-slate-750 dark:text-slate-350 block mt-1">{stats.counts.pendingFiles}</span>
-                  <span className="text-[9px] text-slate-450 dark:text-slate-400 block mt-1">Manuscrito/Briefing</span>
+                <div 
+                  onClick={() => handleCardClick('pending_files')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300 flex flex-col justify-between"
+                >
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Archivos Pend.</span>
+                    <span className="text-xl font-extrabold text-slate-750 dark:text-slate-350 block mt-1">{stats.counts.pendingFiles}</span>
+                  </div>
+                  <div className="text-[9px] text-slate-450 dark:text-slate-400 mt-2 border-t border-slate-50 dark:border-slate-850 pt-1.5 flex justify-between items-center">
+                    <span>Manuscrito/Briefing</span>
+                    <ArrowUpRight className="w-3 h-3 text-slate-350 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </div>
               </div>
 
@@ -914,6 +1693,116 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
             </div>
           )}
         </>
+      )}
+
+      {activeDetailCard && detailData && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-xs">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <h3 className="text-lg font-bold text-slate-850 dark:text-slate-100 flex items-center gap-2">
+                  <Landmark className="w-5 h-5 text-indigo-500" />
+                  {detailData.title}
+                </h3>
+                <p className="text-slate-450 mt-1">{detailData.description}</p>
+              </div>
+              <button 
+                onClick={() => setActiveDetailCard(null)} 
+                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-850"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              
+              {/* Formula panel (if any) */}
+              {detailData.formula && (
+                <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-150 dark:border-slate-850 rounded-2xl space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Fórmula de Cálculo</span>
+                  <p className="font-mono text-xs text-slate-700 dark:text-slate-300 font-bold bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-150/60 dark:border-slate-850">
+                    {detailData.formula}
+                  </p>
+                </div>
+              )}
+
+              {/* Records Table */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">Registros que Componen la Métrica</span>
+                  <span className="text-[11px] text-slate-400 font-semibold bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full">
+                    {detailData.rows.length} {detailData.rows.length === 1 ? 'registro' : 'registros'}
+                  </span>
+                </div>
+                
+                {detailData.rows.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400 font-semibold bg-slate-50 dark:bg-slate-950/20 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col items-center gap-1.5">
+                    <AlertCircle className="w-8 h-8 text-slate-350" />
+                    <span>No hay registros para este periodo</span>
+                  </div>
+                ) : (
+                  <div className="border border-slate-150 dark:border-slate-850 rounded-2xl overflow-hidden shadow-2xs">
+                    <div className="overflow-x-auto max-h-[40vh]">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 font-bold border-b border-slate-100 dark:border-slate-850">
+                            {detailData.headers.map((h, idx) => (
+                              <th key={idx} className="p-3">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
+                          {detailData.rows.map((row, rIdx) => (
+                            <tr key={rIdx} className="hover:bg-slate-50/50 dark:hover:bg-slate-850/20">
+                              {row.map((val, cIdx) => (
+                                <td key={cIdx} className="p-3 font-medium text-slate-700 dark:text-slate-350">{val}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-950/30 border-t border-slate-100 dark:border-slate-800 flex justify-between gap-3">
+              <div className="flex gap-2">
+                {detailData.modulePath && (
+                  <button
+                    onClick={() => {
+                      setActiveDetailCard(null);
+                      navigateToModule(detailData.modulePath);
+                    }}
+                    className="px-4 py-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-indigo-650 dark:text-indigo-400 hover:bg-slate-50 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 animate-pulse-slow"
+                  >
+                    Ver módulo completo
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {detailData.rows.length > 0 && (
+                  <button
+                    onClick={handleCSVExport}
+                    className="px-4 py-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold cursor-pointer transition-all"
+                  >
+                    Exportar detalle CSV
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setActiveDetailCard(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all"
+              >
+                Cerrar Detalle
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
