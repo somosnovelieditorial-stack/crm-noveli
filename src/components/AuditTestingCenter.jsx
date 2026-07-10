@@ -505,23 +505,40 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
             throw new Error('No hay clientes QA. Ejecuta la Prueba 3 primero.');
           }
 
+          const servicePayload = {
+            client_id: client.id,
+            type: 'corrección',
+            book_title: 'TEST_QA_Libro del Cliente Pruebas',
+            status: 'recepción de material',
+            value: 300000,
+            total_agreed_amount: 300000,
+            is_test: true,
+            test_run_id: runId,
+            organization_id: organizationId
+          };
+
           const { data: service, error: servErr } = await supabase
             .from('services')
-            .insert([{
-              client_id: client.id,
-              type: 'corrección',
-              book_title: 'TEST_QA_Libro del Cliente Pruebas',
-              status: 'recepción de material',
-              value: 300000,
-              total_agreed_amount: 300000,
-              is_test: true,
-              test_run_id: runId,
-              organization_id: organizationId
-            }])
+            .insert([servicePayload])
             .select()
             .single();
 
-          if (servErr) throw servErr;
+          if (servErr) {
+            if (String(servErr.message).toLowerCase().includes('violates check constraint')) {
+              const constraintMatch = servErr.message.match(/constraint "([^"]+)"/i);
+              const constraintName = constraintMatch ? constraintMatch[1] : 'chk_services_status';
+              
+              const detailError = new Error(
+                `Violación de restricción CHECK en services.\n` +
+                `- Status enviado a services: "${servicePayload.status}"\n` +
+                `- Constraint afectada: "${constraintName}"\n` +
+                `- Payload enviado: ${JSON.stringify({ type: servicePayload.type, status: servicePayload.status, book_title: servicePayload.book_title })}`
+              );
+              detailError.recommendation = `Sugerencia: La base de datos tiene una restricción CHECK rígida sobre el campo 'status' de la tabla 'services'. Ejecute el script 'supabase_migration_schema_guard.sql' para eliminar esta restricción (ALTER TABLE services DROP CONSTRAINT IF EXISTS ${constraintName};) y permita la flexibilidad en los estados del CRM.`;
+              throw detailError;
+            }
+            throw servErr;
+          }
 
           const { data: stageTypes } = await supabase
             .from('editorial_stages')
@@ -544,7 +561,22 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
               .from('service_stages')
               .insert(stagesToInsert);
 
-            if (stagesErr) throw stagesErr;
+            if (stagesErr) {
+              if (String(stagesErr.message).toLowerCase().includes('violates check constraint')) {
+                const constraintMatch = stagesErr.message.match(/constraint "([^"]+)"/i);
+                const constraintName = constraintMatch ? constraintMatch[1] : 'chk_service_stages_status';
+                
+                const detailError = new Error(
+                  `Violación de restricción CHECK en service_stages.\n` +
+                  `- Status enviado a service_stages: "${stagesToInsert[0]?.status}" / "${stagesToInsert[1]?.status}"\n` +
+                  `- Constraint afectada: "${constraintName}"\n` +
+                  `- Payload enviado (primer item): ${JSON.stringify({ stage_name: stagesToInsert[0]?.stage_name, status: stagesToInsert[0]?.status })}`
+                );
+                detailError.recommendation = `Sugerencia: La base de datos tiene una restricción CHECK rígida en 'service_stages.status'. Elimínela ejecutando el script 'supabase_migration_schema_guard.sql' (ALTER TABLE service_stages DROP CONSTRAINT IF EXISTS ${constraintName};).`;
+                throw detailError;
+              }
+              throw stagesErr;
+            }
           }
 
           result.status = 'OK';
@@ -776,8 +808,9 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
       console.error(`Error running test ${testNumber}:`, err);
       result.status = 'Error';
       const parsed = parseQAError(err.message, result.table);
-      result.message = parsed.text;
-      result.recommendation = parsed.recommendation;
+      const isDetailed = err.message && (err.message.includes('restricción CHECK') || err.message.includes('Violación'));
+      result.message = isDetailed ? err.message : parsed.text;
+      result.recommendation = err.recommendation || parsed.recommendation;
     } finally {
       setTestResults(prev => ({ ...prev, [testNumber]: result }));
       setRunningTests(prev => ({ ...prev, [testNumber]: false }));

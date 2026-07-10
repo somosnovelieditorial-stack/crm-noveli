@@ -99,3 +99,9 @@ ALTER TABLE website_links ADD COLUMN IF NOT EXISTS test_run_id TEXT;
 -- 20. Alterations for table: website_sections
 ALTER TABLE website_sections ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE;
 ALTER TABLE website_sections ADD COLUMN IF NOT EXISTS test_run_id TEXT;
+
+-- 21. Drop status check constraints to prevent rigid DB constraints on CRM editable status states
+ALTER TABLE services DROP CONSTRAINT IF EXISTS services_status_check;
+ALTER TABLE services DROP CONSTRAINT IF EXISTS chk_services_status;
+ALTER TABLE service_stages DROP CONSTRAINT IF EXISTS service_stages_status_check;
+ALTER TABLE service_stages DROP CONSTRAINT IF EXISTS chk_service_stages_status;
