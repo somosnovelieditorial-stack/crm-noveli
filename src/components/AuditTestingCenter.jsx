@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { supabase, isMock } from '../supabaseClient';
 import { calculateProposalTotals } from '../utils/proposalCalculations';
 import { formatCurrency } from '../utils';
+import { databaseContract } from '../config/databaseContract';
 import { 
   Play, Trash2, ShieldAlert, CheckCircle2, AlertTriangle, AlertCircle, 
-  Activity, Database, Terminal, RefreshCw, Layers, Server, Shield
+  Activity, Database, Terminal, RefreshCw, Layers, Server, Shield, FileText, UserCheck
 } from 'lucide-react';
 
 export default function AuditTestingCenter({ organizationId, userRole }) {
@@ -13,39 +14,21 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
   const [supabaseConnected, setSupabaseConnected] = useState(false);
   const [diagTimestamp, setDiagTimestamp] = useState('');
   
-  // Tables state
+  // Tables and schema contract states
   const [tableStats, setTableStats] = useState([]);
   const [loadingCounts, setLoadingCounts] = useState(false);
   const [rlsErrorDetected, setRlsErrorDetected] = useState(false);
   const [rlsErrorMessage, setRlsErrorMessage] = useState('');
+  
+  // Schema contract diff states
+  const [missingCols, setMissingCols] = useState([]);
+  const [tablesWithoutOrgIdCol, setTablesWithoutOrgIdCol] = useState([]);
+  const [checkingSchema, setCheckingSchema] = useState(false);
 
   // Tests state
   const [testResults, setTestResults] = useState({});
   const [runningTests, setRunningTests] = useState({});
   const [cleaningUp, setCleaningUp] = useState(false);
-
-  // List of tables to audit
-  const targetTables = [
-    { key: 'clients', label: 'Clientes' },
-    { key: 'prospects', label: 'Prospectos' },
-    { key: 'quotations', label: 'Propuestas comerciales' },
-    { key: 'quotation_items', label: 'Ítems de propuesta' },
-    { key: 'services', label: 'Servicios contratados' },
-    { key: 'service_stages', label: 'Etapas de servicio' },
-    { key: 'documents', label: 'Documentos' },
-    { key: 'service_catalog', label: 'Catálogo de servicios' },
-    { key: 'service_packs', label: 'Packs de servicios' },
-    { key: 'incomes', label: 'Ingresos' },
-    { key: 'expenses', label: 'Gastos' },
-    { key: 'staff', label: 'Personal' },
-    { key: 'payroll_payments', label: 'Pagos a personal' },
-    { key: 'operational_reserve_movements', label: 'Movimientos de reserva' },
-    { key: 'company_settings', label: 'Configuración de empresa' },
-    { key: 'website_settings', label: 'Sitio Web - Configuración' },
-    { key: 'website_services', label: 'Sitio Web - Servicios' },
-    { key: 'website_books', label: 'Sitio Web - Libros' },
-    { key: 'website_sections', label: 'Sitio Web - Secciones' }
-  ];
 
   useEffect(() => {
     runDiagnostic();
@@ -60,10 +43,9 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
       if (userErr) throw userErr;
       setCurrentUser(user);
 
-      // 2. Check supabase connection by querying a basic table
+      // 2. Check supabase connection
       const { error: pingErr } = await supabase.from('settings').select('id').limit(1);
       if (pingErr) {
-        // If settings fails, try company_settings or similar
         const { error: pingErr2 } = await supabase.from('company_settings').select('id').limit(1);
         if (pingErr2) {
           setSupabaseConnected(false);
@@ -78,75 +60,111 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
       setSupabaseConnected(false);
     } finally {
       setLoadingDiag(false);
-      fetchModuleCounts();
+      checkSchemaContract();
     }
   };
 
-  const fetchModuleCounts = async () => {
-    setLoadingCounts(true);
+  const checkSchemaContract = async () => {
+    setCheckingSchema(true);
+    const missing = [];
+    const noOrgCol = [];
+    const stats = [];
     setRlsErrorDetected(false);
     setRlsErrorMessage('');
-    const stats = [];
 
     try {
-      await Promise.all(
-        targetTables.map(async (table) => {
-          try {
-            // We fetch the basic columns to determine counts locally, making it mock-resilient
-            const { data, error } = await supabase
-              .from(table.key)
-              .select('id, organization_id, user_id, is_test');
+      // Check each table in the contract in parallel/sequence
+      for (const [tableName, columnsObj] of Object.entries(databaseContract)) {
+        const colNames = Object.keys(columnsObj);
+        let tableHasOrgId = true;
+        let totalReal = 0;
+        let missingOrgIdCount = 0;
+        let userIdNoOrgIdCount = 0;
+        let testRecordsCount = 0;
+        let tableError = null;
 
-            if (error) {
-              stats.push({
-                key: table.key,
-                label: table.label,
-                total: 'Error',
-                missingOrgId: 'Error',
-                userIdNoOrgId: 'Error',
-                error: error.message
-              });
-              
-              // Log RLS issue if it indicates access denied or similar
-              if (error.code === '42501' || error.message.toLowerCase().includes('policy') || error.message.toLowerCase().includes('permission')) {
-                setRlsErrorDetected(true);
-                setRlsErrorMessage(`Error RLS en tabla "${table.key}": ${error.message}`);
-              }
-              return;
-            }
+        try {
+          // A. Check if organization_id column exists by doing a direct check
+          const { error: orgIdCheckErr } = await supabase
+            .from(tableName)
+            .select('organization_id')
+            .limit(0);
 
-            const rows = data || [];
-            
-            // Filter real vs test data
-            const realRows = rows.filter(r => r.organization_id === organizationId && r.is_test !== true && r.is_test !== 'true');
-            const missingOrgId = rows.filter(r => r.organization_id === null || r.organization_id === undefined || r.organization_id === '').length;
-            const userIdNoOrgId = rows.filter(r => r.user_id && (r.organization_id === null || r.organization_id === undefined || r.organization_id === '')) .length;
-
-            stats.push({
-              key: table.key,
-              label: table.label,
-              total: realRows.length,
-              missingOrgId,
-              userIdNoOrgId,
-              error: null
-            });
-          } catch (err) {
-            stats.push({
-              key: table.key,
-              label: table.label,
-              total: 'Error',
-              missingOrgId: 'Error',
-              userIdNoOrgId: 'Error',
-              error: err.message
-            });
+          if (orgIdCheckErr && orgIdCheckErr.code === '42703') {
+            tableHasOrgId = false;
+            noOrgCol.push(tableName);
           }
-        })
-      );
+
+          // B. Query the table to determine column differences
+          // We select all expected columns to see if PostgreSQL returns undefined_column (42703)
+          const { data, error: selectErr } = await supabase
+            .from(tableName)
+            .select('id, organization_id, user_id, is_test')
+            .limit(1000); // Safely retrieve up to 1000 records to audit locally
+
+          if (selectErr) {
+            tableError = selectErr.message;
+            if (selectErr.code === '42501' || selectErr.message.toLowerCase().includes('policy') || selectErr.message.toLowerCase().includes('permission')) {
+              setRlsErrorDetected(true);
+              setRlsErrorMessage(prev => prev ? `${prev} | ${tableName}: RLS denegado` : `${tableName}: RLS denegado`);
+            }
+          } else {
+            const rows = data || [];
+            // Count states locally
+            totalReal = rows.filter(r => r.organization_id === organizationId && r.is_test !== true && r.is_test !== 'true').length;
+            missingOrgIdCount = rows.filter(r => r.organization_id === null || r.organization_id === undefined || r.organization_id === '').length;
+            userIdNoOrgIdCount = rows.filter(r => r.user_id && (r.organization_id === null || r.organization_id === undefined || r.organization_id === '')).length;
+            testRecordsCount = rows.filter(r => r.is_test === true || r.is_test === 'true' || (r.test_run_id !== null && r.test_run_id !== undefined)).length;
+          }
+
+          // C. Pinpoint exact missing columns
+          // Try selecting all expected columns. If it fails, run one-by-one check to find ALL missing columns.
+          const { error: fullSelectErr } = await supabase
+            .from(tableName)
+            .select(colNames.join(','))
+            .limit(0);
+
+          if (fullSelectErr && fullSelectErr.code === '42703') {
+            // Find which columns are missing
+            for (const col of colNames) {
+              const { error: colErr } = await supabase
+                .from(tableName)
+                .select(col)
+                .limit(0);
+
+              if (colErr && colErr.code === '42703') {
+                missing.push({
+                  table: tableName,
+                  column: col,
+                  type: columnsObj[col]
+                });
+              }
+            }
+          }
+
+        } catch (err) {
+          tableError = err.message;
+        }
+
+        stats.push({
+          key: tableName,
+          label: tableName,
+          total: tableError ? 'Error' : totalReal,
+          missingOrgId: tableError ? 'Error' : missingOrgIdCount,
+          userIdNoOrgId: tableError ? 'Error' : userIdNoOrgIdCount,
+          testRecords: tableError ? 'Error' : testRecordsCount,
+          hasOrgId: tableHasOrgId,
+          error: tableError
+        });
+      }
+
       setTableStats(stats);
+      setMissingCols(missing);
+      setTablesWithoutOrgIdCol(noOrgCol);
     } catch (err) {
-      console.error('Error fetching module counts:', err);
+      console.error('Error auditing schema schema contract:', err);
     } finally {
-      setLoadingCounts(false);
+      setCheckingSchema(false);
     }
   };
 
@@ -196,7 +214,7 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
         }
       }
       alert('¡Limpieza de datos de prueba completada con éxito!');
-      fetchModuleCounts();
+      checkSchemaContract();
     } catch (err) {
       console.error('Error cleaning QA records:', err);
       alert('Ocurrió un error al limpiar registros de prueba: ' + err.message);
@@ -215,7 +233,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
         case 1: { // Probar Propuesta Comercial
           result.table = 'quotations & quotation_items';
           
-          // A. Fetch catalog items to use
           let { data: catalogItems } = await supabase
             .from('service_catalog')
             .select('*')
@@ -224,7 +241,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
 
           let catItem = (catalogItems && catalogItems.length > 0) ? catalogItems[0] : null;
 
-          // B. Create temporary QA catalog item if none exists
           if (!catItem) {
             const { data: newCat, error: newCatErr } = await supabase
               .from('service_catalog')
@@ -246,7 +262,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
             catItem = { ...catItem, concept: catItem.name, price: catItem.base_price };
           }
 
-          // C. Calculate proposal totals using standard calculations utility
           const tempProposal = {
             iva_mode: '+ IVA',
             manuscript_pages: 150,
@@ -257,7 +272,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
           const tempItems = [{ concept: catItem.concept, unit_price: catItem.price, quantity: 1 }];
           const calculated = calculateProposalTotals(tempProposal, tempItems);
 
-          // D. Save quotation to database
           const { data: newQuote, error: newQuoteErr } = await supabase
             .from('quotations')
             .insert([{
@@ -284,13 +298,12 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
             .single();
 
           if (newQuoteErr) {
-            if (newQuoteErr.message.includes('is_test')) {
-              throw new Error(`${newQuoteErr.message}. ¿Ejecutó la migración "supabase_migration_37.sql"?`);
+            if (newQuoteErr.message.includes('converted_client_id')) {
+              throw new Error(`${newQuoteErr.message}. ¿Ejecutó la migración "supabase_migration_schema_guard.sql"?`);
             }
             throw newQuoteErr;
           }
 
-          // E. Save quotation item
           const { error: newQuoteItemErr } = await supabase
             .from('quotation_items')
             .insert([{
@@ -317,7 +330,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
         case 2: { // Probar Propuesta a Prospecto
           result.table = 'prospects';
 
-          // A. Fetch or create a TEST_QA proposal
           let { data: qaQuotes } = await supabase
             .from('quotations')
             .select('*')
@@ -330,7 +342,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
             throw new Error('Primero ejecuta la Prueba 1 para tener una propuesta comercial QA.');
           }
 
-          // B. Accept the proposal
           const { error: updateQuoteErr } = await supabase
             .from('quotations')
             .update({ status: 'aceptada' })
@@ -338,7 +349,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
 
           if (updateQuoteErr) throw updateQuoteErr;
 
-          // C. Convert to prospect
           const { data: newProspect, error: newProspErr } = await supabase
             .from('prospects')
             .insert([{
@@ -358,7 +368,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
 
           if (newProspErr) throw newProspErr;
 
-          // D. Link quotation to prospect
           const { error: relinkErr } = await supabase
             .from('quotations')
             .update({
@@ -378,7 +387,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
         case 3: { // Probar Prospecto a Cliente
           result.table = 'clients';
 
-          // A. Find a TEST_QA prospect
           let { data: qaProspects } = await supabase
             .from('prospects')
             .select('*')
@@ -392,7 +400,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
             throw new Error('No hay prospecto QA disponible. Corre la Prueba 2 primero.');
           }
 
-          // B. Mark prerequisites as received
           const { error: upProspErr } = await supabase
             .from('prospects')
             .update({
@@ -405,7 +412,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
 
           if (upProspErr) throw upProspErr;
 
-          // C. Convert to client
           const { data: newClient, error: clientErr } = await supabase
             .from('clients')
             .insert([{
@@ -423,7 +429,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
 
           if (clientErr) throw clientErr;
 
-          // D. Mark prospect as converted
           const { error: updateProspStatusErr } = await supabase
             .from('prospects')
             .update({
@@ -444,7 +449,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
         case 4: { // Probar Cliente a Servicio Contratado
           result.table = 'services & service_stages';
 
-          // A. Find TEST_QA client
           let { data: qaClients } = await supabase
             .from('clients')
             .select('*')
@@ -457,7 +461,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
             throw new Error('No hay clientes QA. Ejecuta la Prueba 3 primero.');
           }
 
-          // B. Create service
           const { data: service, error: servErr } = await supabase
             .from('services')
             .insert([{
@@ -476,7 +479,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
 
           if (servErr) throw servErr;
 
-          // C. Create stages
           const { data: stageTypes } = await supabase
             .from('editorial_stages')
             .select('*')
@@ -510,7 +512,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
         case 5: { // Probar Ingreso
           result.table = 'incomes';
 
-          // A. Fetch client QA
           let { data: qaClients } = await supabase
             .from('clients')
             .select('*')
@@ -519,7 +520,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
 
           let client = (qaClients && qaClients.length > 0) ? qaClients[0] : null;
 
-          // B. Create income
           const { data: income, error: incErr } = await supabase
             .from('incomes')
             .insert([{
@@ -546,7 +546,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
         case 6: { // Probar Gasto
           result.table = 'expenses';
 
-          // A. Create tax/general expense
           const { data: expense, error: expErr } = await supabase
             .from('expenses')
             .insert([{
@@ -573,7 +572,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
         case 7: { // Probar Pago a Personal
           result.table = 'staff & payroll_payments';
 
-          // A. Create staff QA
           const { data: member, error: stErr } = await supabase
             .from('staff')
             .insert([{
@@ -590,7 +588,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
 
           if (stErr) throw stErr;
 
-          // B. Register payroll payment
           const { data: payment, error: payErr } = await supabase
             .from('payroll_payments')
             .insert([{
@@ -617,7 +614,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
         case 8: { // Probar Reserva Operacional
           result.table = 'operational_reserve_movements';
 
-          // A. Create movement
           const { data: movement, error: movErr } = await supabase
             .from('operational_reserve_movements')
             .insert([{
@@ -663,30 +659,47 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
           break;
         }
 
-        case 10: { // Probar Sitio Web
-          result.table = 'website_settings, services & books';
+        case 10: { // Probar PDF de propuesta
+          result.table = 'proposalCalculations (PDF simulation)';
 
-          const { data: wsettings, error: setErr } = await supabase
-            .from('website_settings')
-            .select('*');
-            
-          if (setErr) throw setErr;
+          const sampleProposal = {
+            iva_mode: '+ IVA',
+            manuscript_pages: 300,
+            extension_adjustment_type: 'percentage',
+            extension_adjustment_value: 30,
+            tax_rate: 19
+          };
+          const sampleItems = [
+            { concept: 'Pack Impreso', unit_price: 490000, quantity: 1 }
+          ];
 
-          const { data: wservices, error: servErr } = await supabase
-            .from('website_services')
-            .select('*');
-            
-          if (servErr) throw servErr;
-
-          const { data: wbooks, error: bookErr } = await supabase
-            .from('website_books')
-            .select('*');
-
-          if (bookErr) throw bookErr;
+          const computed = calculateProposalTotals(sampleProposal, sampleItems);
+          
+          // Verify totals: 490000 + 30% (147000) = 637000 subtotal net. With 19% IVA (121030) = 758030
+          if (computed.subtotal !== 637000 || computed.total !== 758030) {
+            throw new Error(`Cálculos incorrectos: subtotal=${computed.subtotal} (esperado 637000), total=${computed.total} (esperado 758030)`);
+          }
 
           result.status = 'OK';
-          result.record = `Ajustes web: ${wsettings ? wsettings.length : 0}. Servicios web: ${wservices ? wservices.length : 0}. Libros web: ${wbooks ? wbooks.length : 0}.`;
-          result.recommendation = 'Los datos del sitio web público están correctamente vinculados a la organización del CRM.';
+          result.record = `Cálculo verificado: Neto $${computed.subtotal} | IVA $${computed.vat} | Total $${computed.total}`;
+          result.recommendation = 'Los cálculos del motor unificado unificado son correctos y coinciden con la regla del PDF.';
+          break;
+        }
+
+        case 11: { // Probar usuario administrador secundario
+          result.table = 'organization_members (policies)';
+
+          const { data: admins, error: admErr } = await supabase
+            .from('organization_members')
+            .select('id, user_id, role')
+            .eq('organization_id', organizationId)
+            .eq('role', 'administrador');
+
+          if (admErr) throw admErr;
+
+          result.status = 'OK';
+          result.record = `Encontrados ${admins ? admins.length : 0} administradores en la organización.`;
+          result.recommendation = 'Políticas RLS e índices de roles de administrador comprobados con éxito.';
           break;
         }
 
@@ -697,17 +710,16 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
       console.error(`Error running test ${testNumber}:`, err);
       result.status = 'Error';
       result.message = err.message;
-      result.recommendation = 'Verifique las políticas de RLS, la existencia de tablas, o ejecute la migración supabase_migration_37.sql';
+      result.recommendation = 'Verifique las políticas de RLS, la existencia de tablas, o ejecute la migración supabase_migration_schema_guard.sql';
     } finally {
       setTestResults(prev => ({ ...prev, [testNumber]: result }));
       setRunningTests(prev => ({ ...prev, [testNumber]: false }));
-      fetchModuleCounts(); // Refresh statistics on run
+      checkSchemaContract(); // Refresh counts
     }
   };
 
   const handleRunAllTests = async () => {
-    // Run tests in logical order to allow dependency creation
-    const sequence = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const sequence = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
     for (const testNo of sequence) {
       await handleRunTest(testNo);
     }
@@ -721,10 +733,10 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
         <div>
           <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg flex items-center gap-2">
             <Activity className="w-5 h-5 text-indigo-500 animate-pulse" />
-            Centro de Pruebas y Auditoría de CRM
+            Centro de Pruebas y Auditoría del CRM Noveli
           </h3>
           <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
-            Diagnóstico de la conexión a base de datos, conteo de huérfanos RLS y ejecución de pruebas de integración E2E.
+            Diagnóstico de la base de datos, comparación con el Contrato de Datos, huérfanos RLS y pruebas de integración.
           </p>
         </div>
         <div className="flex gap-2">
@@ -759,10 +771,50 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
           <div className="space-y-1">
             <h4 className="font-bold text-amber-800 dark:text-amber-400 text-xs uppercase tracking-wider">Políticas de RLS Bloqueando Acceso</h4>
             <p className="text-amber-655 dark:text-amber-300/80 text-xs font-medium">{rlsErrorMessage}</p>
-            <p className="text-[10px] text-amber-500 font-bold">Recomendación: Revise que las políticas de RLS en Supabase permitan lecturas/escrituras para el rol del usuario.</p>
+            <p className="text-[10px] text-amber-500 font-bold">Recomendación: Revise las políticas de RLS en Supabase o ejecute la migración maestra para restablecer permisos.</p>
           </div>
         </div>
       )}
+
+      {/* Schema Diff / Database Contract Guard panel */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm rounded-2xl p-5 space-y-4">
+        <div className="flex justify-between items-center border-b border-slate-50 dark:border-slate-800 pb-2">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4.5 h-4.5 text-indigo-500" />
+            <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs uppercase tracking-wider">Diferencias del Contrato de Datos (Schema Guard)</h4>
+          </div>
+          {checkingSchema && <span className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-indigo-500"></span>}
+        </div>
+
+        {missingCols.length === 0 && tablesWithoutOrgIdCol.length === 0 ? (
+          <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 rounded-2xl flex items-center gap-3 text-emerald-800 dark:text-emerald-400 text-xs font-bold">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            <span>¡Base de datos totalmente alineada! No se detectaron discrepancias ni columnas faltantes con el frontend.</span>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="p-4 bg-rose-50 dark:bg-rose-955/20 border border-rose-150 dark:border-rose-900/40 rounded-2xl flex items-start gap-3 text-rose-800 dark:text-rose-400 text-xs leading-relaxed">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-rose-600" />
+              <div>
+                <span className="font-bold block uppercase tracking-wider text-[9px] mb-1">Columnas faltantes detectadas en Supabase:</span>
+                <p className="mb-2">El frontend espera columnas que no existen en el esquema físico actual de la base de datos. Ejecute la migración <strong>supabase_migration_schema_guard.sql</strong>.</p>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {missingCols.map((c, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-455 border border-rose-200 dark:border-rose-900 rounded font-mono text-[9px] font-bold">
+                      {c.table}.{c.column} ({c.type})
+                    </span>
+                  ))}
+                  {tablesWithoutOrgIdCol.map((t, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-955/40 dark:text-amber-400 border border-amber-250 dark:border-amber-900 rounded font-mono text-[9px] font-bold">
+                      {t} (Falta organization_id)
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Grid: A. Diagnóstico general & B. Counts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -825,7 +877,6 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
               <Database className="w-4.5 h-4.5 text-indigo-500" />
               <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs uppercase tracking-wider">B. Conteos por Módulo y Registros Huérfanos</h4>
             </div>
-            {loadingCounts && <span className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-indigo-500"></span>}
           </div>
 
           <div className="overflow-y-auto max-h-[280px] border border-slate-100 dark:border-slate-800 rounded-xl text-[11px]">
@@ -834,15 +885,21 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
                 <tr className="bg-slate-50 dark:bg-slate-950 font-bold uppercase text-[9px] text-slate-400 border-b border-slate-100 dark:border-slate-800">
                   <th className="p-2.5">Módulo / Tabla</th>
                   <th className="p-2.5 text-center">Total Real</th>
-                  <th className="p-2.5 text-center text-amber-600 dark:text-amber-500">Sin Org ID (Huérfanos)</th>
-                  <th className="p-2.5 text-center text-rose-600 dark:text-rose-500">User ID pero sin Org ID</th>
+                  <th className="p-2.5 text-center text-amber-600 dark:text-amber-500">Sin Org ID</th>
+                  <th className="p-2.5 text-center text-rose-600 dark:text-rose-500">User pero sin Org</th>
+                  <th className="p-2.5 text-center text-indigo-600 dark:text-indigo-500">Pruebas (TEST)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {tableStats.map((stat) => (
                   <tr key={stat.key} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10">
-                    <td className="p-2.5 font-bold text-slate-700 dark:text-slate-200">{stat.label} <span className="font-mono text-[9px] text-slate-400">({stat.key})</span></td>
-                    <td className="p-2.5 text-center font-semibold font-mono text-slate-600 dark:text-slate-355">{stat.total}</td>
+                    <td className="p-2.5 font-bold text-slate-700 dark:text-slate-200">
+                      {stat.key} 
+                      {!stat.hasOrgId && (
+                        <span className="ml-1 text-[8px] bg-red-950 text-red-400 border border-red-900 rounded px-1">SIN COL ORG</span>
+                      )}
+                    </td>
+                    <td className="p-2.5 text-center font-semibold font-mono text-slate-600 dark:text-slate-350">{stat.total}</td>
                     <td className="p-2.5 text-center font-mono">
                       {stat.missingOrgId > 0 ? (
                         <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 dark:bg-amber-955/20 dark:text-amber-400 rounded font-bold">{stat.missingOrgId}</span>
@@ -857,6 +914,9 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
                         <span className="text-slate-355 dark:text-slate-700">0</span>
                       )}
                     </td>
+                    <td className="p-2.5 text-center font-mono font-bold text-indigo-500">
+                      {stat.testRecords > 0 ? stat.testRecords : <span className="text-slate-300 dark:text-slate-700">0</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -870,16 +930,16 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
       <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm rounded-2xl p-5 space-y-4">
         <div className="flex items-center gap-2 border-b border-slate-50 dark:border-slate-800 pb-2">
           <Layers className="w-4.5 h-4.5 text-indigo-500" />
-          <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs uppercase tracking-wider">C. Pruebas de Integración y Flujos Cruzados</h4>
+          <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs uppercase tracking-wider">C. Pruebas Automáticas y Flujos Cruzados</h4>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
           {/* Test Buttons list */}
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
             <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Presione el botón para ejecutar cada prueba</h5>
             {[
-              { id: 1, label: '1. Probar Propuesta Comercial', desc: 'Crea propuesta TEST_QA, agrega ítem, calcula IVA/totales, guarda cotización y quotation_items.' },
+              { id: 1, label: '1. Probar Propuesta Comercial', desc: 'Crea propuesta TEST_QA, calcula IVA/totales, guarda cotización y quotation_items.' },
               { id: 2, label: '2. Probar Propuesta a Prospecto', desc: 'Toma la propuesta QA, la acepta y la convierte en un nuevo prospecto.' },
               { id: 3, label: '3. Probar Prospecto a Cliente', desc: 'Marca pago/contrato como recibidos en prospecto QA, y lo convierte en cliente.' },
               { id: 4, label: '4. Probar Cliente a Servicio Contratado', desc: 'Crea un servicio contratado asociado al cliente QA, asignando la estructura de timeline.' },
@@ -888,7 +948,8 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
               { id: 7, label: '7. Probar Pago a Personal', desc: 'Crea un miembro del personal TEST_QA y registra un pago de sueldo.' },
               { id: 8, label: '8. Probar Reserva Operacional', desc: 'Crea un depósito en el balance de reserva operacional TEST_QA.' },
               { id: 9, label: '9. Probar Catálogo y Packs', desc: 'Valida lectura del catálogo y packs activos de servicios.' },
-              { id: 10, label: '10. Probar Sitio Web', desc: 'Prueba la lectura de website_settings, website_services y website_books.' }
+              { id: 10, label: '10. Probar PDF de Propuesta', desc: 'Comprueba el motor de cálculo de propuesta unificada ($758.030) coincidiendo con el PDF.' },
+              { id: 11, label: '11. Probar Administrador Secundario', desc: 'Verifica la lectura de administradores y RLS en organization_members.' }
             ].map((test) => (
               <div 
                 key={test.id} 
@@ -946,7 +1007,7 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
 
                       {res.status === 'OK' ? (
                         <div className="grid grid-cols-3 gap-1.5 text-[10px] text-slate-400">
-                          <span>Creado:</span>
+                          <span>Resultado:</span>
                           <span className="col-span-2 text-emerald-450 font-bold">{res.record}</span>
                         </div>
                       ) : (

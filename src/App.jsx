@@ -1078,7 +1078,7 @@ export default function App() {
     };
 
     return (
-      <ErrorBoundary key={activeTab}>
+      <ErrorBoundary key={activeTab} moduleName={activeTab}>
         {getComponent()}
       </ErrorBoundary>
     );
