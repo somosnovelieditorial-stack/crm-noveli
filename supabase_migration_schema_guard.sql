@@ -100,8 +100,20 @@ ALTER TABLE website_links ADD COLUMN IF NOT EXISTS test_run_id TEXT;
 ALTER TABLE website_sections ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE;
 ALTER TABLE website_sections ADD COLUMN IF NOT EXISTS test_run_id TEXT;
 
+-- 22. Alterations for table: organization_members
+ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS area TEXT;
+ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS permissions JSONB;
+
 -- 21. Drop status check constraints to prevent rigid DB constraints on CRM editable status states
 ALTER TABLE services DROP CONSTRAINT IF EXISTS services_status_check;
 ALTER TABLE services DROP CONSTRAINT IF EXISTS chk_services_status;
 ALTER TABLE service_stages DROP CONSTRAINT IF EXISTS service_stages_status_check;
 ALTER TABLE service_stages DROP CONSTRAINT IF EXISTS chk_service_stages_status;
+
+-- 23. Helper function to find auth.users ID by email safely from frontend
+CREATE OR REPLACE FUNCTION get_user_id_by_email(email_addr TEXT)
+RETURNS UUID AS $$
+    SELECT id FROM auth.users WHERE email = email_addr LIMIT 1;
+$$ LANGUAGE sql SECURITY DEFINER;

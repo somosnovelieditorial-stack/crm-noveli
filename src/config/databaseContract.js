@@ -497,7 +497,11 @@ export const databaseContract = {
     user_id: 'UUID',
     role: 'TEXT',
     active: 'BOOLEAN',
-    created_at: 'TIMESTAMP WITH TIME ZONE'
+    created_at: 'TIMESTAMP WITH TIME ZONE',
+    email: 'TEXT',
+    full_name: 'TEXT',
+    area: 'TEXT',
+    permissions: 'JSONB'
   },
   organizations: {
     id: 'UUID',

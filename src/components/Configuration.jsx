@@ -1023,14 +1023,24 @@ export default function Configuration({ isReadOnly, userRole, organizationId }) 
 
       {activeTab === 'roles' && (
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-5">
-          <div>
-            <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-brand-500" />
-              Estructura de Roles de Usuarios
-            </h3>
-            <p className="text-slate-455 text-xs mt-0.5">
-              Control de políticas y permisos. Asigna perfiles para controlar las vistas a las que cada miembro de la editorial puede acceder.
-            </p>
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+            <div>
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-brand-500" />
+                Estructura de Roles de Usuarios
+              </h3>
+              <p className="text-slate-455 text-xs mt-0.5">
+                Control de políticas y permisos. Asigna perfiles para controlar las vistas a las que cada miembro de la editorial puede acceder.
+              </p>
+            </div>
+            {userRole === 'administrador' && (
+              <a
+                href="/configuracion/usuarios"
+                className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-650/15 text-center whitespace-nowrap"
+              >
+                Administrar Cuentas y Accesos
+              </a>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -28,6 +28,7 @@ import Configuration from './components/Configuration';
 import Staff from './components/Staff';
 import Website from './components/Website';
 import CRMAudit from './components/CRMAudit';
+import UsersPermissions from './components/UsersPermissions';
 
 // Permission Helper
 import { hasPermission, formatCurrency, canAccessModule, canPerformAction } from './utils';
@@ -122,7 +123,8 @@ const menuGroups = [
     items: [
       { id: 'configuration', label: 'Configuración General', tab: 'configuration' },
       { id: 'integrations', label: 'Integraciones', tab: 'integrations' },
-      { id: 'settings-audit', label: 'Auditoría del CRM', tab: 'settings-audit' }
+      { id: 'settings-audit', label: 'Auditoría del CRM', tab: 'settings-audit' },
+      { id: 'settings-users', label: 'Usuarios y Permisos', tab: 'settings-users' }
     ]
   }
 ];
@@ -217,6 +219,9 @@ function SeguimientosView({ isReadOnly }) {
 const getTabFromPath = (path) => {
   const cleanPath = path.toLowerCase().replace(/^\/|\/$/g, '');
   
+  if (cleanPath === 'configuracion/usuarios') return 'settings-users';
+  if (cleanPath === 'configuracion/users') return 'settings-users';
+  if (cleanPath === 'users') return 'settings-users';
   if (cleanPath === 'configuracion/auditoria') return 'settings-audit';
   if (cleanPath === 'configuracion/auditoría') return 'settings-audit';
   if (cleanPath === 'audit') return 'settings-audit';
@@ -271,7 +276,8 @@ const getTabFromPath = (path) => {
     'notifications': 'notifications',
     'notificaciones': 'notifications',
     'seguimientos': 'seguimientos',
-    'settings-audit': 'settings-audit'
+    'settings-audit': 'settings-audit',
+    'settings-users': 'settings-users'
   };
 
   return mapping[cleanPath] || 'dashboard';
@@ -307,7 +313,8 @@ const getPathFromTab = (tab) => {
     'website-libros': '/sitio-web/libros',
     'website-enlaces': '/sitio-web/enlaces',
     'website-secciones': '/sitio-web/secciones',
-    'settings-audit': '/configuracion/auditoria'
+    'settings-audit': '/configuracion/auditoria',
+    'settings-users': '/configuracion/usuarios'
   };
 
   return mapping[tab] || '/';
@@ -1044,6 +1051,16 @@ export default function App() {
             );
           }
           return <CRMAudit {...commonProps} />;
+        }
+        case 'settings-users': {
+          if (userRole !== 'administrador' && userRole !== 'admin') {
+            return (
+              <div className="p-8 text-center text-rose-500 font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl animate-fade-in shadow-sm">
+                No tienes permiso para administrar usuarios.
+              </div>
+            );
+          }
+          return <UsersPermissions {...commonProps} />;
         }
         case 'notifications': return (
           <div className="space-y-6 animate-fade-in text-slate-800 dark:text-slate-100">
