@@ -84,22 +84,25 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
         let tableError = null;
 
         try {
-          // A. Check if organization_id column exists by doing a direct check
-          const { error: orgIdCheckErr } = await supabase
-            .from(tableName)
-            .select('organization_id')
-            .limit(0);
+          // A. Check if organization_id column exists by doing a direct check (exclude organizations table itself)
+          if (tableName !== 'organizations') {
+            const { error: orgIdCheckErr } = await supabase
+              .from(tableName)
+              .select('organization_id')
+              .limit(0);
 
-          if (orgIdCheckErr && orgIdCheckErr.code === '42703') {
-            tableHasOrgId = false;
-            noOrgCol.push(tableName);
+            if (orgIdCheckErr && orgIdCheckErr.code === '42703') {
+              tableHasOrgId = false;
+              noOrgCol.push(tableName);
+            }
           }
 
           // B. Query the table to determine column differences
           // We select all expected columns to see if PostgreSQL returns undefined_column (42703)
+          const selectCols = tableName === 'organizations' ? 'id, created_at' : 'id, organization_id, user_id, is_test';
           const { data, error: selectErr } = await supabase
             .from(tableName)
-            .select('id, organization_id, user_id, is_test')
+            .select(selectCols)
             .limit(1000); // Safely retrieve up to 1000 records to audit locally
 
           if (selectErr) {
@@ -111,10 +114,17 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
           } else {
             const rows = data || [];
             // Count states locally
-            totalReal = rows.filter(r => r.organization_id === organizationId && r.is_test !== true && r.is_test !== 'true').length;
-            missingOrgIdCount = rows.filter(r => r.organization_id === null || r.organization_id === undefined || r.organization_id === '').length;
-            userIdNoOrgIdCount = rows.filter(r => r.user_id && (r.organization_id === null || r.organization_id === undefined || r.organization_id === '')).length;
-            testRecordsCount = rows.filter(r => r.is_test === true || r.is_test === 'true' || (r.test_run_id !== null && r.test_run_id !== undefined)).length;
+            if (tableName === 'organizations') {
+              totalReal = rows.filter(r => r.id === organizationId).length;
+              missingOrgIdCount = 0;
+              userIdNoOrgIdCount = 0;
+              testRecordsCount = 0;
+            } else {
+              totalReal = rows.filter(r => r.organization_id === organizationId && r.is_test !== true && r.is_test !== 'true').length;
+              missingOrgIdCount = rows.filter(r => r.organization_id === null || r.organization_id === undefined || r.organization_id === '').length;
+              userIdNoOrgIdCount = rows.filter(r => r.user_id && (r.organization_id === null || r.organization_id === undefined || r.organization_id === '')).length;
+              testRecordsCount = rows.filter(r => r.is_test === true || r.is_test === 'true' || (r.test_run_id !== null && r.test_run_id !== undefined)).length;
+            }
           }
 
           // C. Pinpoint exact missing columns
