@@ -6,6 +6,7 @@ import {
   X, Plus, FileText, Download, Edit2, Trash2, AlertTriangle
 } from 'lucide-react';
 import QuickQuoteModal from './QuickQuoteModal';
+import { calculateProposalTotals } from '../utils/proposalCalculations';
 
 export default function ClientQuotesModal({ 
   isOpen, 
@@ -190,39 +191,36 @@ export default function ClientQuotesModal({
       });
 
       // Totals
+      const totals = calculateProposalTotals(quote, items);
+      console.log("proposal totals usados en PDF", totals);
+
       y += 4;
       doc.setFont('Helvetica', 'normal');
       doc.setTextColor(100, 116, 139);
       
       doc.text('Subtotal Base:', 125, y + 4);
-      doc.text(formatCurrency(quote.subtotal || 0, quote.currency), 173, y + 4);
+      doc.text(formatCurrency(totals.subtotal, quote.currency), 173, y + 4);
 
       y += 5;
-      const adjustmentAmount = quote.extension_adjustment_type === 'percentage'
-        ? Math.round(Number(quote.subtotal || 0) * (Number(quote.extension_adjustment_value || 0) / 100))
-        : Number(quote.extension_adjustment_value || 0);
-
-      if (adjustmentAmount > 0) {
+      if (totals.adjustmentAmount > 0) {
         doc.text('Ajuste Extensión:', 125, y + 4);
-        doc.text(`+${formatCurrency(adjustmentAmount, quote.currency)}`, 173, y + 4);
+        doc.text(`+${formatCurrency(totals.adjustmentAmount, quote.currency)}`, 173, y + 4);
         y += 5;
       }
 
-      if (Number(quote.discount) > 0) {
+      if (totals.discount > 0) {
         doc.text('Descuento Especial:', 125, y + 4);
-        doc.text(`-${formatCurrency(quote.discount, quote.currency)}`, 173, y + 4);
+        doc.text(`-${formatCurrency(totals.discount, quote.currency)}`, 173, y + 4);
         y += 5;
       }
 
-      if (quote.includes_iva) {
-        const net = Math.round(Number(quote.total) / 1.19);
-        const vat = Number(quote.total) - net;
-        
+      const ivaMode = quote.iva_mode || (quote.includes_iva ? 'IVA incluido' : 'Exento / sin IVA');
+      if (ivaMode !== 'Exento / sin IVA') {
         doc.text('Neto:', 125, y + 4);
-        doc.text(formatCurrency(net, quote.currency), 173, y + 4);
+        doc.text(formatCurrency(totals.net, quote.currency), 173, y + 4);
         y += 5;
         doc.text('IVA (19%):', 125, y + 4);
-        doc.text(formatCurrency(vat, quote.currency), 173, y + 4);
+        doc.text(formatCurrency(totals.vat, quote.currency), 173, y + 4);
         y += 5;
       }
 
@@ -230,7 +228,7 @@ export default function ClientQuotesModal({
       doc.setTextColor(...primaryColor);
       doc.setFontSize(10.5);
       doc.text('TOTAL DE LA PROPUESTA:', 110, y + 5);
-      doc.text(formatCurrency(quote.total || 0, quote.currency), 173, y + 5);
+      doc.text(formatCurrency(totals.total, quote.currency), 173, y + 5);
 
       // Terms
       y += 18;

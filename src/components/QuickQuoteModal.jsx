@@ -25,96 +25,6 @@ const normalizeTimestamp = (value) => {
   return value;
 };
 
-const getPreviewRows = (items, totals, formHeader) => {
-  const rate = (Number(formHeader.tax_rate) || 19) / 100;
-  const rows = (items || []).map(item => {
-    const total = Number(item.unit_price) * Number(item.quantity);
-    let net = 0;
-    let vat = 0;
-    let rowTotal = 0;
-    if (formHeader.iva_mode === 'IVA incluido') {
-      net = Math.round(total / (1 + rate));
-      vat = total - net;
-      rowTotal = total;
-    } else if (formHeader.iva_mode === '+ IVA') {
-      net = total;
-      vat = Math.round(net * rate);
-      rowTotal = net + vat;
-    } else {
-      net = total;
-      vat = 0;
-      rowTotal = total;
-    }
-    return {
-      id: item.id,
-      concept: item.concept,
-      quantity: item.quantity,
-      net,
-      vat,
-      total: rowTotal
-    };
-  });
-
-  const adjVal = Number(formHeader.extension_adjustment_value) || 0;
-  if (adjVal !== 0) {
-    const adjAmt = totals.adjustmentAmount;
-    let net = 0;
-    let vat = 0;
-    let total = 0;
-    if (formHeader.iva_mode === 'IVA incluido') {
-      net = Math.round(adjAmt / (1 + rate));
-      vat = adjAmt - net;
-      total = adjAmt;
-    } else if (formHeader.iva_mode === '+ IVA') {
-      net = adjAmt;
-      vat = Math.round(net * rate);
-      total = net + vat;
-    } else {
-      net = adjAmt;
-      vat = 0;
-      total = adjAmt;
-    }
-    rows.push({
-      id: 'adjustment-row',
-      concept: `Ajuste por extensión (${formHeader.manuscript_pages || 0} pág.)`,
-      quantity: 1,
-      net,
-      vat,
-      total
-    });
-  }
-
-  const discVal = Number(formHeader.discount) || 0;
-  if (discVal !== 0) {
-    let net = 0;
-    let vat = 0;
-    let total = 0;
-    if (formHeader.iva_mode === 'IVA incluido') {
-      net = Math.round(discVal / (1 + rate));
-      vat = discVal - net;
-      total = discVal;
-    } else if (formHeader.iva_mode === '+ IVA') {
-      net = discVal;
-      vat = Math.round(net * rate);
-      total = net + vat;
-    } else {
-      net = discVal;
-      vat = 0;
-      total = discVal;
-    }
-    rows.push({
-      id: 'discount-row',
-      concept: `Descuento aplicado`,
-      quantity: 1,
-      net: -net,
-      vat: -vat,
-      total: -total
-    });
-  }
-
-  return rows;
-};
-
 const isPdfImageCompatible = (url) => {
   if (!url) return false;
   const clean = url.toLowerCase().split('?')[0];
@@ -1187,111 +1097,8 @@ export default function QuickQuoteModal({
       const totals = calculateProposalTotals(safeQuote, items);
       console.log("proposal totals usados en PDF", totals);
 
-      const rowItems = [];
       const ivaMode = safeQuote.iva_mode || (safeQuote.includes_iva ? 'IVA incluido' : 'Exento / sin IVA');
-      const taxRate = totals.taxRateVal;
-
-      (items || []).forEach(item => {
-        const itemNetTotal = Number(item.unit_price) * Number(item.quantity);
-        let net = 0;
-        let vat = 0;
-        let rowTotal = 0;
-
-        if (ivaMode === 'IVA incluido') {
-          net = Math.round(itemNetTotal / (1 + taxRate / 100));
-          vat = itemNetTotal - net;
-          rowTotal = itemNetTotal;
-        } else if (ivaMode === '+ IVA') {
-          net = itemNetTotal;
-          vat = Math.round(net * (taxRate / 100));
-          rowTotal = net + vat;
-        } else { 
-          net = itemNetTotal;
-          vat = 0;
-          rowTotal = itemNetTotal;
-        }
-
-        rowItems.push({
-          concept: item.concept,
-          quantity: item.quantity,
-          net: net,
-          vat: vat,
-          total: rowTotal
-        });
-      });
-
-      let netAdjustment = 0;
-      let vatAdjustment = 0;
-      let totalAdjustment = 0;
-
-      if (totals.adjustmentAmount !== 0) {
-        if (ivaMode === 'IVA incluido') {
-          netAdjustment = Math.round(totals.adjustmentAmount / (1 + taxRate / 100));
-          vatAdjustment = totals.adjustmentAmount - netAdjustment;
-          totalAdjustment = totals.adjustmentAmount;
-        } else if (ivaMode === '+ IVA') {
-          netAdjustment = totals.adjustmentAmount;
-          vatAdjustment = Math.round(netAdjustment * (taxRate / 100));
-          totalAdjustment = netAdjustment + vatAdjustment;
-        } else {
-          netAdjustment = totals.adjustmentAmount;
-          vatAdjustment = 0;
-          totalAdjustment = totals.adjustmentAmount;
-        }
-      }
-
-      let netDiscount = 0;
-      let vatDiscount = 0;
-      let totalDiscount = 0;
-
-      if (totals.discount !== 0) {
-        if (ivaMode === 'IVA incluido') {
-          netDiscount = Math.round(totals.discount / (1 + taxRate / 100));
-          vatDiscount = totals.discount - netDiscount;
-          totalDiscount = totals.discount;
-        } else if (ivaMode === '+ IVA') {
-          netDiscount = totals.discount;
-          vatDiscount = Math.round(netDiscount * (taxRate / 100));
-          totalDiscount = netDiscount + vatDiscount;
-        } else {
-          netDiscount = totals.discount;
-          vatDiscount = 0;
-          totalDiscount = totals.discount;
-        }
-      }
-
-      const finalRows = [...rowItems];
-      if (totals.adjustmentAmount !== 0) {
-        const isPercentage =
-          safeQuote.extension_adjustment_type === 'percentage' ||
-          safeQuote.extension_adjustment_type === 'percent' ||
-          safeQuote.extension_adjustment_type === 'Ajuste Porcentaje (%)';
-        const adjVal = Number(safeQuote.extension_adjustment_value) || 0;
-        const pages = safeQuote.manuscript_pages || 0;
-        const adjustmentLabel = isPercentage
-          ? `Ajuste por extensión (${pages} pág. / ${adjVal}%)`
-          : `Ajuste por extensión (${pages} pág.)`;
-
-        finalRows.push({
-          concept: adjustmentLabel,
-          quantity: 1,
-          net: netAdjustment,
-          vat: vatAdjustment,
-          total: totalAdjustment
-        });
-      }
-      if (totals.discount !== 0) {
-        finalRows.push({
-          concept: `Descuento aplicado`,
-          quantity: 1,
-          net: -netDiscount,
-          vat: -vatDiscount,
-          total: -totalDiscount
-        });
-      }
-
-      const finalNetSum = totals.net;
-      const finalVatSum = totals.vat;
+      const finalRows = totals.rows;
       const finalTotalSum = totals.total;
 
       checkPageBreak(25 + (finalRows.length * rowSpacing));
@@ -2348,7 +2155,7 @@ export default function QuickQuoteModal({
                             </tr>
                           </thead>
                           <tbody>
-                            {getPreviewRows(formItems, totals, formHeader).map(row => (
+                            {totals.rows.map(row => (
                               <tr key={row.id} className="border-b border-slate-50 dark:border-slate-855">
                                 <td className="p-2 font-bold">{row.concept}</td>
                                 <td className="p-2 text-center">{row.quantity}</td>
@@ -2533,7 +2340,7 @@ export default function QuickQuoteModal({
                               </tr>
                             </thead>
                             <tbody>
-                              {getPreviewRows(formItems, totals, formHeader).map(row => (
+                              {totals.rows.map(row => (
                                 <tr key={row.id} className="border-b border-slate-50 dark:border-slate-850">
                                   <td className="p-2 font-bold">{row.concept}</td>
                                   <td className="p-2 text-center">{row.quantity}</td>

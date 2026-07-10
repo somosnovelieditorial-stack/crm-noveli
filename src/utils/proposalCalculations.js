@@ -28,13 +28,16 @@ export function calculateProposalTotals(proposal, items) {
   }
   const rate = taxRateVal / 100;
 
-  const ivaMode = safeProposal.iva_mode || 'Exento / sin IVA';
+  const ivaMode = safeProposal.iva_mode || (safeProposal.includes_iva ? 'IVA incluido' : 'Exento / sin IVA');
 
   // 3. Extension adjustment logic
   const isPercentage =
     adjType === 'percentage' ||
     adjType === 'percent' ||
-    adjType === 'Ajuste Porcentaje (%)';
+    adjType === 'porcentaje' ||
+    adjType === 'Ajuste Porcentaje (%)' ||
+    String(adjType).toLowerCase().includes('percent') ||
+    String(adjType).toLowerCase().includes('porcent');
 
   let adjustmentAmount = 0;
   if (isPercentage) {
@@ -69,14 +72,111 @@ export function calculateProposalTotals(proposal, items) {
     total = totalRaw;
   }
 
+  // 5. Generate rows array
+  const rows = safeItems.map((item, idx) => {
+    const itemNetTotal = Number(item.unit_price || 0) * Number(item.quantity || 1);
+    let itemNet = 0;
+    let itemVat = 0;
+    let itemTotal = 0;
+
+    if (isIvaIncluded) {
+      itemNet = Math.round(itemNetTotal / (1 + rate));
+      itemVat = itemNetTotal - itemNet;
+      itemTotal = itemNetTotal;
+    } else if (isIvaPlus) {
+      itemNet = itemNetTotal;
+      itemVat = Math.round(itemNet * rate);
+      itemTotal = itemNet + itemVat;
+    } else {
+      itemNet = itemNetTotal;
+      itemVat = 0;
+      itemTotal = itemNetTotal;
+    }
+
+    return {
+      id: item.id || `item-${idx}`,
+      concept: item.concept,
+      quantity: Number(item.quantity) || 1,
+      net: itemNet,
+      vat: itemVat,
+      total: itemTotal
+    };
+  });
+
+  if (adjustmentAmount !== 0) {
+    let adjNet = 0;
+    let adjVat = 0;
+    let adjTotal = 0;
+
+    if (isIvaIncluded) {
+      adjNet = Math.round(adjustmentAmount / (1 + rate));
+      adjVat = adjustmentAmount - adjNet;
+      adjTotal = adjustmentAmount;
+    } else if (isIvaPlus) {
+      adjNet = adjustmentAmount;
+      adjVat = Math.round(adjNet * rate);
+      adjTotal = adjNet + adjVat;
+    } else {
+      adjNet = adjustmentAmount;
+      adjVat = 0;
+      adjTotal = adjustmentAmount;
+    }
+
+    const pages = Number(safeProposal.manuscript_pages) || 0;
+    const adjustmentLabel = isPercentage
+      ? `Ajuste por extensión (${pages} pág. / ${adjVal}%)`
+      : `Ajuste por extensión (${pages} pág.)`;
+
+    rows.push({
+      id: 'adjustment-row',
+      concept: adjustmentLabel,
+      quantity: 1,
+      net: adjNet,
+      vat: adjVat,
+      total: adjTotal
+    });
+  }
+
+  if (discount !== 0) {
+    let discNet = 0;
+    let discVat = 0;
+    let discTotal = 0;
+
+    if (isIvaIncluded) {
+      discNet = Math.round(discount / (1 + rate));
+      discVat = discount - discNet;
+      discTotal = discount;
+    } else if (isIvaPlus) {
+      discNet = discount;
+      discVat = Math.round(discNet * rate);
+      discTotal = discNet + discVat;
+    } else {
+      discNet = discount;
+      discVat = 0;
+      discTotal = discount;
+    }
+
+    rows.push({
+      id: 'discount-row',
+      concept: `Descuento aplicado`,
+      quantity: 1,
+      net: -discNet,
+      vat: -discVat,
+      total: -discTotal
+    });
+  }
+
   return {
     subtotal,
+    netSubtotal: subtotal,
     adjustmentAmount,
-    subtotalAdjusted,
+    extensionAdjustmentAmount: adjustmentAmount,
     discount,
     net,
     vat,
+    taxAmount: vat,
     total,
+    rows,
     taxRateVal
   };
 }
