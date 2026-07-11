@@ -4,14 +4,7 @@ import { X, ArrowUpRight, AlertCircle, FileText } from 'lucide-react';
 export default function DashboardDetailDrawer({
   isOpen,
   onClose,
-  title,
-  subtitle,
-  metricValue,
-  formula,
-  rows = [],
-  columns = [],
-  emptyMessage = 'No hay registros para este periodo',
-  moduleLink
+  detail
 }) {
   // Prevent body scroll when drawer is open
   useEffect(() => {
@@ -26,6 +19,16 @@ export default function DashboardDetailDrawer({
   }, [isOpen]);
 
   if (!isOpen) return null;
+  if (!detail) return null;
+
+  const rows = Array.isArray(detail.rows) ? detail.rows : [];
+  const columns = Array.isArray(detail.columns) ? detail.columns || detail.headers : [];
+  const title = detail.title || '';
+  const subtitle = detail.subtitle || detail.description || '';
+  const metricValue = detail.value !== undefined ? detail.value : detail.metricValue;
+  const formula = detail.formula || null;
+  const emptyMessage = detail.emptyMessage || 'No hay registros para este periodo';
+  const moduleLink = detail.moduleLink || detail.modulePath || null;
 
   const navigateToModule = (path) => {
     window.history.pushState(null, '', path);

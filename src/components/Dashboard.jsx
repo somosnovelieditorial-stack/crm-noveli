@@ -12,7 +12,24 @@ import {
 export default function Dashboard({ organizationId, realtimeTrigger }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('finanzas'); // 'finanzas' | 'operativa'
-  const [activeDetailCard, setActiveDetailCard] = useState(null);
+  const [selectedDetail, setSelectedDetail] = useState(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  const openDetail = (detail) => {
+    setSelectedDetail(detail || null);
+    setIsDetailOpen(true);
+  };
+
+  const closeDetail = () => {
+    setIsDetailOpen(false);
+    setSelectedDetail(null);
+  };
+
+  const handleCardClick = (cardId) => {
+    const detail = getDetailItems(cardId);
+    openDetail(detail);
+  };
+
   const [rawData, setRawData] = useState({
     incomes: [],
     expenses: [],
@@ -578,7 +595,7 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
     document.body.removeChild(link);
   };
 
-  const getDetailItems = () => {
+  const getDetailItemsRaw = (cardId) => {
     const { incomes, expenses, payroll, clients, prospects, services, reserveMovements, allocations } = rawData;
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
@@ -606,7 +623,7 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       return filtered.length > 0;
     });
 
-    switch (activeDetailCard) {
+    switch (cardId) {
       case 'total_disponible': {
         const list = [];
         monthIncomes.forEach(i => {
@@ -1188,14 +1205,16 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
     }
   };
 
-  const handleCSVExport = () => {
-    const details = getDetailItems();
-    if (!details) return;
-    exportToCSV(
-      `${details.title.toLowerCase().replace(/\s+/g, '_')}_detalle.csv`,
-      details.headers,
-      details.rows
-    );
+  const getDetailItems = (cardId) => {
+    const result = getDetailItemsRaw(cardId);
+    if (!result) return null;
+    return {
+      ...result,
+      subtitle: result.description,
+      columns: result.headers,
+      moduleLink: result.modulePath,
+      value: getMetricValue(cardId)
+    };
   };
 
   const getMetricValue = (cardId) => {
@@ -1721,15 +1740,9 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       )}
 
       <DashboardDetailDrawer
-        isOpen={!!activeDetailCard}
-        onClose={() => setActiveDetailCard(null)}
-        title={detailData?.title}
-        subtitle={detailData?.description}
-        metricValue={activeDetailCard ? getMetricValue(activeDetailCard) : null}
-        formula={detailData?.formula}
-        rows={detailData?.rows}
-        columns={detailData?.headers}
-        moduleLink={detailData?.modulePath}
+        isOpen={isDetailOpen}
+        onClose={closeDetail}
+        detail={selectedDetail}
       />
     </div>
   );
