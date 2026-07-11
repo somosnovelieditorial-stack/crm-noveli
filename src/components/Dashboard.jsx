@@ -122,7 +122,8 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         expensesRes,
         payrollRes,
         allocationsRes,
-        reserveMovementsRes
+        reserveMovementsRes,
+        staffRes
       ] = await Promise.all([
         fetchWithErrors('clients'),
         fetchWithErrors('prospects'),
@@ -131,7 +132,8 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         fetchWithErrors('expenses'),
         fetchWithErrors('payroll_payments'),
         fetchWithErrors('income_allocations'),
-        fetchWithErrors('operational_reserve_movements')
+        fetchWithErrors('operational_reserve_movements'),
+        fetchWithErrors('staff')
       ]);
 
       const clients = clientsRes.data;
@@ -143,9 +145,35 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       const incomesError = incomesRes.error;
       const expenses = expensesRes.data;
       const expensesError = expensesRes.error;
-      const payroll = payrollRes.data;
+      const rawPayroll = payrollRes.data;
       const allocations = allocationsRes.data;
       const reserveMovements = reserveMovementsRes.data;
+      const staff = staffRes.data || [];
+      const payroll = (rawPayroll || []).map(p => {
+        const member = (staff || []).find(s => s.id === p.staff_id);
+        const name = member ? member.name : 'Colaborador';
+        const role = member ? member.role : '';
+        
+        const amt = p.amount !== undefined && p.amount !== null ? p.amount :
+                    p.total !== undefined && p.total !== null ? p.total :
+                    p.salary_amount !== undefined && p.salary_amount !== null ? p.salary_amount :
+                    p.payment_amount || 0;
+                    
+        const pDate = p.date || p.payment_date || p.paid_at || p.created_at;
+        
+        const statusStr = p.status ? String(p.status).toLowerCase().trim() : '';
+        const isPaid = ['pagado', 'paid', 'completado', 'liquidado'].includes(statusStr) || (!p.status && Number(amt) > 0);
+
+        return {
+          ...p,
+          staff_name: name,
+          staff_role: role,
+          amount: Number(amt) || 0,
+          date: pDate,
+          isPaid,
+          status: p.status || (isPaid ? 'pagado' : 'pendiente')
+        };
+      });
 
       console.error('clientsError', clientsError);
       console.error('incomesError', incomesError);
@@ -273,8 +301,13 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
 
       // Period Payroll
       const payrollTotal = (monthPayroll || [])
-        .filter(p => p.status === 'pagado')
-        .reduce((sum, item) => sum + convertToClp(getNormalizedAmount(item), item.currency), 0);
+        .filter(p => p.isPaid)
+        .reduce((sum, item) => sum + convertToClp(item.amount, item.currency || 'CLP'), 0);
+
+      const payrollPayments = monthPayroll;
+      const totalPayrollPayments = payrollTotal;
+      console.log("payrollPayments dashboard", payrollPayments);
+      console.log("totalPayrollPayments dashboard", totalPayrollPayments);
 
       // Period Utility
       const utility = incomesNet - expensesNet - payrollTotal - taxesPaidTotal;
@@ -821,17 +854,18 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       }
 
       case 'payroll': {
-        const paidPayroll = monthPayroll.filter(p => p.status === 'pagado');
+        const paidPayroll = monthPayroll.filter(p => p.isPaid);
         return {
           title: 'Pagos a Personal',
           description: 'Liquidaciones de sueldo y honorarios pagados en el periodo.',
-          headers: ['Nombre Colaborador', 'Rol', 'Fecha Pago', 'Monto', 'Periodo'],
+          headers: ['Nombre Colaborador', 'Rol / Cargo', 'Monto Pagado', 'Fecha', 'Método', 'Estado'],
           rows: paidPayroll.map(p => [
-            p.staff_name || p.member_name || 'Colaborador',
-            p.role || '-',
-            p.date || p.payment_date || '-',
-            formatCurrency(getNormalizedAmount(p), p.currency),
-            p.period || '-'
+            p.staff_name || 'Colaborador',
+            p.staff_role || p.role || '-',
+            formatCurrency(p.amount, p.currency || 'CLP'),
+            p.date || '-',
+            p.method || p.payment_method || '-',
+            p.status || 'pagado'
           ]),
           rawRows: paidPayroll,
           modulePath: '/personal'
