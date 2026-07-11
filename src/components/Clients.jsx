@@ -2,6 +2,9 @@ import React, { useEffect, useState, Component } from 'react';
 import { supabase, isMock } from '../supabaseClient';
 import ClientQuotesModal from './ClientQuotesModal';
 import { formatDate, exportToCSV, syncPaymentStatus } from '../utils';
+import { createAutoIncome } from '../financeHelper';
+import IncomeDistributionModal from './IncomeDistributionModal';
+import ExportDropdown from './ExportDropdown';
 import { 
   Plus, Search, Edit2, Trash2, Eye, X, 
   User, Mail, Phone, Globe, FileText, Download, DollarSign, MapPin, Clock,
@@ -129,6 +132,9 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
   const [editorialStages, setEditorialStages] = useState([]);
   const [clientServices, setClientServices] = useState([]);
   const [loadingServices, setLoadingServices] = useState(false);
+
+  const [distributeIncomeData, setDistributeIncomeData] = useState(null);
+  const [isDistributeModalOpen, setIsDistributeModalOpen] = useState(false);
 
   const normalizeClient = (c) => {
     if (!c) return null;
@@ -1282,10 +1288,25 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
       // Log activity
       await logActivity('pago recibido', `Cliente marcado como pagado: ${client.name}`, client.id);
 
+      // Fetch or create the income to distribute
+      const inc = await syncClientIncome(client.id, null, {
+        ...client,
+        payment_status: 'pagado',
+        amount_paid: finalAmountPaid
+      });
+
       // 3. Refresh list of clients
       await fetchClients();
-      
-      alert('Cliente marcado como pagado e ingreso registrado correctamente.');
+
+      if (inc) {
+        setDistributeIncomeData({
+          ...inc,
+          clientName: client.name
+        });
+        setIsDistributeModalOpen(true);
+      } else {
+        alert('Cliente marcado como pagado e ingreso registrado correctamente.');
+      }
 
     } catch (err) {
       console.error('Error marking client as paid:', err);
@@ -1294,73 +1315,25 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
   };
 
   const syncClientIncome = async (clientId, serviceId, data) => {
-    const amount = parseFloat(data.amount_paid) || 0;
+    const amount = parseFloat(data.amount_paid) || parseFloat(data.total_agreed_amount) || 0;
     const todayStr = new Date().toISOString().split('T')[0];
-    const autoMark = 'Ingreso generado desde cliente';
-    const notes = `Pago registrado desde formulario de cliente para la obra: ${data.service_book_title || 'Sin obra'} (${autoMark})`;
+    const notes = `Pago registrado desde cliente para la obra: ${data.service_book_title || 'Sin obra'}`;
 
-    let incomeStatus = 'pendiente';
-    if (data.payment_status === 'pagado') {
-      incomeStatus = 'pagado';
-    } else if (data.payment_status === 'pendiente' || data.payment_status === 'sin pago') {
-      incomeStatus = 'pendiente';
+    if (data.payment_status === 'pagado' && amount > 0) {
+      const inc = await createAutoIncome({
+        client_id: clientId,
+        service_id: serviceId || null,
+        amount: amount,
+        currency: data.currency || 'CLP',
+        payment_method: data.payment_method || 'transferencia',
+        concept: `Pago Cliente: ${data.name || 'Desconocido'}`,
+        source_type: 'client_payment',
+        notes: notes,
+        includes_vat: data.includes_vat || false
+      });
+      return inc;
     }
-
-    // 1. Search if an automatic income already exists for this client and service (or client alone if serviceId is null)
-    let query = supabase
-      .from('incomes')
-      .select('*')
-      .eq('client_id', clientId);
-    
-    if (serviceId) {
-      query = query.eq('service_id', serviceId);
-    } else {
-      query = query.is('service_id', null);
-    }
-    
-    query = query.ilike('notes', `%${autoMark}%`);
-    const { data: existingIncomes, error: searchError } = await query;
-    if (searchError) {
-      console.error("Error searching automatic income:", searchError);
-    }
-
-    const incomePayload = {
-      client_id: clientId,
-      service_id: serviceId || null,
-      amount: amount,
-      currency: data.currency || 'CLP',
-      date: data.paid_at || data.service_start_date || todayStr,
-      payment_method: data.payment_method || 'transferencia',
-      includes_vat: data.includes_vat || false,
-      status: incomeStatus,
-      notes: notes,
-      source: 'cliente'
-    };
-
-    if (existingIncomes && existingIncomes.length > 0) {
-      const existingIncome = existingIncomes[0];
-      if (amount > 0) {
-        // Update existing income
-        const { error } = await supabase
-          .from('incomes')
-          .update(incomePayload)
-          .eq('id', existingIncome.id);
-        if (error) throw error;
-      } else {
-        // Delete to avoid clutter if amount is 0
-        const { error } = await supabase
-          .from('incomes')
-          .delete()
-          .eq('id', existingIncome.id);
-        if (error) throw error;
-      }
-    } else if (amount > 0) {
-      // Create new automatic income
-      const { error } = await supabase
-        .from('incomes')
-        .insert([incomePayload]);
-      if (error) throw error;
-    }
+    return null;
   };
 
   const handleToggleRequirement = async (field, currentValue) => {
@@ -1460,12 +1433,20 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
         serviceId = servicesRes[0].id;
       }
       
-      await syncClientIncome(selectedClient.id, serviceId, updatedClient);
+      const inc = await syncClientIncome(selectedClient.id, serviceId, updatedClient);
 
       await logActivity('requisito actualizado', `Requisito modificado desde checklist rápido del cliente: ${field} = ${newValue ? 'Sí' : 'No'}`, selectedClient.id);
 
       setSelectedClient(normalizeClient(updatedClient));
       setClients(clients.map(c => c.id === selectedClient.id ? normalizeClient({ ...c, ...updatedClient }) : c));
+
+      if (inc) {
+        setDistributeIncomeData({
+          ...inc,
+          clientName: selectedClient.name
+        });
+        setIsDistributeModalOpen(true);
+      }
     } catch (err) {
       console.error("Error updating requirement quick checkbox:", err);
       alert("Error al actualizar el requisito.");
@@ -1827,8 +1808,34 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
       const syncTargetId = selectedClient ? selectedClient.id : createdClient.id;
       await syncPaymentStatus(syncTargetId, formData.payment_status === 'pagado');
 
+      let inc = null;
+      if (formData.payment_status === 'pagado') {
+        let serviceId = null;
+        const { data: servicesRes } = await supabase
+          .from('services')
+          .select('id')
+          .eq('client_id', syncTargetId)
+          .order('created_at', { ascending: true });
+        if (servicesRes && servicesRes.length > 0) {
+          serviceId = servicesRes[0].id;
+        }
+
+        inc = await syncClientIncome(syncTargetId, serviceId, {
+          ...formData,
+          name: formData.name
+        });
+      }
+
       await fetchClients();
       setIsModalOpen(false);
+
+      if (inc) {
+        setDistributeIncomeData({
+          ...inc,
+          clientName: formData.name
+        });
+        setIsDistributeModalOpen(true);
+      }
     } catch (err) {
       console.error('Error saving client:', err);
       setFormError(err.message || 'Error al guardar los datos del cliente.');
@@ -1983,14 +1990,23 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <button
-            onClick={handleExportCSV}
-            disabled={filteredClients.length === 0}
-            className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer disabled:opacity-50"
-          >
-            <Download className="w-4 h-4" />
-            Exportar CSV
-          </button>
+          <ExportDropdown
+            data={filteredClients.map(c => ({
+              Nombre: c.name || '',
+              Email: c.email || '',
+              Instagram: c.instagram || '',
+              Teléfono: c.phone || '',
+              País: c.country || '',
+              Ciudad: c.city || '',
+              'Tipo Cliente': c.client_type || 'nacional',
+              'Moneda Preferida': c.preferred_currency || 'CLP',
+              Estado: c.status,
+              Notas: c.notes || '',
+              'Fecha Creación': c.created_at ? c.created_at.split('T')[0] : ''
+            }))}
+            filename="clientes"
+            headers={['Nombre', 'Email', 'Instagram', 'Teléfono', 'País', 'Ciudad', 'Tipo Cliente', 'Moneda Preferida', 'Estado', 'Notas', 'Fecha Creación']}
+          />
           {!isReadOnly && (
             <button
               onClick={handleOpenAddModal}
@@ -3668,6 +3684,20 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
         entityName={selectedClientForQuotes?.name}
         preferredCurrency={selectedClientForQuotes?.preferred_currency || 'CLP'}
       />
+
+      {isDistributeModalOpen && distributeIncomeData && (
+        <IncomeDistributionModal
+          isOpen={isDistributeModalOpen}
+          onClose={() => {
+            setIsDistributeModalOpen(false);
+            setDistributeIncomeData(null);
+          }}
+          income={distributeIncomeData}
+          onSave={() => {
+            fetchClients();
+          }}
+        />
+      )}
     </div>
   );
 }

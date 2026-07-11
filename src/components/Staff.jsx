@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
+import ExportDropdown from './ExportDropdown';
 import { 
   Users, DollarSign, Wallet, Plus, Trash2, Edit2, CheckCircle2, 
   AlertTriangle, Save, Calendar, UserPlus, CreditCard, ShieldAlert,
@@ -498,31 +499,73 @@ export default function Staff({ defaultSubTab = 'members', realtimeTrigger }) {
 
         <div className="flex gap-2">
           {activeSubTab === 'members' && (
-            <button 
-              onClick={handleOpenAddStaff}
-              className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-xs transition-all shadow-md cursor-pointer"
-            >
-              <UserPlus className="w-4 h-4" />
-              Nuevo Personal
-            </button>
+            <>
+              <ExportDropdown
+                data={staffList.map(s => ({
+                  Nombre: s.name,
+                  Rol: s.role,
+                  Tipo: s.type,
+                  'Pago Acordado': s.agreed_payment,
+                  Moneda: s.currency,
+                  Frecuencia: s.payment_frequency,
+                  Estado: s.status
+                }))}
+                filename="personal"
+                headers={['Nombre', 'Rol', 'Tipo', 'Pago Acordado', 'Moneda', 'Frecuencia', 'Estado']}
+              />
+              <button 
+                onClick={handleOpenAddStaff}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-xs transition-all shadow-md cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4" />
+                Nuevo Personal
+              </button>
+            </>
           )}
           {activeSubTab === 'payroll' && (
-            <button 
-              onClick={handleOpenAddPayroll}
-              className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-xs transition-all shadow-md cursor-pointer"
-            >
-              <CreditCard className="w-4 h-4" />
-              Registrar Pago
-            </button>
+            <>
+              <ExportDropdown
+                data={payrollList.map(p => ({
+                  Colaborador: p.staff_name,
+                  Monto: p.amount,
+                  Moneda: p.currency,
+                  Fecha: p.date,
+                  Método: p.method,
+                  Estado: p.status
+                }))}
+                filename="nominas_pagos"
+                headers={['Colaborador', 'Monto', 'Moneda', 'Fecha', 'Método', 'Estado']}
+              />
+              <button 
+                onClick={handleOpenAddPayroll}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-xs transition-all shadow-md cursor-pointer"
+              >
+                <CreditCard className="w-4 h-4" />
+                Registrar Pago
+              </button>
+            </>
           )}
           {activeSubTab === 'reserve' && (
-            <button 
-              onClick={handleOpenAddReserve}
-              className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-xs transition-all shadow-md cursor-pointer"
-            >
-              <Wallet className="w-4 h-4" />
-              Registrar Movimiento
-            </button>
+            <>
+              <ExportDropdown
+                data={reserveMovements.map(m => ({
+                  Fecha: m.date,
+                  Tipo: m.type,
+                  Monto: m.amount,
+                  Moneda: m.currency,
+                  Concepto: m.notes
+                }))}
+                filename="reserva_operacional"
+                headers={['Fecha', 'Tipo', 'Monto', 'Moneda', 'Concepto']}
+              />
+              <button 
+                onClick={handleOpenAddReserve}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-xs transition-all shadow-md cursor-pointer"
+              >
+                <Wallet className="w-4 h-4" />
+                Registrar Movimiento
+              </button>
+            </>
           )}
         </div>
       </div>

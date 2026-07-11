@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, formatDate, filterByPeriod, exportToCSV, syncPaymentStatus } from '../utils';
 import PeriodFilter from './PeriodFilter';
+import { createAutoIncome } from '../financeHelper';
+import IncomeDistributionModal from './IncomeDistributionModal';
+import ExportDropdown from './ExportDropdown';
 import { 
   Plus, Search, Edit2, Trash2, X, BookOpen, User, 
   Calendar, ClipboardList, CheckCircle2, PlayCircle, Circle,
@@ -42,6 +45,9 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
+
+  const [distributeIncomeData, setDistributeIncomeData] = useState(null);
+  const [isDistributeModalOpen, setIsDistributeModalOpen] = useState(false);
 
   // Advanced progress, template and config states
   const [autoApplyTemplate, setAutoApplyTemplate] = useState(true);
@@ -684,7 +690,8 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
         // Add Mode
         const res = await supabase
           .from('services')
-          .insert([payload]);
+          .insert([payload])
+          .select();
 
         if (res.error) throw res.error;
 
@@ -724,8 +731,36 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
       // Synchronize client payment status, services, and incomes!
       await syncPaymentStatus(formData.client_id);
 
+      let inc = null;
+      if (payload.payment_status === 'pagado') {
+        const amt = parseFloat(payload.amount_paid) || parseFloat(formData.total_agreed_amount) || parseFloat(formData.value) || 0;
+        if (amt > 0) {
+          inc = await createAutoIncome({
+            client_id: formData.client_id,
+            service_id: selectedService ? selectedService.id : null,
+            amount: amt,
+            currency: formData.currency || 'CLP',
+            payment_method: formData.payment_method || 'transferencia',
+            concept: `Pago Servicio: ${formData.title || formData.book_title || 'Desconocido'}`,
+            source_type: 'service_payment',
+            notes: `Pago registrado desde formulario de servicio: ${formData.book_title || 'Sin título'}`,
+            includes_vat: formData.includes_vat || false
+          });
+        }
+      }
+
       await fetchData();
       setIsModalOpen(false);
+
+      if (inc) {
+        const clientObj = clients.find(c => c.id === formData.client_id);
+        const clientName = clientObj ? clientObj.name : 'Cliente';
+        setDistributeIncomeData({
+          ...inc,
+          clientName: clientName
+        });
+        setIsDistributeModalOpen(true);
+      }
     } catch (err) {
       console.error('Error saving service:', err);
       setFormError(err.message || 'Error al guardar el servicio.');
@@ -1191,14 +1226,29 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
         </div>
         
         <div className="flex gap-2 shrink-0">
-          <button
-            onClick={handleExportCSV}
-            disabled={finalFilteredServices.length === 0}
-            className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer disabled:opacity-50"
-          >
-            <Download className="w-4 h-4" />
-            Exportar CSV
-          </button>
+          <ExportDropdown
+            data={finalFilteredServices.map(s => {
+              const duration = getDurationStats(s.start_date, s.estimated_delivery, s.contract_duration_value, s.contract_duration_unit);
+              return {
+                Autor: s.clientName,
+                Libro: s.book_title || '-',
+                Servicio: s.type || '-',
+                Valor: s.value || 0,
+                Moneda: s.currency || 'CLP',
+                'Tasa Cambio': s.exchange_rate || 1,
+                'Valor CLP': s.value_converted || s.value,
+                Estado: s.status,
+                'Fecha Inicio': s.start_date,
+                'Entrega Estimada': s.estimated_delivery,
+                'Etapa Actual': s.current_stage,
+                'Avance %': s.advance_percent,
+                'Días Transcurridos': duration.elapsedDays,
+                'Días Restantes': duration.remainingDays < 0 ? `Atrasado (${duration.remainingDays})` : duration.remainingDays
+              };
+            })}
+            filename={`servicios_contratados_${period.mode}_${period.year || ''}_${period.month || ''}`}
+            headers={['Autor', 'Libro', 'Servicio', 'Valor', 'Moneda', 'Tasa Cambio', 'Valor CLP', 'Estado', 'Fecha Inicio', 'Entrega Estimada', 'Etapa Actual', 'Avance %', 'Días Transcurridos', 'Días Restantes']}
+          />
           <button
             onClick={handleOpenAddModal}
             disabled={clients.length === 0 || isReadOnly}
@@ -2132,9 +2182,21 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
                 Guardar Etapas
               </button>
             </div>
-
           </div>
         </div>
+      )}
+      {isDistributeModalOpen && distributeIncomeData && (
+        <IncomeDistributionModal
+          isOpen={isDistributeModalOpen}
+          onClose={() => {
+            setIsDistributeModalOpen(false);
+            setDistributeIncomeData(null);
+          }}
+          income={distributeIncomeData}
+          onSave={() => {
+            fetchData();
+          }}
+        />
       )}
     </div>
   );

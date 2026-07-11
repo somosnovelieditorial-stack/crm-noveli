@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { formatDate, exportToCSV } from '../utils';
+import { createAutoIncome } from '../financeHelper';
+import IncomeDistributionModal from './IncomeDistributionModal';
+import ExportDropdown from './ExportDropdown';
 import { 
   Plus, Search, Edit2, Trash2, X, Sparkles, Check,
   User, Send, Target, Calendar, HelpCircle, FileText, Download, Globe, MapPin, Clock, DollarSign,
@@ -21,6 +24,9 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState(null);
+  
+  const [distributeIncomeData, setDistributeIncomeData] = useState(null);
+  const [isDistributeModalOpen, setIsDistributeModalOpen] = useState(false);
   
   // Main form state
   const [formData, setFormData] = useState({
@@ -970,6 +976,8 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
         clientTargetName = newClient.name;
       }
 
+      let tempCreatedIncome = null;
+
       // 2. Insert into activity_log if any requirements are already completed
       if (payload.payment_link_sent) {
         await logActivity('link de pago enviado', `Link de pago enviado a ${payload.name}`, clientTargetId);
@@ -1073,20 +1081,20 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
           if (sidx === 0) {
             const amtPaidVal = parseFloat(convertData.amount_paid) || 0;
             if (amtPaidVal > 0) {
-              const { error: incomeError } = await supabase
-                .from('incomes')
-                .insert({
-                  client_id: clientTargetId,
-                  service_id: newService.id,
-                  amount: amtPaidVal,
-                  currency: currency,
-                  date: convertData.paid_at || convertData.service_start_date || new Date().toISOString().split('T')[0],
-                  payment_method: convertData.payment_method || 'transferencia',
-                  includes_vat: convertData.includes_vat || false,
-                  status: 'pagado',
-                  notes: `Pago inicial registrado desde formulario de conversión de prospecto a cliente para la obra: ${convertData.service_book_title}`
-                });
-              if (incomeError) throw incomeError;
+              const incObj = await createAutoIncome({
+                client_id: clientTargetId,
+                service_id: newService.id,
+                amount: amtPaidVal,
+                currency: currency,
+                payment_method: convertData.payment_method || 'transferencia',
+                concept: `Pago de prospecto convertido: ${convertData.name}`,
+                source_type: 'prospect_payment',
+                notes: `Pago inicial registrado desde formulario de conversión de prospecto a cliente para la obra: ${convertData.service_book_title}`,
+                includes_vat: convertData.includes_vat || false
+              });
+              if (incObj) {
+                tempCreatedIncome = incObj;
+              }
             }
           }
 
@@ -1097,7 +1105,16 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
 
       await fetchProspects();
       setIsConvertModalOpen(false);
-      alert(`¡Prospecto convertido en cliente con éxito! Cliente: ${clientTargetName}`);
+      
+      if (tempCreatedIncome) {
+        setDistributeIncomeData({
+          ...tempCreatedIncome,
+          clientName: clientTargetName
+        });
+        setIsDistributeModalOpen(true);
+      } else {
+        alert(`¡Prospecto convertido en cliente con éxito! Cliente: ${clientTargetName}`);
+      }
 
     } catch (err) {
       console.error('Error converting prospect to client:', err);
@@ -1279,14 +1296,26 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <button
-            onClick={handleExportCSV}
-            disabled={filteredProspects.length === 0}
-            className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer disabled:opacity-50"
-          >
-            <Download className="w-4 h-4" />
-            Exportar CSV
-          </button>
+          <ExportDropdown
+            data={filteredProspects.map(p => ({
+              Nombre: p.name,
+              Contacto: p.contact || '',
+              Origen: p.origin,
+              'Servicio Interés': p.interest_service,
+              Probability: p.probability,
+              'Próxima Acción': p.next_action || '',
+              'Fecha Seguimiento': p.followup_date || '',
+              País: p.country || '',
+              Ciudad: p.city || '',
+              'Tipo Cliente': p.client_type || 'nacional',
+              'Moneda Preferida': p.preferred_currency || 'CLP',
+              'Convertido a Cliente': p.converted_to_client_id ? 'Sí' : 'No',
+              Notas: p.notes || '',
+              'Fecha Creación': p.created_at ? p.created_at.split('T')[0] : ''
+            }))}
+            filename="prospectos"
+            headers={['Nombre', 'Contacto', 'Origen', 'Servicio Interés', 'Probability', 'Próxima Acción', 'Fecha Seguimiento', 'País', 'Ciudad', 'Tipo Cliente', 'Moneda Preferida', 'Convertido a Cliente', 'Notas', 'Fecha Creación']}
+          />
           {!isReadOnly && (
             <button
               onClick={handleOpenAddModal}
@@ -3151,7 +3180,19 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
           </div>
         </div>
       )}
-
+      {isDistributeModalOpen && distributeIncomeData && (
+        <IncomeDistributionModal
+          isOpen={isDistributeModalOpen}
+          onClose={() => {
+            setIsDistributeModalOpen(false);
+            setDistributeIncomeData(null);
+          }}
+          income={distributeIncomeData}
+          onSave={() => {
+            fetchProspects();
+          }}
+        />
+      )}
     </div>
   );
 }

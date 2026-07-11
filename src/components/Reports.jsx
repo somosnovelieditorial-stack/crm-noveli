@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { formatCurrency, convertToClp, filterByPeriod, exportToCSV, calculateVatSplit, formatDate } from '../utils';
 import PeriodFilter from './PeriodFilter';
+import ExportDropdown from './ExportDropdown';
 import { 
   BarChart3, PieChart, Users, DollarSign, ArrowUpRight, 
   TrendingUp, Award, Layers, CreditCard, AlertTriangle, 
@@ -460,13 +461,31 @@ export default function Reports() {
             Auditoría de rentabilidad, ventas por servicio, impuestos y alertas de plazos por período.
           </p>
         </div>
-        <button
-          onClick={handleExportCSV}
-          className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer w-fit shadow-sm transition-all"
-        >
-          <Download className="w-4 h-4" />
-          Exportar Informe CSV
-        </button>
+        <ExportDropdown
+          data={[
+            { Seccion: 'Resumen Financiero', Indicador: 'Ingresos Totales Brutos (CLP Eq)', Valor: report.incomesTotal },
+            { Seccion: 'Resumen Financiero', Indicador: 'Ingresos Netos (CLP Eq)', Valor: report.incomesNet },
+            { Seccion: 'Resumen Financiero', Indicador: 'IVA Débito Recaudado (CLP Eq)', Valor: report.incomesVat },
+            { Seccion: 'Resumen Financiero', Indicador: 'Gastos Totales Brutos (CLP Eq)', Valor: report.expensesTotal },
+            { Seccion: 'Resumen Financiero', Indicador: 'Gastos Netos (CLP Eq)', Valor: report.expensesNet },
+            { Seccion: 'Resumen Financiero', Indicador: 'IVA Crédito Deducido (CLP Eq)', Valor: report.expensesVat },
+            { Seccion: 'Resumen Financiero', Indicador: 'Utilidad Estimada Real (CLP Eq)', Valor: report.utility },
+            { Seccion: 'Resumen Financiero', Indicador: 'Impuesto IVA por Pagar (CLP Eq)', Valor: report.vatToPay },
+            { Seccion: 'Operaciones', Indicador: 'Clientes Activos Creados', Valor: report.activeClients },
+            { Seccion: 'Operaciones', Indicador: 'Prospectos Nuevos', Valor: report.prospectsCount.total },
+            { Seccion: 'Operaciones', Indicador: 'Tasa Conversión Leads (%)', Valor: report.conversionRate },
+            { Seccion: 'Operaciones', Indicador: 'Tiempo Entrega Promedio (Días)', Valor: report.avgDeliveryTime },
+            { Seccion: 'Operaciones', Indicador: 'Servicios Editorial Contratados', Valor: report.servicesCount.total },
+            ...report.serviceSales.map(s => ({
+              Seccion: 'Ventas por Servicio',
+              Indicador: `Servicio: ${s.type} (${s.count} contratos)`,
+              Valor: s.total
+            }))
+          ]}
+          filename={`informe_gestion_avanzado_${period.mode}_${period.year || ''}_${period.month || ''}`}
+          headers={['Seccion', 'Indicador', 'Valor']}
+          headerLabels={['Sección', 'Indicador', 'Valor (CLP / Cantidad)']}
+        />
       </div>
 
       {/* Period Selector */}

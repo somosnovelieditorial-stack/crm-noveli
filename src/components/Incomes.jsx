@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, formatDate, calculateVatSplit, filterByPeriod, exportToCSV } from '../utils';
 import PeriodFilter from './PeriodFilter';
+import ExportDropdown from './ExportDropdown';
 import { 
   Plus, Search, Edit2, Trash2, X, DollarSign, 
   User, BookOpen, Calendar, HelpCircle, FileText, CheckCircle, AlertCircle, Download,
@@ -666,14 +667,27 @@ export default function Incomes({ realtimeTrigger }) {
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <button
-            onClick={handleExportCSV}
-            disabled={filteredIncomes.length === 0}
-            className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer disabled:opacity-50"
-          >
-            <Download className="w-4 h-4" />
-            Exportar CSV
-          </button>
+          <ExportDropdown
+            data={filteredIncomes.map(inc => {
+              const vatSplit = calculateVatSplit(inc.amount, inc.includes_vat);
+              return {
+                Fecha: inc.date || inc.created_at?.split('T')[0] || '-',
+                Cliente: inc.clientName,
+                Servicio: inc.serviceTitle,
+                Monto: inc.amount,
+                Moneda: inc.currency,
+                'Tasa Cambio': inc.exchange_rate || 1,
+                'Monto CLP': inc.value_converted || inc.amount,
+                Neto: inc.includes_vat ? vatSplit.net : inc.amount,
+                IVA: inc.includes_vat ? vatSplit.vat : 0,
+                'Medio de Pago': inc.payment_method,
+                Estado: inc.status,
+                Notas: inc.notes || ''
+              };
+            })}
+            filename={`ingresos_${period.mode}_${period.year || ''}_${period.month || ''}`}
+            headers={['Fecha', 'Cliente', 'Servicio', 'Monto', 'Moneda', 'Tasa Cambio', 'Monto CLP', 'Neto', 'IVA', 'Medio de Pago', 'Estado', 'Notas']}
+          />
           <button
             onClick={handleOpenAddModal}
             className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-sm transition-all shadow-md shadow-brand-600/20 cursor-pointer w-fit"

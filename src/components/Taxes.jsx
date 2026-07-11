@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit, convertToClp, filterByPeriod, exportToCSV } from '../utils';
 import PeriodFilter from './PeriodFilter';
+import ExportDropdown from './ExportDropdown';
 import { 
   Percent, FileText, Info, Calendar, ArrowRight,
   TrendingUp, TrendingDown, DollarSign, Calculator, Download
@@ -269,13 +270,20 @@ export default function Taxes() {
           </p>
         </div>
         
-        <button
-          onClick={handleExportCSV}
-          className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer w-fit"
-        >
-          <Download className="w-4 h-4" />
-          Exportar Balance CSV
-        </button>
+        <ExportDropdown
+          data={[
+            { Concepto: 'Ingresos Totales Brutos Facturados (CLP Eq)', Monto: report.incomesTotal, Moneda: 'CLP', Detalle: 'Monto bruto de boletas/facturas' },
+            { Concepto: 'IVA Débito Generado (CLP Eq)', Monto: report.incomesVat, Moneda: 'CLP', Detalle: '19% sobre facturación afecta' },
+            { Concepto: 'Ingresos Exentos / Internacionales (CLP Eq)', Monto: report.exemptIncomesTotal, Moneda: 'CLP', Detalle: 'Servicios exentos de IVA' },
+            { Concepto: 'Gastos Totales Afectos (CLP Eq)', Monto: report.expensesTotal, Moneda: 'CLP', Detalle: 'Gastos operativos' },
+            { Concepto: 'IVA Crédito Recuperado (CLP Eq)', Monto: report.expensesVat, Moneda: 'CLP', Detalle: '19% sobre gastos deducibles' },
+            { Concepto: 'Impuesto Neto IVA a Pagar (CLP Eq)', Monto: report.vatToPay, Moneda: 'CLP', Detalle: 'Débito - Crédito' },
+            { Concepto: 'Total Ingresos Netos (Ingreso Real)', Monto: report.netIncomesTotal, Moneda: 'CLP', Detalle: 'Ingreso neto facturado + ingreso exento' },
+            { Concepto: 'Utilidad Estimada Comercial', Monto: report.estimatedUtility, Moneda: 'CLP', Detalle: 'Total Ingresos Netos - Total Gastos Netos' }
+          ]}
+          filename={`impuestos_y_balances_${period.mode}_${period.year || ''}_${period.month || ''}`}
+          headers={['Concepto', 'Monto', 'Moneda', 'Detalle']}
+        />
       </div>
 
       {/* Period Filter Component */}

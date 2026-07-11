@@ -45,10 +45,15 @@ ALTER TABLE documents ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS test_run_id TEXT;
 
 -- 8. Alterations for table: incomes
+ALTER TABLE incomes ADD COLUMN IF NOT EXISTS source_type TEXT;
 ALTER TABLE incomes ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE;
 ALTER TABLE incomes ADD COLUMN IF NOT EXISTS test_run_id TEXT;
 
 -- 9. Alterations for table: expenses
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE SET NULL;
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS service_id UUID REFERENCES services(id) ON DELETE SET NULL;
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS fund_type TEXT;
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS money_source TEXT;
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE;
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS test_run_id TEXT;
 
@@ -117,3 +122,117 @@ CREATE OR REPLACE FUNCTION get_user_id_by_email(email_addr TEXT)
 RETURNS UUID AS $$
     SELECT id FROM auth.users WHERE email = email_addr LIMIT 1;
 $$ LANGUAGE sql SECURITY DEFINER;
+
+-- 24. Create Income Distributions Table
+CREATE TABLE IF NOT EXISTS income_distributions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE DEFAULT get_user_org_id(),
+    income_id UUID NOT NULL REFERENCES incomes(id) ON DELETE CASCADE,
+    client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+    prospect_id UUID REFERENCES prospects(id) ON DELETE SET NULL,
+    service_id UUID REFERENCES services(id) ON DELETE SET NULL,
+    distribution_type TEXT NOT NULL,
+    category TEXT,
+    amount NUMERIC(12,2) NOT NULL,
+    percentage NUMERIC(5,2),
+    status TEXT,
+    notes TEXT,
+    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL DEFAULT auth.uid(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    is_test BOOLEAN DEFAULT FALSE,
+    test_run_id TEXT
+);
+
+-- Enable RLS and setup policies for income_distributions
+ALTER TABLE income_distributions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage income_distributions" ON income_distributions;
+CREATE POLICY "Users can manage income_distributions" ON income_distributions 
+    FOR ALL USING (organization_id = get_user_org_id()) WITH CHECK (organization_id = get_user_org_id());
+
+-- 25. Create Client Funds Table
+CREATE TABLE IF NOT EXISTS client_funds (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE DEFAULT get_user_org_id(),
+    client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    service_id UUID REFERENCES services(id) ON DELETE SET NULL,
+    fund_type TEXT NOT NULL,
+    fund_name TEXT NOT NULL,
+    initial_amount NUMERIC(12,2) DEFAULT 0,
+    allocated_amount NUMERIC(12,2) DEFAULT 0,
+    used_amount NUMERIC(12,2) DEFAULT 0,
+    balance NUMERIC(12,2) DEFAULT 0,
+    status TEXT,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    is_test BOOLEAN DEFAULT FALSE,
+    test_run_id TEXT
+);
+
+-- Enable RLS and setup policies for client_funds
+ALTER TABLE client_funds ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage client_funds" ON client_funds;
+CREATE POLICY "Users can manage client_funds" ON client_funds 
+    FOR ALL USING (organization_id = get_user_org_id()) WITH CHECK (organization_id = get_user_org_id());
+
+-- 26. Create Fund Movements Table
+CREATE TABLE IF NOT EXISTS fund_movements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE DEFAULT get_user_org_id(),
+    fund_id UUID NOT NULL REFERENCES client_funds(id) ON DELETE CASCADE,
+    income_id UUID REFERENCES incomes(id) ON DELETE SET NULL,
+    expense_id UUID REFERENCES expenses(id) ON DELETE SET NULL,
+    movement_type TEXT NOT NULL,
+    amount NUMERIC(12,2) NOT NULL,
+    concept TEXT,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL DEFAULT auth.uid(),
+    is_test BOOLEAN DEFAULT FALSE,
+    test_run_id TEXT
+);
+
+-- Enable RLS and setup policies for fund_movements
+ALTER TABLE fund_movements ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage fund_movements" ON fund_movements;
+CREATE POLICY "Users can manage fund_movements" ON fund_movements 
+    FOR ALL USING (organization_id = get_user_org_id()) WITH CHECK (organization_id = get_user_org_id());
+
+-- 27. Create Income Tax Reservations Table
+CREATE TABLE IF NOT EXISTS income_tax_reservations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE DEFAULT get_user_org_id(),
+    income_id UUID NOT NULL REFERENCES incomes(id) ON DELETE CASCADE,
+    tax_type TEXT NOT NULL,
+    tax_rate NUMERIC(5,2) DEFAULT 0,
+    taxable_amount NUMERIC(12,2) DEFAULT 0,
+    tax_amount NUMERIC(12,2) DEFAULT 0,
+    status TEXT,
+    paid_at DATE,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS and setup policies for income_tax_reservations
+ALTER TABLE income_tax_reservations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage income_tax_reservations" ON income_tax_reservations;
+CREATE POLICY "Users can manage income_tax_reservations" ON income_tax_reservations 
+    FOR ALL USING (organization_id = get_user_org_id()) WITH CHECK (organization_id = get_user_org_id());
+
+-- 28. Create CRM Error Logs Table
+CREATE TABLE IF NOT EXISTS crm_error_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    error_message TEXT NOT NULL,
+    error_stack TEXT,
+    module TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS and setup policies for crm_error_logs
+ALTER TABLE crm_error_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can insert error logs" ON crm_error_logs;
+CREATE POLICY "Anyone can insert error logs" ON crm_error_logs FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Admins can select error logs" ON crm_error_logs;
+CREATE POLICY "Admins can select error logs" ON crm_error_logs FOR SELECT USING (true);

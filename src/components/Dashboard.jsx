@@ -123,7 +123,11 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         payrollRes,
         allocationsRes,
         reserveMovementsRes,
-        staffRes
+        staffRes,
+        distributionsRes,
+        clientFundsRes,
+        fundMovementsRes,
+        taxReservationsRes
       ] = await Promise.all([
         fetchWithErrors('clients'),
         fetchWithErrors('prospects'),
@@ -133,7 +137,11 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         fetchWithErrors('payroll_payments'),
         fetchWithErrors('income_allocations'),
         fetchWithErrors('operational_reserve_movements'),
-        fetchWithErrors('staff')
+        fetchWithErrors('staff'),
+        fetchWithErrors('income_distributions'),
+        fetchWithErrors('client_funds'),
+        fetchWithErrors('fund_movements'),
+        fetchWithErrors('income_tax_reservations')
       ]);
 
       const clients = clientsRes.data;
@@ -149,6 +157,10 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       const allocations = allocationsRes.data;
       const reserveMovements = reserveMovementsRes.data;
       const staff = staffRes.data || [];
+      const incomeDistributions = distributionsRes.data || [];
+      const clientFunds = clientFundsRes.data || [];
+      const fundMovements = fundMovementsRes.data || [];
+      const taxReservations = taxReservationsRes.data || [];
       const payroll = (rawPayroll || []).map(p => {
         const member = (staff || []).find(s => s.id === p.staff_id);
         const name = member ? member.name : 'Colaborador';
@@ -333,6 +345,27 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       }, 0);
 
       const operationalReserve = allocationsVal + movementsVal;
+
+      // Client funds calculations
+      const fundsAllocated = (clientFunds || []).reduce((sum, f) => sum + (parseFloat(f.allocated_amount) || 0), 0);
+      const fundsAvailable = (clientFunds || []).reduce((sum, f) => sum + (parseFloat(f.balance) || 0), 0);
+
+      // Incomes to distribute
+      let toDistribute = 0;
+      const validIncomes = (incomes || []).filter(i => i.status === 'pagado');
+      validIncomes.forEach(i => {
+        const amt = parseFloat(i.amount) || 0;
+        const vat = i.includes_vat ? (amt - (amt / 1.19)) : 0;
+        const netPool = amt - vat;
+        
+        const distSum = (incomeDistributions || [])
+          .filter(d => d.income_id === i.id)
+          .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+        
+        if (netPool > distSum) {
+          toDistribute += (netPool - distSum);
+        }
+      });
 
       // Period Pending Payments (clients and services created in the period)
       let periodPendingCount = 0;
@@ -574,6 +607,9 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
           pendingPaymentsCount: periodPendingCount,
           totalDisponible,
           taxesPaidTotal,
+          fundsAllocated,
+          fundsAvailable,
+          toDistribute,
         },
         counts: {
           activeClients,
@@ -807,6 +843,92 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
           ]),
           rawRows: list,
           modulePath: '/reserva'
+        };
+      }
+
+      case 'funds_allocated': {
+        const rows = (clientFunds || []).map(f => {
+          const client = (clients || []).find(c => c.id === f.client_id);
+          return [
+            client ? client.name : 'Cliente desconocido',
+            f.fund_type || '-',
+            formatCurrency(f.allocated_amount, 'CLP'),
+            formatCurrency(f.balance, 'CLP'),
+            f.updated_at ? new Date(f.updated_at).toLocaleDateString() : '-'
+          ];
+        });
+        return {
+          title: 'Fondos de Clientes (Asignado)',
+          description: 'Historial de fondos asignados a los clientes para gastos específicos.',
+          headers: ['Cliente', 'Tipo de Fondo', 'Total Asignado', 'Saldo Disponible', 'Última Actualización'],
+          rows: rows,
+          rawRows: clientFunds,
+          modulePath: '/clientes'
+        };
+      }
+
+      case 'funds_available': {
+        const rows = (clientFunds || []).map(f => {
+          const client = (clients || []).find(c => c.id === f.client_id);
+          return [
+            client ? client.name : 'Cliente desconocido',
+            f.fund_type || '-',
+            formatCurrency(f.balance, 'CLP'),
+            formatCurrency(f.allocated_amount, 'CLP'),
+            f.updated_at ? new Date(f.updated_at).toLocaleDateString() : '-'
+          ];
+        });
+        return {
+          title: 'Fondos de Clientes (Saldo Disponible)',
+          description: 'Saldos líquidos disponibles en los fondos de los clientes.',
+          headers: ['Cliente', 'Tipo de Fondo', 'Saldo Disponible', 'Monto Asignado Inicial', 'Última Actualización'],
+          rows: rows,
+          rawRows: clientFunds,
+          modulePath: '/clientes'
+        };
+      }
+
+      case 'to_distribute': {
+        const list = [];
+        const validIncomes = (incomes || []).filter(i => i.status === 'pagado');
+        validIncomes.forEach(i => {
+          const amt = parseFloat(i.amount) || 0;
+          const vat = i.includes_vat ? (amt - (amt / 1.19)) : 0;
+          const netPool = amt - vat;
+          
+          const distSum = (incomeDistributions || [])
+            .filter(d => d.income_id === i.id)
+            .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+          
+          if (netPool > distSum) {
+            const clientObj = (clients || []).find(c => c.id === i.client_id);
+            list.push({
+              date: i.date || '-',
+              concept: i.concept || 'Pago recibido',
+              clientName: clientObj ? clientObj.name : 'Cliente general',
+              netPool: netPool,
+              allocated: distSum,
+              pending: netPool - distSum
+            });
+          }
+        });
+
+        const rows = list.map(item => [
+          item.date,
+          item.clientName,
+          item.concept,
+          formatCurrency(item.netPool, 'CLP'),
+          formatCurrency(item.allocated, 'CLP'),
+          formatCurrency(item.pending, 'CLP')
+        ]);
+
+        return {
+          title: 'Ingresos Pendientes de Distribución',
+          description: 'Lista de ingresos recibidos netos que aún no se han distribuido al 100% en las áreas correspondientes.',
+          headers: ['Fecha', 'Cliente', 'Concepto', 'Pozo Neto Real', 'Distribuido', 'Pendiente'],
+          rows: rows,
+          rawRows: list,
+          modulePath: '/ingresos'
         };
       }
 
@@ -1262,6 +1384,9 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       case 'vat': return formatCurrency(stats.financials.vatToPay, 'CLP');
       case 'taxes': return formatCurrency(stats.financials.taxesPaidTotal, 'CLP');
       case 'receivables': return formatCurrency(stats.financials.pendingPaymentsVal, 'CLP');
+      case 'funds_allocated': return formatCurrency(stats.financials.fundsAllocated, 'CLP');
+      case 'funds_available': return formatCurrency(stats.financials.fundsAvailable, 'CLP');
+      case 'to_distribute': return formatCurrency(stats.financials.toDistribute, 'CLP');
       case 'active_clients': return stats.counts.activeClients;
       case 'active_prospects': return stats.counts.activeProspects;
       case 'services_process': return stats.counts.servicesInProcess;
@@ -1434,7 +1559,7 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
               </div>
 
               {/* Detalle Financiero Secundario */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {/* Ingresos del periodo */}
                 <div 
                   onClick={() => handleCardClick('incomes')}
@@ -1534,6 +1659,61 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
                   <div className="text-[10px] text-amber-600 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex justify-between items-center">
                     <span>{stats.financials.pendingPaymentsCount} cuentas</span>
                     <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+
+                {/* Fondos Asignados */}
+                <div 
+                  onClick={() => handleCardClick('funds_allocated')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase">Fondos Asignados</span>
+                    <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
+                      {formatCurrency(stats.financials.fundsAllocated, 'CLP')}
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-slate-450 dark:text-slate-400 font-medium mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex justify-between items-center">
+                    <span>Fondos totales clientes</span>
+                    <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+
+                {/* Fondos Disponibles */}
+                <div 
+                  onClick={() => handleCardClick('funds_available')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
+                >
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase">Fondos Disponibles</span>
+                    <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
+                      {formatCurrency(stats.financials.fundsAvailable, 'CLP')}
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-emerald-650 dark:text-emerald-500 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex justify-between items-center">
+                    <span>Saldo neto restante</span>
+                    <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+
+                {/* Por Distribuir */}
+                <div 
+                  onClick={() => handleCardClick('to_distribute')}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-850 shadow-2xs flex flex-col justify-between group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300 relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-amber-400/5 rounded-full blur-md pointer-events-none"></div>
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase">Por Distribuir</span>
+                    <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
+                      {formatCurrency(stats.financials.toDistribute, 'CLP')}
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-amber-600 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex justify-between items-center">
+                    <span>Ingresos sin asignar</span>
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
                   </div>
                 </div>
               </div>

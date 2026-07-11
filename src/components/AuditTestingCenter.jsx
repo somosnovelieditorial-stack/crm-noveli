@@ -63,6 +63,7 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
   const [testResults, setTestResults] = useState({});
   const [runningTests, setRunningTests] = useState({});
   const [cleaningUp, setCleaningUp] = useState(false);
+  const [fixing, setFixing] = useState(false);
 
   useEffect(() => {
     runDiagnostic();
@@ -264,6 +265,68 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
       alert('Ocurrió un error al limpiar registros de prueba: ' + err.message);
     } finally {
       setCleaningUp(false);
+    }
+  };
+
+  const handleFixInconsistencies = async () => {
+    setFixing(true);
+    try {
+      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+      
+      // 1. Recreate missing IVA reservations
+      const { data: incList } = await supabase.from('incomes').select('*').eq('status', 'pagado');
+      const { data: taxList } = await supabase.from('income_tax_reservations').select('*').eq('tax_type', 'iva');
+      
+      if (incList && incList.length > 0) {
+        for (const inc of incList) {
+          if (inc.includes_vat) {
+            const hasTax = (taxList || []).some(t => t.income_id === inc.id);
+            if (!hasTax) {
+              const amt = parseFloat(inc.amount) || 0;
+              const ivaVal = amt - (amt / 1.19);
+              await supabase.from('income_tax_reservations').insert({
+                organization_id: orgId,
+                income_id: inc.id,
+                tax_type: 'iva',
+                reserved_amount: ivaVal,
+                notes: 'IVA autogenerado para corregir inconsistencia de auditoría'
+              });
+            }
+          }
+        }
+      }
+      
+      // 2. Adjust negative balances of client funds to 0
+      const { data: fundList } = await supabase.from('client_funds').select('*');
+      if (fundList && fundList.length > 0) {
+        for (const f of fundList) {
+          const bal = parseFloat(f.balance) || 0;
+          if (bal < 0) {
+            await supabase.from('client_funds').update({
+              balance: 0,
+              notes: (f.notes || '') + ' [Saldo corregido automáticamente a 0 por auditoría]'
+            }).eq('id', f.id);
+            
+            await supabase.from('fund_movements').insert({
+              organization_id: orgId,
+              client_fund_id: f.id,
+              client_id: f.client_id,
+              type: 'entrada',
+              amount: Math.abs(bal),
+              concept: 'Ajuste de auditoría automática (saldo negativo corregido)',
+              notes: 'Movimiento generado automáticamente para balancear fondos.'
+            });
+          }
+        }
+      }
+      
+      alert('¡Corrección automática completada con éxito!');
+      await handleRunTest(12);
+    } catch (err) {
+      console.error('Error fixing inconsistencies:', err);
+      alert('Ocurrió un error al corregir las inconsistencias: ' + err.message);
+    } finally {
+      setFixing(false);
     }
   };
 
@@ -801,6 +864,89 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
           break;
         }
 
+        case 12: { // Auditoría de Consistencia Financiera
+          result.table = 'incomes, client_funds, expenses, income_tax_reservations';
+          
+          let inconsistencies = [];
+          
+          // 1. Check IVA tax reservations for paid incomes
+          const { data: incList } = await supabase.from('incomes').select('*').eq('status', 'pagado');
+          const { data: taxList } = await supabase.from('income_tax_reservations').select('*').eq('tax_type', 'iva');
+          
+          if (incList && incList.length > 0) {
+            incList.forEach(inc => {
+              if (inc.includes_vat) {
+                const parentTax = (taxList || []).find(t => t.income_id === inc.id);
+                if (!parentTax) {
+                  inconsistencies.push({
+                    item: `Ingreso ID: ${inc.id} (${inc.concept})`,
+                    issue: 'Falta reserva de IVA en la base de datos para este ingreso pagado con IVA.'
+                  });
+                }
+              }
+            });
+          }
+          
+          // 2. Check allocation sums
+          const { data: distList } = await supabase.from('income_distributions').select('*');
+          if (incList && incList.length > 0) {
+            incList.forEach(inc => {
+              const amt = parseFloat(inc.amount) || 0;
+              const vat = inc.includes_vat ? (amt - (amt / 1.19)) : 0;
+              const netPool = amt - vat;
+              
+              const sumDist = (distList || [])
+                .filter(d => d.income_id === inc.id)
+                .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+              
+              if (sumDist > netPool + 1) {
+                inconsistencies.push({
+                  item: `Ingreso ID: ${inc.id} (${inc.concept})`,
+                  issue: `La suma de distribuciones (${sumDist.toLocaleString()}) supera al pozo neto disponible (${netPool.toLocaleString()}).`
+                });
+              }
+            });
+          }
+          
+          // 3. Check client funds for negative balances
+          const { data: fundList } = await supabase.from('client_funds').select('*');
+          if (fundList && fundList.length > 0) {
+            fundList.forEach(f => {
+              const bal = parseFloat(f.balance) || 0;
+              if (bal < 0) {
+                inconsistencies.push({
+                  item: `Fondo ID: ${f.id} (${f.fund_type} - Cliente: ${f.client_id})`,
+                  issue: `El saldo del fondo es negativo: ${bal.toLocaleString()}.`
+                });
+              }
+            });
+          }
+          
+          if (inconsistencies.length > 0) {
+            const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
+            const logPromises = inconsistencies.map(inc => {
+              return supabase.from('crm_error_logs').insert({
+                organization_id: orgId,
+                module: 'finanzas',
+                error_message: inc.issue,
+                stack_trace: `Elemento: ${inc.item}`,
+                severity: 'alta'
+              });
+            });
+            await Promise.all(logPromises);
+            
+            result.status = 'Inconsistente';
+            result.record = `Se encontraron ${inconsistencies.length} inconsistencias financieras.`;
+            result.message = inconsistencies.map(inc => `- ${inc.item}: ${inc.issue}`).join('\n');
+            result.recommendation = 'Haga clic en "Corregir automáticamente" para resolver saldos negativos y regenerar reservas de IVA.';
+          } else {
+            result.status = 'OK';
+            result.record = 'Auditoría completada. Todo el flujo financiero es consistente al 100%.';
+            result.recommendation = 'No se requieren acciones correctoras.';
+          }
+          break;
+        }
+
         default:
           throw new Error('Prueba no soportada');
       }
@@ -1050,7 +1196,8 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
               { id: 8, label: '8. Probar Reserva Operacional', desc: 'Crea un depósito en el balance de reserva operacional TEST_QA.' },
               { id: 9, label: '9. Probar Catálogo y Packs', desc: 'Valida lectura del catálogo y packs activos de servicios.' },
               { id: 10, label: '10. Probar PDF de Propuesta', desc: 'Comprueba el motor de cálculo de propuesta unificada ($758.030) coincidiendo con el PDF.' },
-              { id: 11, label: '11. Probar Administrador Secundario', desc: 'Verifica la lectura de administradores y RLS en organization_members.' }
+              { id: 11, label: '11. Probar Administrador Secundario', desc: 'Verifica la lectura de administradores y RLS en organization_members.' },
+              { id: 12, label: '12. Consistencia Financiera', desc: 'Valida reservas de IVA, límites de distribuciones y saldos de fondos de clientes.' }
             ].map((test) => (
               <div 
                 key={test.id} 
@@ -1096,6 +1243,8 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
                         <span className="font-bold text-indigo-400">Prueba #{testNo}:</span>
                         {res.status === 'OK' ? (
                           <span className="px-1.5 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800 rounded font-bold text-[9px] uppercase">✓ OK</span>
+                        ) : res.status === 'Inconsistente' ? (
+                          <span className="px-1.5 py-0.5 bg-amber-950 text-amber-400 border border-amber-800 rounded font-bold text-[9px] uppercase">✗ INCONSISTENTE</span>
                         ) : (
                           <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 border border-rose-800 rounded font-bold text-[9px] uppercase">✗ ERROR</span>
                         )}
@@ -1113,7 +1262,9 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
                         </div>
                       ) : (
                         <div className="bg-rose-950/20 border border-rose-950/40 p-2 rounded text-rose-400 text-[10px] leading-relaxed whitespace-pre-wrap">
-                          <span className="font-bold block uppercase tracking-wider text-[9px] mb-0.5 text-rose-350">Error del sistema:</span>
+                          <span className="font-bold block uppercase tracking-wider text-[9px] mb-0.5 text-rose-350">
+                            {res.status === 'Inconsistente' ? 'Detalle de Inconsistencias:' : 'Error del sistema:'}
+                          </span>
                           {res.message}
                         </div>
                       )}
@@ -1121,6 +1272,16 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
                       <div className="text-[10px] text-slate-455">
                         <span className="font-bold text-indigo-300">Respuesta:</span> {res.recommendation}
                       </div>
+
+                      {res.status === 'Inconsistente' && (
+                        <button
+                          onClick={handleFixInconsistencies}
+                          disabled={fixing}
+                          className="mt-2 w-full py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded font-bold text-[10px] cursor-pointer transition-all disabled:opacity-50"
+                        >
+                          {fixing ? 'Corrigiendo...' : 'Corregir automáticamente'}
+                        </button>
+                      )}
                     </div>
                   );
                 })

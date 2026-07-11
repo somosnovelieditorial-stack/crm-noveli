@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, formatDate, calculateVatSplit, filterByPeriod, exportToCSV } from '../utils';
 import PeriodFilter from './PeriodFilter';
+import { deductExpenseFromFund } from '../financeHelper';
+import ExportDropdown from './ExportDropdown';
 import { 
   Plus, Search, Edit2, Trash2, X, DollarSign, 
   Briefcase, Calendar, ShieldCheck, ShieldAlert, FileText, Download,
@@ -28,6 +30,10 @@ export default function Expenses({ realtimeTrigger }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState(null);
 
+  const [clients, setClients] = useState([]);
+  const [services, setServices] = useState([]);
+  const [clientFunds, setClientFunds] = useState([]);
+
   // Form State
   const [formData, setFormData] = useState({
     provider_id: '',
@@ -42,7 +48,11 @@ export default function Expenses({ realtimeTrigger }) {
     tax_payment: false,
     affects_cashflow: true,
     tax_type: '',
-    source: 'Manual'
+    source: 'Manual',
+    client_id: '',
+    service_id: '',
+    money_source: 'caja_general',
+    fund_type: ''
   });
 
   const [formError, setFormError] = useState('');
@@ -65,9 +75,12 @@ export default function Expenses({ realtimeTrigger }) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [expensesRes, providersRes] = await Promise.all([
+      const [expensesRes, providersRes, clientsRes, servicesRes, fundsRes] = await Promise.all([
         supabase.from('expenses').select('*').order('date', { ascending: false }),
-        supabase.from('providers').select('id, name').order('name', { ascending: true })
+        supabase.from('providers').select('id, name').order('name', { ascending: true }),
+        supabase.from('clients').select('id, name').order('name', { ascending: true }),
+        supabase.from('services').select('id, client_id, book_title').order('book_title', { ascending: true }),
+        supabase.from('client_funds').select('*')
       ]);
 
       if (expensesRes.error) throw expensesRes.error;
@@ -75,6 +88,9 @@ export default function Expenses({ realtimeTrigger }) {
 
       setExpenses(expensesRes.data || []);
       setProviders(providersRes.data || []);
+      setClients(clientsRes.data || []);
+      setServices(servicesRes.data || []);
+      setClientFunds(fundsRes.data || []);
     } catch (err) {
       console.error('Error fetching expenses data:', err);
     } finally {
@@ -412,6 +428,7 @@ export default function Expenses({ realtimeTrigger }) {
         rate_date: formData.date
       };
 
+      let expenseId = '';
       if (selectedExpense) {
         // Edit Mode
         const { error } = await supabase
@@ -420,6 +437,7 @@ export default function Expenses({ realtimeTrigger }) {
           .eq('id', selectedExpense.id);
 
         if (error) throw error;
+        expenseId = selectedExpense.id;
       } else {
         // Add Mode
         const { data, error } = await supabase
@@ -430,6 +448,22 @@ export default function Expenses({ realtimeTrigger }) {
         if (error) throw error;
         
         const createdExpense = data?.[0];
+        expenseId = createdExpense?.id;
+
+        // Deduct from client fund if money_source is a client fund
+        const clientFundSources = ['publicidad', 'impresion', 'diseno', 'correccion', 'reserva_cliente'];
+        if (formData.client_id && clientFundSources.includes(formData.money_source)) {
+          await deductExpenseFromFund({
+            client_id: formData.client_id,
+            fund_type: formData.money_source,
+            amount: Number(formData.amount),
+            concept: `Gasto: ${formData.concept || 'Gasto descontado del fondo'}`,
+            notes: formData.notes,
+            expense_id: expenseId,
+            service_id: formData.service_id || null
+          });
+        }
+
         if (createdExpense && newDocFile) {
           await handleUploadExpenseDocument(newDocFile, newDocType, newDocNotes, newDocTitle, createdExpense.id, createdExpense.provider_id);
         }
@@ -524,14 +558,26 @@ export default function Expenses({ realtimeTrigger }) {
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <button
-            onClick={handleExportCSV}
-            disabled={filteredExpenses.length === 0}
-            className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer disabled:opacity-50"
-          >
-            <Download className="w-4 h-4" />
-            Exportar CSV
-          </button>
+          <ExportDropdown
+            data={filteredExpenses.map(exp => {
+              const vatSplit = calculateVatSplit(exp.amount, exp.includes_vat);
+              return {
+                Fecha: exp.date,
+                Categoria: exp.category,
+                Proveedor: exp.providerName,
+                Monto: exp.amount,
+                Moneda: exp.currency,
+                'Tasa Cambio': exp.exchange_rate || 1,
+                'Monto CLP': exp.value_converted || exp.amount,
+                Neto: exp.deductible ? (exp.includes_vat ? vatSplit.net : exp.amount) : exp.amount,
+                'IVA Credito': exp.deductible && exp.includes_vat ? vatSplit.vat : 0,
+                Deducible: exp.deductible ? 'Sí' : 'No',
+                Notas: exp.notes || ''
+              };
+            })}
+            filename={`gastos_${period.mode}_${period.year || ''}_${period.month || ''}`}
+            headers={['Fecha', 'Categoria', 'Proveedor', 'Monto', 'Moneda', 'Tasa Cambio', 'Monto CLP', 'Neto', 'IVA Credito', 'Deducible', 'Notas']}
+          />
           <button
             onClick={handleOpenAddModal}
             className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-sm transition-all shadow-md shadow-brand-600/20 cursor-pointer w-fit"
@@ -781,6 +827,80 @@ export default function Expenses({ realtimeTrigger }) {
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
                     </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Asociar a Cliente */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Asociar a Cliente</label>
+                    <select
+                      value={formData.client_id}
+                      onChange={(e) => {
+                        const cid = e.target.value;
+                        setFormData({
+                          ...formData,
+                          client_id: cid,
+                          service_id: '',
+                          money_source: 'caja_general'
+                        });
+                      }}
+                      className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
+                    >
+                      <option value="">-- Gasto General Empresa --</option>
+                      {clients.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Asociar a Servicio */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Servicio / Obra</label>
+                    <select
+                      value={formData.service_id}
+                      onChange={(e) => setFormData({...formData, service_id: e.target.value})}
+                      disabled={!formData.client_id}
+                      className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="">-- Sin Servicio Específico --</option>
+                      {services.filter(s => s.client_id === formData.client_id).map(s => (
+                        <option key={s.id} value={s.id}>{s.book_title || 'Sin título'}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Fuente de Financiamiento */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Fuente del Dinero</label>
+                    <select
+                      value={formData.money_source}
+                      onChange={(e) => setFormData({...formData, money_source: e.target.value})}
+                      className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none"
+                    >
+                      <option value="caja_general">Caja General</option>
+                      <option value="reserva_operacional">Reserva Operacional</option>
+                      <option value="utilidad">Utilidad Disponible</option>
+                      {formData.client_id && (
+                        <>
+                          <option value="publicidad">Fondo Publicidad Cliente</option>
+                          <option value="impresion">Fondo Impresión Cliente</option>
+                          <option value="diseno">Fondo Diseño Cliente</option>
+                          <option value="correccion">Fondo Corrección Cliente</option>
+                          <option value="reserva_cliente">Fondo Reserva Cliente</option>
+                        </>
+                      )}
+                    </select>
+                    {formData.client_id && ['publicidad', 'impresion', 'diseno', 'correccion', 'reserva_cliente'].includes(formData.money_source) && (
+                      <div className="text-[11px] text-slate-500 mt-1 font-semibold">
+                        Saldo Disponible: <span className="text-emerald-600">
+                          {formatCurrency(
+                            (clientFunds.find(f => f.client_id === formData.client_id && f.fund_type === formData.money_source)?.balance || 0),
+                            'CLP'
+                          )}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

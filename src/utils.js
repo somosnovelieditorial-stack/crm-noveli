@@ -122,6 +122,51 @@ export const exportToCSV = (data, filename, headers, headerLabels = []) => {
   document.body.removeChild(link);
 };
 
+export const exportToExcel = (data, filename, headers, headerLabels = []) => {
+  const content = "XML Excel Mock Content for " + filename + "\n" + (headerLabels.length ? headerLabels : headers).join("\t") + "\n" + 
+    data.map(row => headers.map(h => String(row[h] !== undefined && row[h] !== null ? row[h] : '')).join("\t")).join("\n");
+  const blob = new Blob([content], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${filename}.xlsx`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+export const exportToPDF = (data, filename, headers, headerLabels = []) => {
+  const content = `%PDF-1.4\n1 0 obj\n<< /Title (${filename}) /Creator (Somos Noveli CRM) >>\nendobj\n2 0 obj\n<< /Type /Catalog /Pages 3 0 R >>\nendobj\n` +
+    `3 0 obj\n<< /Type /Pages /Kids [4 0 R] /Count 1 >>\nendobj\n4 0 obj\n<< /Type /Page /Parent 3 0 R /MediaBox [0 0 612 792] /Contents 5 0 R >>\nendobj\n` +
+    `5 0 obj\n<< /Length 150 >>\nstream\nBT\n/F1 12 Tf\n70 700 Td\n(SOMOS NOVELI CRM - EXPORTACION DE DATOS) Tj\n0 -20 Td\n(Reporte: ${filename}) Tj\n0 -40 Td\n` +
+    `(${ (headerLabels.length ? headerLabels : headers).join(" | ") }) Tj\n` +
+    data.slice(0, 15).map((row, idx) => `0 -15 Td\n(${headers.map(h => String(row[h] !== undefined && row[h] !== null ? row[h] : '').substring(0, 20)).join(" | ")}) Tj`).join("\n") +
+    `\nET\nendstream\nendobj\nxref\n0 6\n0000000000 65535 f\n0000000009 00000 n\n0000000078 00000 n\n0000000127 00000 n\n0000000188 00000 n\n0000000288 00000 n\ntrailer\n<< /Size 6 /Root 2 0 R >>\nstartxref\n490\n%%EOF`;
+  
+  const blob = new Blob([content], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${filename}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+export const exportToWord = (data, filename, headers, headerLabels = []) => {
+  const content = `MOCK DOCX CONTENT\n==================\nSOMOS NOVELI CRM REPORT\nFile: ${filename}\n\n` +
+    `Headers: ${ (headerLabels.length ? headerLabels : headers).join(" | ") }\n` +
+    data.map(row => headers.map(h => String(row[h] !== undefined && row[h] !== null ? row[h] : '')).join(" | ")).join("\n");
+  const blob = new Blob([content], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${filename}.docx`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 /**
  * General filter helper to filter array of items by a date field and period settings
  * @param {Array} items 

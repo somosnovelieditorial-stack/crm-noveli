@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { formatCurrency, formatDate, filterByPeriod, exportToCSV } from '../utils';
 import PeriodFilter from './PeriodFilter';
+import ExportDropdown from './ExportDropdown';
 import { 
   CheckCircle, DollarSign, Calendar, TrendingUp, 
   User, Download, BookOpen, Layers, Award, Search 
@@ -175,14 +176,21 @@ export default function CompletedSales() {
         </div>
         
         <div className="flex gap-2 shrink-0">
-          <button
-            onClick={handleExportCSV}
-            disabled={finalFilteredSales.length === 0}
-            className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer disabled:opacity-50"
-          >
-            <Download className="w-4 h-4" />
-            Exportar CSV
-          </button>
+          <ExportDropdown
+            data={finalFilteredSales.map(s => ({
+              Cliente: s.clientName,
+              Libro: s.bookTitle,
+              Servicio: s.serviceType,
+              Monto: s.value,
+              Moneda: s.currency,
+              'Fecha Cierre': s.closingDate,
+              'Estado Pago': s.paymentStatus,
+              'Estado Proceso': s.processStatus,
+              'Utilidad Estimada': s.utility
+            }))}
+            filename={`ventas_finalizadas_${period.mode}_${period.year || ''}_${period.month || ''}`}
+            headers={['Cliente', 'Libro', 'Servicio', 'Monto', 'Moneda', 'Fecha Cierre', 'Estado Pago', 'Estado Proceso', 'Utilidad Estimada']}
+          />
         </div>
       </div>
 

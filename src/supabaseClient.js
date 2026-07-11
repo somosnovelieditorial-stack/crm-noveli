@@ -957,7 +957,12 @@ const INITIAL_MOCK_DATA = {
   ],
   payroll_payments: [],
   operational_reserve_movements: [],
-  income_allocations: []
+  income_allocations: [],
+  income_distributions: [],
+  client_funds: [],
+  fund_movements: [],
+  income_tax_reservations: [],
+  crm_error_logs: []
 };
 
 // LocalStorage database engine helper
