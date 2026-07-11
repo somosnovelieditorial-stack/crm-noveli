@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit, convertToClp, filterByPeriod } from '../utils';
 import PeriodFilter from './PeriodFilter';
+import DashboardDetailDrawer from './DashboardDetailDrawer';
 import { 
   TrendingUp, TrendingDown, DollarSign, Percent, X,
   Users, UserCheck, BookOpen, AlertCircle, Calendar,
@@ -1197,6 +1198,30 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
     );
   };
 
+  const getMetricValue = (cardId) => {
+    switch (cardId) {
+      case 'total_disponible': return formatCurrency(stats.financials.totalDisponible, 'CLP');
+      case 'utility': return formatCurrency(stats.financials.utility, 'CLP');
+      case 'reserve': return formatCurrency(stats.financials.operationalReserve, 'CLP');
+      case 'incomes': return formatCurrency(stats.financials.incomesTotal, 'CLP');
+      case 'expenses': return formatCurrency(stats.financials.expensesTotal, 'CLP');
+      case 'payroll': return formatCurrency(stats.financials.payrollTotal, 'CLP');
+      case 'vat': return formatCurrency(stats.financials.vatToPay, 'CLP');
+      case 'taxes': return formatCurrency(stats.financials.taxesPaidTotal, 'CLP');
+      case 'receivables': return formatCurrency(stats.financials.pendingPaymentsVal, 'CLP');
+      case 'active_clients': return stats.counts.activeClients;
+      case 'active_prospects': return stats.counts.activeProspects;
+      case 'services_process': return stats.counts.servicesInProcess;
+      case 'avg_progress': return `${stats.counts.avgProgress}%`;
+      case 'atrasados': return stats.counts.servicesAtrasados;
+      case 'proximos': return stats.counts.servicesProximos;
+      case 'finalizados': return stats.counts.servicesFinalizados;
+      case 'pending_contracts': return stats.counts.pendingContracts;
+      case 'pending_files': return stats.counts.pendingFiles;
+      default: return null;
+    }
+  };
+
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
@@ -1695,115 +1720,17 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         </>
       )}
 
-      {activeDetailCard && detailData && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-xs">
-            
-            {/* Modal Header */}
-            <div className="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-800">
-              <div>
-                <h3 className="text-lg font-bold text-slate-850 dark:text-slate-100 flex items-center gap-2">
-                  <Landmark className="w-5 h-5 text-indigo-500" />
-                  {detailData.title}
-                </h3>
-                <p className="text-slate-450 mt-1">{detailData.description}</p>
-              </div>
-              <button 
-                onClick={() => setActiveDetailCard(null)} 
-                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-850"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
-              
-              {/* Formula panel (if any) */}
-              {detailData.formula && (
-                <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-150 dark:border-slate-850 rounded-2xl space-y-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Fórmula de Cálculo</span>
-                  <p className="font-mono text-xs text-slate-700 dark:text-slate-300 font-bold bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-150/60 dark:border-slate-850">
-                    {detailData.formula}
-                  </p>
-                </div>
-              )}
-
-              {/* Records Table */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">Registros que Componen la Métrica</span>
-                  <span className="text-[11px] text-slate-400 font-semibold bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full">
-                    {detailData.rows.length} {detailData.rows.length === 1 ? 'registro' : 'registros'}
-                  </span>
-                </div>
-                
-                {detailData.rows.length === 0 ? (
-                  <div className="p-12 text-center text-slate-400 font-semibold bg-slate-50 dark:bg-slate-950/20 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col items-center gap-1.5">
-                    <AlertCircle className="w-8 h-8 text-slate-350" />
-                    <span>No hay registros para este periodo</span>
-                  </div>
-                ) : (
-                  <div className="border border-slate-150 dark:border-slate-850 rounded-2xl overflow-hidden shadow-2xs">
-                    <div className="overflow-x-auto max-h-[40vh]">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 font-bold border-b border-slate-100 dark:border-slate-850">
-                            {detailData.headers.map((h, idx) => (
-                              <th key={idx} className="p-3">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
-                          {detailData.rows.map((row, rIdx) => (
-                            <tr key={rIdx} className="hover:bg-slate-50/50 dark:hover:bg-slate-850/20">
-                              {row.map((val, cIdx) => (
-                                <td key={cIdx} className="p-3 font-medium text-slate-700 dark:text-slate-350">{val}</td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 bg-slate-50 dark:bg-slate-950/30 border-t border-slate-100 dark:border-slate-800 flex justify-between gap-3">
-              <div className="flex gap-2">
-                {detailData.modulePath && (
-                  <button
-                    onClick={() => {
-                      setActiveDetailCard(null);
-                      navigateToModule(detailData.modulePath);
-                    }}
-                    className="px-4 py-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-indigo-650 dark:text-indigo-400 hover:bg-slate-50 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 animate-pulse-slow"
-                  >
-                    Ver módulo completo
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                {detailData.rows.length > 0 && (
-                  <button
-                    onClick={handleCSVExport}
-                    className="px-4 py-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold cursor-pointer transition-all"
-                  >
-                    Exportar detalle CSV
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={() => setActiveDetailCard(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all"
-              >
-                Cerrar Detalle
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DashboardDetailDrawer
+        isOpen={!!activeDetailCard}
+        onClose={() => setActiveDetailCard(null)}
+        title={detailData?.title}
+        subtitle={detailData?.description}
+        metricValue={activeDetailCard ? getMetricValue(activeDetailCard) : null}
+        formula={detailData?.formula}
+        rows={detailData?.rows}
+        columns={detailData?.headers}
+        moduleLink={detailData?.modulePath}
+      />
     </div>
   );
 }
