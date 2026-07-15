@@ -1071,6 +1071,7 @@ const getMockDb = () => {
 
 const saveMockDb = (db) => {
   localStorage.setItem('somos_noveli_crm_db', JSON.stringify(db));
+  window.dispatchEvent(new CustomEvent('database-mutated'));
 };
 
 // Mock Query Builder that behaves similarly to Supabase postgrest-js
@@ -2395,4 +2396,36 @@ function formatCurrency(amount, currency = 'CLP') {
   }
   return 'US$ ' + Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+export const fetchNewWebsiteLeadsCount = async (organizationId) => {
+  try {
+    const { data, error } = await supabaseInstance
+      .from('website_leads')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('status', 'nuevo');
+      
+    if (error) throw error;
+    
+    // Exclude is_test = true
+    const realLeads = (data || []).filter(lead => {
+      if (lead.is_test === true || lead.is_test === 'true' || lead.is_test === 1) return false;
+      return true;
+    });
+    return realLeads.length;
+  } catch (err) {
+    console.error('Error fetching new website leads count:', err);
+    try {
+      await supabaseInstance.from('crm_error_logs').insert({
+        error_message: err.message,
+        error_stack: err.stack || '',
+        module: 'website-solicitudes',
+        created_at: new Date().toISOString()
+      });
+    } catch (logErr) {
+      console.error('Failed to log error to database:', logErr);
+    }
+    return 0;
+  }
+};
 

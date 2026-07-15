@@ -417,6 +417,15 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Listen to local database mutations to refresh metrics and counts in mock mode
+  useEffect(() => {
+    const handleMutation = () => {
+      setRealtimeTrigger(prev => prev + 1);
+    };
+    window.addEventListener('database-mutated', handleMutation);
+    return () => window.removeEventListener('database-mutated', handleMutation);
+  }, []);
+
   // Sync activeTab changes to browser history URL pathname
   useEffect(() => {
     if (user) {
@@ -453,6 +462,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const newLeadsCount = notifications.filter(n => n.type === 'solicitud_web').length;
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
   const userRef = useRef(null);
@@ -631,7 +641,7 @@ export default function App() {
     if (user) {
       loadNotifications();
     }
-  }, [activeTab, user]);
+  }, [activeTab, user, realtimeTrigger]);
 
   // Sync global search results
   useEffect(() => {
@@ -944,11 +954,14 @@ export default function App() {
     if (db.website_leads) {
       db.website_leads.forEach(lead => {
         if (lead.status === 'nuevo') {
+          if (lead.is_test === true || lead.is_test === 'true' || lead.is_test === 1 || lead.is_test === '1') {
+            return;
+          }
           list.push({
             id: `notif-web-lead-${lead.id}`,
             type: 'solicitud_web',
-            title: `Nueva Solicitud: ${lead.name}`,
-            desc: `${lead.email} | Servicio: ${lead.service_of_interest || 'General'} | Fecha: ${lead.created_at ? new Date(lead.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'S/F'}`,
+            title: 'Nueva solicitud web',
+            desc: `${lead.name} • ${lead.service_of_interest || 'General'} • ${lead.created_at ? new Date(lead.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'S/F'}`,
             tab: 'website-solicitudes',
             severity: 'high'
           });
@@ -1039,7 +1052,7 @@ export default function App() {
 
     const getComponent = () => {
       switch (activeTab) {
-        case 'dashboard': return <Dashboard {...commonProps} />;
+        case 'dashboard': return <Dashboard {...commonProps} onChangeTab={setActiveTab} />;
         case 'quotations': return <CommercialProposals {...commonProps} />;
         case 'clients': return <Clients {...commonProps} />;
         case 'prospects': return <Prospects {...commonProps} />;
@@ -1120,7 +1133,7 @@ export default function App() {
                         onClick={() => setActiveTab(notif.tab)}
                         className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-707 dark:text-slate-200 cursor-pointer shadow-xs"
                       >
-                        Ir al Módulo
+                        {notif.type === 'solicitud_web' ? 'Ver solicitud' : 'Ir al Módulo'}
                       </button>
                     </div>
                   ))
@@ -1262,6 +1275,11 @@ export default function App() {
                     <span className="flex items-center gap-2.5">
                       {group.icon}
                       <span className="font-bold">{group.label}</span>
+                      {group.id === 'website' && newLeadsCount > 0 && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-extrabold bg-rose-500 text-white rounded-full leading-none shrink-0">
+                          {newLeadsCount}
+                        </span>
+                      )}
                     </span>
                     {isExpanded ? (
                       <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -1288,7 +1306,14 @@ export default function App() {
                                 : 'text-slate-500 hover:text-slate-850 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100/50 dark:hover:bg-slate-800/20'}
                             `}
                           >
-                            <span>{item.label}</span>
+                            <span className="flex items-center justify-between w-full">
+                              <span>{item.label}</span>
+                              {item.id === 'website-solicitudes' && newLeadsCount > 0 && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-extrabold bg-rose-500 text-white rounded-full leading-none shrink-0">
+                                  {newLeadsCount}
+                                </span>
+                              )}
+                            </span>
                           </button>
                         );
                       })}

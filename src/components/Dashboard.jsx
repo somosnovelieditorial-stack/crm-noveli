@@ -31,7 +31,7 @@ const safeNumber = (value) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-export default function Dashboard({ organizationId, realtimeTrigger }) {
+export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('finanzas'); // 'finanzas' | 'operativa'
   const [selectedDetail, setSelectedDetail] = useState(null);
@@ -93,6 +93,7 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       avgProgress: 0,
       newWebLeads: 0,
     },
+    latestWebLead: null,
     upcomingMilestones: [],
     recentServices: []
   });
@@ -644,7 +645,11 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         : 0;
 
       // 12. Solicitudes Web Nuevas
-      const newWebLeadsCount = (websiteLeads || []).filter(l => l.status === 'nuevo').length;
+      const newLeadsList = (websiteLeads || [])
+        .filter(l => l.status === 'nuevo' && l.is_test !== true && l.is_test !== 'true' && l.is_test !== 1 && l.is_test !== '1')
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      const newWebLeadsCount = newLeadsList.length;
+      const latestLead = newLeadsList.length > 0 ? newLeadsList[0] : null;
 
       // Recent editorial services for bottom log
       const recentServices = (services || [])
@@ -695,6 +700,7 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
           avgProgress,
           newWebLeads: newWebLeadsCount,
         },
+        latestWebLead: latestLead,
         upcomingMilestones: [],
         recentServices
       });
@@ -2083,6 +2089,64 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
                   {stats.counts.readyToStart}
                 </span>
               </div>
+
+              {/* Solicitudes Web Nuevas Widget */}
+              {stats.counts.newWebLeads > 0 && stats.latestWebLead && (
+                <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 dark:from-amber-950/20 dark:to-orange-950/20 p-6 rounded-2xl border border-amber-200/50 dark:border-amber-900/50 shadow-xs space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                        </span>
+                        <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Solicitudes Web Nuevas</h3>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Tienes <span className="font-extrabold text-amber-600 dark:text-amber-400">{stats.counts.newWebLeads}</span> solicitudes pendientes de revisión.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (onChangeTab) {
+                          onChangeTab('website-solicitudes');
+                        } else {
+                          window.history.pushState(null, '', '/sitio-web/solicitudes');
+                          window.dispatchEvent(new PopStateEvent('popstate'));
+                        }
+                      }}
+                      className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1 border border-transparent"
+                    >
+                      <span>Ver Solicitudes</span>
+                      <ArrowUpRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-900/50 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 text-xs space-y-3">
+                    <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                      <div>
+                        <span className="font-bold text-slate-700 dark:text-slate-200">{stats.latestWebLead.name}</span>
+                        <span className="text-slate-450 mx-1.5">•</span>
+                        <span className="text-slate-500 dark:text-slate-400">{stats.latestWebLead.email}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {stats.latestWebLead.created_at ? new Date(stats.latestWebLead.created_at).toLocaleString('es-CL') : 'S/F'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 rounded text-[9px] font-bold uppercase tracking-wider">
+                          {stats.latestWebLead.service_of_interest || 'Consulta General'}
+                        </span>
+                      </div>
+                      <p className="text-slate-650 dark:text-slate-350 italic font-serif leading-relaxed mt-1">
+                        "{stats.latestWebLead.message}"
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Últimos servicios */}
               <div className="pt-2">
