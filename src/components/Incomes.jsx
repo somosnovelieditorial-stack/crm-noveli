@@ -54,6 +54,7 @@ export default function Incomes({ realtimeTrigger }) {
   const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
   const [viewingIncome, setViewingIncome] = useState(null);
   const [viewingAllocations, setViewingAllocations] = useState([]);
+  const [viewingDistributions, setViewingDistributions] = useState([]);
 
   // Services list filtered for current selected client in form
   const [formServices, setFormServices] = useState([]);
@@ -207,16 +208,16 @@ export default function Incomes({ realtimeTrigger }) {
     setViewingIncome(income);
     setIsDistributionModalOpen(true);
     setViewingAllocations([]);
+    setViewingDistributions([]);
     try {
-      const { data, error } = await supabase
-        .from('income_allocations')
-        .select('*')
-        .eq('income_id', income.id);
-      if (!error && data) {
-        setViewingAllocations(data);
-      }
+      const [allocRes, distRes] = await Promise.all([
+        supabase.from('income_allocations').select('*').eq('income_id', income.id),
+        supabase.from('income_distributions').select('*').eq('income_id', income.id)
+      ]);
+      if (allocRes.data) setViewingAllocations(allocRes.data);
+      if (distRes.data) setViewingDistributions(distRes.data);
     } catch (err) {
-      console.error("Error fetching viewing allocations:", err);
+      console.error("Error fetching viewing distributions and allocations:", err);
     }
   };
 
@@ -1394,77 +1395,105 @@ export default function Incomes({ realtimeTrigger }) {
         </div>
       )}
 
-      {/* Distribution Viewer Modal */}
-      {isDistributionModalOpen && viewingIncome && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl max-w-md w-full shadow-2xl p-6 space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Briefcase className="w-5 h-5 text-brand-500" />
-                Distribución de Ingreso
-              </h3>
-              <button 
-                onClick={() => setIsDistributionModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-655 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+       {/* Distribution Viewer Modal */}
+      {isDistributionModalOpen && viewingIncome && (() => {
+        const includesIva = viewingIncome.includes_vat === true || viewingIncome.includes_vat === 'true' || viewingIncome.includes_iva === true || viewingIncome.includes_iva === 'true';
+        let netoReal = 0;
+        if (viewingIncome.net_amount !== undefined && viewingIncome.net_amount !== null && Number(viewingIncome.net_amount) > 0) {
+          netoReal = Number(viewingIncome.net_amount);
+        } else {
+          if (includesIva) {
+            netoReal = viewingIncome.amount / 1.19;
+          } else {
+            netoReal = viewingIncome.amount;
+          }
+        }
+        const iva = includesIva ? (viewingIncome.amount - netoReal) : 0;
 
-            <div className="text-xs space-y-1.5 text-slate-600 dark:text-slate-400">
-              <div><strong>Cliente:</strong> {viewingIncome.clientName}</div>
-              <div><strong>Servicio:</strong> {viewingIncome.serviceTitle}</div>
-              <div><strong>Monto Total:</strong> {formatCurrency(viewingIncome.amount, viewingIncome.currency)}</div>
-              <div><strong>Monto Neto (Base):</strong> {formatCurrency(viewingIncome.includes_vat ? viewingIncome.amount / 1.19 : viewingIncome.amount, viewingIncome.currency)}</div>
-            </div>
+        const sumDist = viewingDistributions.length > 0
+          ? viewingDistributions.reduce((acc, curr) => acc + Number(curr.amount || 0), 0)
+          : viewingAllocations.reduce((acc, curr) => acc + Number(curr.calculated_amount || 0), 0);
 
-            <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Desglose de Reparto</h4>
-              {viewingAllocations.length === 0 ? (
-                <p className="text-xs text-slate-400 italic py-4 text-center">No se ha definido distribución para este ingreso.</p>
-              ) : (
-                <div className="space-y-2">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="text-slate-400 font-bold border-b border-slate-100 dark:border-slate-850">
-                          <th className="pb-1.5">Área</th>
-                          <th className="pb-1.5">Tipo</th>
-                          <th className="pb-1.5 text-right">Valor</th>
-                          <th className="pb-1.5 text-right">Monto</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-855/50">
-                        {viewingAllocations.map((alloc) => (
-                          <tr key={alloc.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10">
-                            <td className="py-2 font-bold capitalize text-slate-700 dark:text-slate-350">{alloc.area}</td>
-                            <td className="py-2 text-slate-500 capitalize">{alloc.allocation_type}</td>
-                            <td className="py-2 text-right font-mono text-slate-500">
-                              {alloc.allocation_type === 'porcentaje' ? `${alloc.value}%` : formatCurrency(alloc.value, viewingIncome.currency)}
-                            </td>
-                            <td className="py-2 text-right font-mono font-bold text-slate-850 dark:text-slate-100">
-                              {formatCurrency(alloc.calculated_amount, viewingIncome.currency)}
-                            </td>
+        const saldoPendiente = netoReal - sumDist;
+
+        return (
+          <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl max-w-md w-full shadow-2xl p-6 space-y-4">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-brand-500" />
+                  Distribución de Ingreso
+                </h3>
+                <button 
+                  onClick={() => setIsDistributionModalOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-655 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="text-xs space-y-2 text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-100 dark:border-slate-850">
+                <div className="flex justify-between"><strong>Ingreso Bruto:</strong> <span className="font-mono font-bold text-slate-800 dark:text-slate-100">{formatCurrency(viewingIncome.amount, viewingIncome.currency)}</span></div>
+                <div className="flex justify-between"><strong>IVA Débito:</strong> <span className="font-mono text-rose-500">{formatCurrency(iva, viewingIncome.currency)}</span></div>
+                <div className="flex justify-between"><strong>Neto Real (Base):</strong> <span className="font-mono font-bold text-emerald-500">{formatCurrency(netoReal, viewingIncome.currency)}</span></div>
+                <div className="flex justify-between border-t border-slate-200 dark:border-slate-800 pt-1.5"><strong>Total Distribuido:</strong> <span className="font-mono font-bold text-slate-800 dark:text-slate-100">{formatCurrency(sumDist, viewingIncome.currency)}</span></div>
+                <div className="flex justify-between"><strong>Saldo Pendiente:</strong> <span className={`font-mono font-bold ${saldoPendiente > 0 ? 'text-amber-500' : 'text-slate-850 dark:text-slate-100'}`}>{formatCurrency(saldoPendiente > 0 ? saldoPendiente : 0, viewingIncome.currency)}</span></div>
+              </div>
+
+              <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
+                <h4 className="text-xs font-bold text-slate-450 uppercase tracking-wider mb-2">Desglose de Reparto</h4>
+                {viewingDistributions.length === 0 && viewingAllocations.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-4 text-center">Este ingreso aún no tiene distribución interna detallada.</p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="overflow-x-auto max-h-[30vh]">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="text-slate-400 font-bold border-b border-slate-150 dark:border-slate-800">
+                            <th className="pb-1.5">Área / Destino</th>
+                            <th className="pb-1.5">Tipo</th>
+                            <th className="pb-1.5 text-right">Porcentaje</th>
+                            <th className="pb-1.5 text-right">Monto</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
+                          {viewingDistributions.length > 0 ? (
+                            viewingDistributions.map((dist) => (
+                              <tr key={dist.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10">
+                                <td className="py-2 font-bold capitalize text-slate-700 dark:text-slate-350">{dist.category}</td>
+                                <td className="py-2 text-slate-500 capitalize">smart</td>
+                                <td className="py-2 text-right font-mono text-slate-500">
+                                  {dist.percentage !== null && dist.percentage !== undefined ? `${dist.percentage}%` : '-'}
+                                </td>
+                                <td className="py-2 text-right font-mono font-bold text-slate-850 dark:text-slate-100">
+                                  {formatCurrency(dist.amount, viewingIncome.currency)}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            viewingAllocations.map((alloc) => (
+                              <tr key={alloc.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10">
+                                <td className="py-2 font-bold capitalize text-slate-700 dark:text-slate-350">{alloc.area}</td>
+                                <td className="py-2 text-slate-500 capitalize">{alloc.allocation_type}</td>
+                                <td className="py-2 text-right font-mono text-slate-500">
+                                  {alloc.allocation_type === 'porcentaje' ? `${alloc.value}%` : formatCurrency(alloc.value, viewingIncome.currency)}
+                                </td>
+                                <td className="py-2 text-right font-mono font-bold text-slate-850 dark:text-slate-100">
+                                  {formatCurrency(alloc.calculated_amount, viewingIncome.currency)}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-850 dark:text-slate-100">
-                    <span>Total Distribuido:</span>
-                    <span>
-                      {formatCurrency(
-                        viewingAllocations.reduce((acc, a) => acc + Number(a.calculated_amount), 0),
-                        viewingIncome.currency
-                      )}
-                    </span>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

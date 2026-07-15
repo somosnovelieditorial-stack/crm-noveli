@@ -393,8 +393,17 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
 
       // Incomes to distribute
       let toDistribute = 0;
+      let hasPendingOrParcialDist = false;
       const paidIncomes = (incomes || []).filter(i => i.status === 'pagado');
       paidIncomes.forEach(i => {
+        const distStatus = i.distribution_status || 'sin_configurar';
+        const hasDists = (incomeDistributions || []).some(d => d.income_id === i.id);
+        const matchesCondition = distStatus === 'pendiente' || distStatus === 'parcial' || (hasDists && distStatus !== 'completa');
+        
+        if (!matchesCondition) return;
+
+        hasPendingOrParcialDist = true;
+
         const amt = safeNumber(i.amount);
         const includesIva = i.includes_vat === true || i.includes_vat === 'true' || i.includes_iva === true || i.includes_iva === 'true';
         let net = 0;
@@ -662,6 +671,7 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
           fundsAllocated,
           fundsAvailable,
           toDistribute,
+          showToDistributeCard: hasPendingOrParcialDist,
         },
         counts: {
           activeClients,
@@ -972,7 +982,10 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       }
 
       case 'to_distribute': {
-        const list = [];
+        const sinConfigurar = [];
+        const parcial = [];
+        const completa = [];
+
         const paidIncomes = (incomes || []).filter(i => i.status === 'pagado');
         paidIncomes.forEach(i => {
           const amt = safeNumber(i.amount);
@@ -994,34 +1007,77 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
             .filter(d => d.income_id === i.id)
             .reduce((sum, d) => sum + convertToClp(safeNumber(d.amount), i.currency), 0);
           
-          if (clpNetPool > distSum) {
-            const clientObj = (clients || []).find(c => c.id === i.client_id);
-            list.push({
-              date: i.date || '-',
-              concept: i.concept || 'Pago recibido',
-              clientName: clientObj ? clientObj.name : 'Cliente general',
-              netPool: clpNetPool,
-              allocated: distSum,
-              pending: clpNetPool - distSum
-            });
+          const pending = clpNetPool - distSum;
+          const clientObj = (clients || []).find(c => c.id === i.client_id);
+          const clientName = clientObj ? clientObj.name : 'Cliente general';
+
+          const itemData = {
+            date: i.date || '-',
+            clientName,
+            concept: i.concept || 'Pago recibido',
+            netPool: clpNetPool,
+            allocated: distSum,
+            pending: pending > 0 ? pending : 0
+          };
+
+          const status = i.distribution_status || 'sin_configurar';
+          if (status === 'completa') {
+            completa.push(itemData);
+          } else if (status === 'pendiente' || status === 'parcial') {
+            parcial.push(itemData);
+          } else {
+            sinConfigurar.push(itemData);
           }
         });
 
-        const rows = list.map(item => [
-          item.date,
-          item.clientName,
-          item.concept,
-          formatCurrency(item.netPool, 'CLP'),
-          formatCurrency(item.allocated, 'CLP'),
-          formatCurrency(item.pending, 'CLP')
-        ]);
+        const mapToRow = (item, type) => {
+          if (type === 'sin_configurar') {
+            return [
+              item.date,
+              item.clientName,
+              item.concept,
+              formatCurrency(item.netPool, 'CLP')
+            ];
+          } else if (type === 'completa') {
+            return [
+              item.date,
+              item.clientName,
+              item.concept,
+              formatCurrency(item.netPool, 'CLP'),
+              formatCurrency(item.allocated, 'CLP')
+            ];
+          } else {
+            return [
+              item.date,
+              item.clientName,
+              item.concept,
+              formatCurrency(item.netPool, 'CLP'),
+              formatCurrency(item.allocated, 'CLP'),
+              formatCurrency(item.pending, 'CLP')
+            ];
+          }
+        };
 
         return {
-          title: 'Ingresos Pendientes de Distribución',
-          description: 'Lista de ingresos recibidos netos que aún no se han distribuido al 100% en las áreas correspondientes.',
-          headers: ['Fecha', 'Cliente', 'Concepto', 'Pozo Neto Real', 'Distribuido', 'Pendiente'],
-          rows: rows,
-          rawRows: list,
+          title: 'Distribución de Ingresos',
+          description: 'Control de distribución de ingresos a las diferentes áreas de la organización.',
+          sections: [
+            {
+              title: 'Ingresos Sin Distribución Configurada',
+              headers: ['Fecha', 'Cliente', 'Concepto', 'Pozo Neto Real'],
+              rows: sinConfigurar.map(item => mapToRow(item, 'sin_configurar'))
+            },
+            {
+              title: 'Ingresos Parcialmente Distribuidos',
+              headers: ['Fecha', 'Cliente', 'Concepto', 'Pozo Neto Real', 'Distribuido', 'Pendiente'],
+              rows: parcial.map(item => mapToRow(item, 'parcial'))
+            },
+            {
+              title: 'Ingresos Completamente Distribuidos',
+              headers: ['Fecha', 'Cliente', 'Concepto', 'Pozo Neto Real', 'Distribuido'],
+              rows: completa.map(item => mapToRow(item, 'completa'))
+            }
+          ],
           modulePath: '/ingresos'
         };
       }
@@ -1802,25 +1858,27 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
                 </div>
 
                 {/* Por Distribuir */}
-                <div 
-                  onClick={() => handleCardClick('to_distribute')}
-                  className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-850 shadow-2xs flex flex-col justify-between group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300 relative overflow-hidden"
-                >
-                  <div className="absolute top-0 right-0 w-12 h-12 bg-amber-400/5 rounded-full blur-md pointer-events-none"></div>
-                  <div>
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase">Por Distribuir</span>
-                    <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
-                      {formatCurrency(stats.financials.toDistribute, 'CLP')}
+                {stats.financials.showToDistributeCard && (
+                  <div 
+                    onClick={() => handleCardClick('to_distribute')}
+                    className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-850 shadow-2xs flex flex-col justify-between group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300 relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-12 h-12 bg-amber-400/5 rounded-full blur-md pointer-events-none"></div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase">Por Distribuir</span>
+                      <div className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
+                        {formatCurrency(stats.financials.toDistribute, 'CLP')}
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-amber-600 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex justify-between items-center">
+                      <span>Ingresos sin asignar</span>
+                      <span className="flex h-2 w-2 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                      </span>
                     </div>
                   </div>
-                  <div className="text-[10px] text-amber-600 font-bold mt-2 pt-2 border-t border-slate-50 dark:border-slate-850 flex justify-between items-center">
-                    <span>Ingresos sin asignar</span>
-                    <span className="flex h-2 w-2 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                    </span>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           ) : (

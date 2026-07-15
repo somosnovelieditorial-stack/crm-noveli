@@ -303,6 +303,7 @@ CREATE TABLE IF NOT EXISTS incomes (
     exchange_rate NUMERIC(12,4) NOT NULL DEFAULT 1.0000,
     value_converted NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     rate_date DATE,
+    distribution_status TEXT CHECK (distribution_status IN ('sin_configurar', 'pendiente', 'parcial', 'completa')) DEFAULT 'sin_configurar',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

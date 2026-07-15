@@ -15,6 +15,7 @@ export default function IncomeDistributionModal({ isOpen, onClose, income, onSav
   
   // Distribution rows
   const [distributions, setDistributions] = useState([]);
+  const [distributionStatus, setDistributionStatus] = useState('sin_configurar');
   
   // Available categories
   const categories = [
@@ -50,6 +51,7 @@ export default function IncomeDistributionModal({ isOpen, onClose, income, onSav
 
   const initializeDistribution = async () => {
     if (!income) return;
+    setDistributionStatus(income.distribution_status || 'sin_configurar');
     
     // 1. Determine tax mode based on includes_vat and notes
     let initialTaxMode = 'exento';
@@ -130,6 +132,16 @@ export default function IncomeDistributionModal({ isOpen, onClose, income, onSav
 
   const totalDistributed = calculatedRows.reduce((sum, r) => sum + r.computedAmount, 0);
   const remainingAmount = netPool - totalDistributed;
+
+  useEffect(() => {
+    if (distributions.length > 0) {
+      if (Math.abs(remainingAmount) <= 1) {
+        setDistributionStatus('completa');
+      } else {
+        setDistributionStatus('parcial');
+      }
+    }
+  }, [remainingAmount, distributions.length]);
 
   const handleAddRow = () => {
     setDistributions(prev => [
@@ -300,6 +312,12 @@ export default function IncomeDistributionModal({ isOpen, onClose, income, onSav
         }
       }
 
+      // 5.5. Update distribution_status on incomes
+      await supabase
+        .from('incomes')
+        .update({ distribution_status: distributionStatus })
+        .eq('id', income.id);
+
       // 6. Log Activity
       await supabase.from('activity_log').insert({
         organization_id: orgId,
@@ -350,7 +368,7 @@ export default function IncomeDistributionModal({ isOpen, onClose, income, onSav
         <div className="flex-1 overflow-y-auto py-4 space-y-6 pr-1">
           
           {/* Summary Financial Matrix */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-100 dark:border-slate-850">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-slate-50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-100 dark:border-slate-850">
             <div>
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ingreso Bruto</span>
               <p className="text-lg font-extrabold text-slate-800 dark:text-slate-100">{formatCurrency(income?.amount || 0, income?.currency)}</p>
@@ -367,6 +385,21 @@ export default function IncomeDistributionModal({ isOpen, onClose, income, onSav
                 <option value="iva">Afecto a IVA (19%)</option>
                 <option value="exento">Exento / Sin IVA</option>
                 <option value="extranjero">Extranjero / Internacional</option>
+              </select>
+            </div>
+
+            {/* Distribution Status selector */}
+            <div>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Estado Distribución</span>
+              <select
+                value={distributionStatus}
+                onChange={(e) => setDistributionStatus(e.target.value)}
+                className="block w-full text-xs border border-slate-200 dark:border-slate-800 rounded-lg p-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+              >
+                <option value="sin_configurar">Sin Configurar</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="parcial">Parcial</option>
+                <option value="completa">Completa</option>
               </select>
             </div>
 
