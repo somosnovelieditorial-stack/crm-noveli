@@ -962,7 +962,57 @@ const INITIAL_MOCK_DATA = {
   client_funds: [],
   fund_movements: [],
   income_tax_reservations: [],
-  crm_error_logs: []
+  crm_error_logs: [],
+  website_leads: [
+    {
+      id: "lead-1",
+      organization_id: "11111111-1111-1111-1111-111111111111",
+      name: "Gabriel García Márquez",
+      email: "gabriel@macondo.com",
+      phone: "+57 300 123 4567",
+      instagram: "gabito_escritor",
+      service_of_interest: "Full Físico",
+      message: "Hola, me gustaría publicar una novela que narra los cien años de una dinastía familiar en un pueblo llamado Macondo.",
+      status: "nuevo",
+      converted_to_proposal: false,
+      converted_quotation_id: null,
+      converted_to_prospect: false,
+      converted_prospect_id: null,
+      created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "lead-2",
+      organization_id: "11111111-1111-1111-1111-111111111111",
+      name: "Julio Cortázar",
+      email: "julio@rayuela.org",
+      phone: "+33 1 42 27 78 90",
+      instagram: "cronopio_cortazar",
+      service_of_interest: "Full eBook",
+      message: "Buenas tardes, tengo un manuscrito experimental que se puede leer en varios órdenes. ¿Es posible publicarlo como eBook interconectado?",
+      status: "revisado",
+      converted_to_proposal: false,
+      converted_quotation_id: null,
+      converted_to_prospect: false,
+      converted_prospect_id: null,
+      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    {
+      id: "lead-3",
+      organization_id: "11111111-1111-1111-1111-111111111111",
+      name: "Gabriela Mistral",
+      email: "gabriela@desolacion.cl",
+      phone: "+56 9 9999 8888",
+      instagram: "mistral_poesia",
+      service_of_interest: "Corrección",
+      message: "Estimados, quisiera cotizar la corrección de un poemario que reúne versos sobre la maternidad y la naturaleza.",
+      status: "propuesta creada",
+      converted_to_proposal: true,
+      converted_quotation_id: "quotation-1",
+      converted_to_prospect: false,
+      converted_prospect_id: null,
+      created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
+    }
+  ]
 };
 
 // LocalStorage database engine helper

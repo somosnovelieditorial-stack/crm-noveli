@@ -106,7 +106,10 @@ const menuGroups = [
     id: 'website',
     label: 'Sitio Web',
     icon: <Globe className="w-4 h-4" />,
-    tab: 'website'
+    items: [
+      { id: 'website', label: 'Gestión Web', tab: 'website' },
+      { id: 'website-solicitudes', label: 'Solicitudes Web', tab: 'website-solicitudes' }
+    ]
   },
   {
     id: 'reports',
@@ -233,6 +236,7 @@ const getTabFromPath = (path) => {
   if (cleanPath === 'sitio-web/libros') return 'website-libros';
   if (cleanPath === 'sitio-web/enlaces') return 'website-enlaces';
   if (cleanPath === 'sitio-web/secciones') return 'website-secciones';
+  if (cleanPath === 'sitio-web/solicitudes') return 'website-solicitudes';
   if (cleanPath === 'sitio-web') return 'website';
 
   const mapping = {
@@ -313,6 +317,7 @@ const getPathFromTab = (tab) => {
     'website-libros': '/sitio-web/libros',
     'website-enlaces': '/sitio-web/enlaces',
     'website-secciones': '/sitio-web/secciones',
+    'website-solicitudes': '/sitio-web/solicitudes',
     'settings-audit': '/configuracion/auditoria',
     'settings-users': '/configuracion/usuarios'
   };
@@ -998,7 +1003,8 @@ export default function App() {
     { id: 'website-libros', label: 'Libros Web', icon: <Globe className="w-4.5 h-4.5" /> },
     { id: 'website-configuracion', label: 'Configuración Web', icon: <Globe className="w-4.5 h-4.5" /> },
     { id: 'website-enlaces', label: 'Enlaces Web', icon: <Globe className="w-4.5 h-4.5" /> },
-    { id: 'website-secciones', label: 'Secciones Web', icon: <Globe className="w-4.5 h-4.5" /> }
+    { id: 'website-secciones', label: 'Secciones Web', icon: <Globe className="w-4.5 h-4.5" /> },
+    { id: 'website-solicitudes', label: 'Solicitudes Web', icon: <Globe className="w-4.5 h-4.5" /> }
   ];
 
   const handleWebsitePathChange = (path) => {
@@ -1008,6 +1014,7 @@ export default function App() {
     else if (path === 'configuracion') setActiveTab('website-configuracion');
     else if (path === 'enlaces') setActiveTab('website-enlaces');
     else if (path === 'secciones') setActiveTab('website-secciones');
+    else if (path === 'solicitudes') setActiveTab('website-solicitudes');
   };
 
   // Render current tab content
@@ -1037,6 +1044,7 @@ export default function App() {
         case 'website-configuracion': return <Website {...commonProps} initialPath="configuracion" onChangePath={handleWebsitePathChange} />;
         case 'website-enlaces': return <Website {...commonProps} initialPath="enlaces" onChangePath={handleWebsitePathChange} />;
         case 'website-secciones': return <Website {...commonProps} initialPath="secciones" onChangePath={handleWebsitePathChange} />;
+        case 'website-solicitudes': return <Website {...commonProps} initialPath="solicitudes" onChangePath={handleWebsitePathChange} />;
         case 'documents': return <Documents {...commonProps} />;
         case 'taxes': return <Taxes {...commonProps} />;
         case 'reports': return <Reports {...commonProps} />;

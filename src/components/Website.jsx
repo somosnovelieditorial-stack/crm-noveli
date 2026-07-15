@@ -4,9 +4,26 @@ import {
   Globe, ArrowUpRight, ShieldCheck, Cpu, Layout, Server, ExternalLink, 
   Activity, ArrowLeft, Plus, Check, Eye, EyeOff, Edit, Trash2, Link as LinkIcon, 
   BookOpen, Heart, ShoppingBag, ArrowUp, ArrowDown, Star, AlertTriangle, 
-  Upload, Copy, Save, FileText, Settings, AlignLeft, Info
+  Upload, Copy, Save, FileText, Settings, AlignLeft, Info, UserCheck, Mail, Phone, Calendar, X
 } from 'lucide-react';
 import { formatCurrency } from '../utils';
+
+const InstagramIcon = ({ className }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+  </svg>
+);
 
 // Fallback values
 const DEFAULT_SITE_SETTINGS = {
@@ -60,6 +77,10 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const [books, setBooks] = useState([]);
   const [links, setLinks] = useState([]);
   const [sections, setSections] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [leadsFilter, setLeadsFilter] = useState('todos');
 
   // 1. Configuración Web states
   const [configId, setConfigId] = useState(null);
@@ -127,6 +148,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     fetchBooks();
     fetchLinks();
     fetchSections();
+    fetchLeads();
   }, [realtimeTrigger]);
 
   const navigateTo = (path) => {
@@ -857,8 +879,253 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     setBookFeatured(!!book.featured);
     setBookVisible(book.visible_on_website !== false);
     setBookSaleUrl(book.sale_url || '');
-    setBookSalePlatform(book.sale_platform || 'Amazon');
+  // --- 6. WEBSITE LEADS OPS ---
+  const fetchLeads = async () => {
+    try {
+      const orgId = getOrgId();
+      // No filtering by user_id
+      const { data, error } = await supabase
+        .from('website_leads')
+        .select('*')
+        .eq('organization_id', orgId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setLeads(data || []);
+    } catch (err) {
+      console.error('Error fetching website leads:', err);
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: err.message,
+          error_stack: err.stack || '',
+          module: 'website-solicitudes',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    }
   };
+
+  const handleUpdateStatus = async (leadId, newStatus) => {
+    if (isReadOnly) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('website_leads')
+        .update({ status: newStatus })
+        .eq('id', leadId);
+
+      if (error) throw error;
+      await fetchLeads();
+      
+      // Update selected lead state if open
+      if (selectedLead && selectedLead.id === leadId) {
+        setSelectedLead(prev => prev ? { ...prev, status: newStatus } : null);
+      }
+      
+      alert(`Estado de la solicitud actualizado a "${newStatus}" correctamente.`);
+    } catch (err) {
+      console.error('Error updating status:', err);
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: err.message,
+          error_stack: err.stack || '',
+          module: 'website-solicitudes',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error:', logErr);
+      }
+      alert('Error al actualizar el estado: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateQuotation = async (lead) => {
+    if (isReadOnly) return;
+    
+    // Check if already converted
+    if (lead.converted_to_proposal) {
+      alert("Esta solicitud ya tiene una propuesta asociada.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const orgId = getOrgId();
+      const randNum = Math.floor(100000 + Math.random() * 900000);
+      const quoteNumber = `COT-${randNum}`;
+      
+      const newQuote = {
+        organization_id: orgId,
+        author_name: lead.name,
+        author_email: lead.email,
+        author_phone: lead.phone,
+        author_instagram: lead.instagram,
+        origin: 'web',
+        object: lead.service_of_interest || 'Servicio de Interés Web',
+        other_notes: `[Solicitud Web] Mensaje original: ${lead.message || ''}`,
+        quote_number: quoteNumber,
+        issue_date: new Date().toISOString().split('T')[0],
+        valid_until: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        validity_days: 15,
+        status: 'borrador',
+        currency: 'CLP',
+        subtotal: 0,
+        discount: 0,
+        total: 0,
+        net_amount: 0,
+        tax_amount: 0,
+        included_items: [],
+        excluded_items: [],
+        start_condition_items: []
+      };
+
+      // Create quote
+      const { data: quoteData, error: quoteError } = await supabase
+        .from('quotations')
+        .insert([newQuote])
+        .select('id')
+        .single();
+
+      if (quoteError) throw quoteError;
+      const createdQuoteId = quoteData.id;
+
+      // Update lead
+      const { error: leadUpdateError } = await supabase
+        .from('website_leads')
+        .update({
+          converted_to_proposal: true,
+          converted_quotation_id: createdQuoteId,
+          status: 'propuesta creada'
+        })
+        .eq('id', lead.id);
+
+      if (leadUpdateError) throw leadUpdateError;
+
+      await fetchLeads();
+      
+      // Update selected lead state if open
+      if (selectedLead && selectedLead.id === lead.id) {
+        setSelectedLead(prev => prev ? { 
+          ...prev, 
+          status: 'propuesta creada',
+          converted_to_proposal: true,
+          converted_quotation_id: createdQuoteId
+        } : null);
+      }
+
+      alert(`Propuesta comercial ${quoteNumber} creada exitosamente.`);
+    } catch (err) {
+      console.error('Error creating quotation:', err);
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: err.message,
+          error_stack: err.stack || '',
+          module: 'website-solicitudes',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error:', logErr);
+      }
+      alert('Error al crear propuesta: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConvertToProspect = async (lead) => {
+    if (isReadOnly) return;
+    
+    // Check if already converted
+    if (lead.converted_to_prospect) {
+      alert("Esta solicitud ya ha sido convertida a prospecto.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const orgId = getOrgId();
+      const newProspect = {
+        organization_id: orgId,
+        name: lead.name,
+        email: lead.email,
+        phone: lead.phone,
+        instagram: lead.instagram,
+        origin: 'web',
+        interest_service: lead.service_of_interest,
+        notes: `[Convertido desde Solicitud Web] Mensaje original: ${lead.message || ''}`,
+        probability: 'media',
+        currency: 'CLP',
+        client_type: 'Nacional',
+        preferred_currency: 'CLP'
+      };
+
+      // Create prospect
+      const { data: prospectData, error: prospectError } = await supabase
+        .from('prospects')
+        .insert([newProspect])
+        .select('id')
+        .single();
+
+      if (prospectError) throw prospectError;
+      const createdProspectId = prospectData.id;
+
+      // Update lead
+      const { error: leadUpdateError } = await supabase
+        .from('website_leads')
+        .update({
+          converted_to_prospect: true,
+          converted_prospect_id: createdProspectId,
+          status: 'convertido a prospecto'
+        })
+        .eq('id', lead.id);
+
+      if (leadUpdateError) throw leadUpdateError;
+
+      await fetchLeads();
+      
+      // Update selected lead state if open
+      if (selectedLead && selectedLead.id === lead.id) {
+        setSelectedLead(prev => prev ? { 
+          ...prev, 
+          status: 'convertido a prospecto',
+          converted_to_prospect: true,
+          converted_prospect_id: createdProspectId
+        } : null);
+      }
+
+      alert(`Lead ${lead.name} convertido a Prospecto exitosamente.`);
+    } catch (err) {
+      console.error('Error converting to prospect:', err);
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: err.message,
+          error_stack: err.stack || '',
+          module: 'website-solicitudes',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error:', logErr);
+      }
+      alert('Error al convertir a prospecto: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredLeads = leads.filter(lead => {
+    if (leadsFilter === 'todos') return true;
+    if (leadsFilter === 'nuevo') return lead.status === 'nuevo';
+    if (leadsFilter === 'revisado') return lead.status === 'revisado';
+    if (leadsFilter === 'contactado') return lead.status === 'contactado';
+    if (leadsFilter === 'propuesta') return lead.status === 'propuesta creada';
+    if (leadsFilter === 'prospecto') return lead.status === 'convertido a prospecto';
+    if (leadsFilter === 'descartado') return lead.status === 'descartado';
+    return true;
+  });
 
   return (
     <div className="space-y-6 animate-fade-in pb-12 text-slate-800 dark:text-slate-100">
@@ -1034,6 +1301,29 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                 className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
                 <span>Configurar Secciones</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* 6. Solicitudes Web */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-6 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="p-2.5 bg-rose-50 dark:bg-rose-955/20 text-rose-600 dark:text-rose-455 rounded-xl w-fit">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">6. Solicitudes Web</h3>
+                <p className="text-xs text-slate-455 dark:text-slate-400 leading-relaxed">
+                  Revisa y gestiona las solicitudes y cotizaciones enviadas por los autores desde el formulario de contacto web.
+                </p>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
+                  {leads.length} solicitudes registradas ({leads.filter(l => l.status === 'nuevo').length} nuevas)
+                </div>
+              </div>
+              <button
+                onClick={() => navigateTo('solicitudes')}
+                className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
+              >
+                <span>Ver Solicitudes</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -1632,6 +1922,438 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         </div>
       )}
 
+      {/* ------------------ SUB-VIEW: SOLICITUDES ------------------ */}
+      {currentPath === 'solicitudes' && (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="flex items-center space-x-3">
+                <button onClick={() => navigateTo('dashboard')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-855 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer">
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Solicitudes Web (Leads)</h2>
+                  <p className="text-xs text-slate-400 mt-0.5 font-sans">Gestiona los contactos de autores y cotizaciones recibidas desde el portal público.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="flex flex-wrap gap-2 pb-2 border-b border-slate-100 dark:border-slate-850">
+              {[
+                { id: 'todos', label: 'Todos', count: leads.length },
+                { id: 'nuevo', label: 'Nuevos', count: leads.filter(l => l.status === 'nuevo').length, color: 'bg-blue-500' },
+                { id: 'revisado', label: 'Revisados', count: leads.filter(l => l.status === 'revisado').length, color: 'bg-amber-500' },
+                { id: 'contactado', label: 'Contactados', count: leads.filter(l => l.status === 'contactado').length, color: 'bg-purple-500' },
+                { id: 'propuesta', label: 'Propuesta Creada', count: leads.filter(l => l.status === 'propuesta creada').length, color: 'bg-indigo-500' },
+                { id: 'prospecto', label: 'Convertidos', count: leads.filter(l => l.status === 'convertido a prospecto').length, color: 'bg-emerald-500' },
+                { id: 'descartado', label: 'Descartados', count: leads.filter(l => l.status === 'descartado').length, color: 'bg-slate-500' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setLeadsFilter(tab.id)}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-all border ${
+                    leadsFilter === tab.id
+                      ? 'bg-amber-500 text-white border-transparent shadow-md'
+                      : 'bg-white dark:bg-slate-900 border-slate-205 dark:border-slate-805 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                    leadsFilter === tab.id 
+                      ? 'bg-white/20 text-white' 
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Leads Table Container */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs">
+              <div className="overflow-x-auto text-xs">
+                {filteredLeads.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 font-semibold flex flex-col items-center justify-center gap-3">
+                    <Globe className="w-12 h-12 text-slate-300 dark:text-slate-700 animate-pulse" />
+                    <p>No se encontraron solicitudes con este filtro.</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-150 dark:border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                        <th className="py-3">Fecha</th>
+                        <th className="py-3">Nombre</th>
+                        <th className="py-3">Contacto</th>
+                        <th className="py-3">Servicio de Interés</th>
+                        <th className="py-3">Mensaje</th>
+                        <th className="py-3">Estado</th>
+                        <th className="py-3 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                      {filteredLeads.map((lead) => {
+                        const dateStr = lead.created_at
+                          ? new Date(lead.created_at).toLocaleDateString('es-CL', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })
+                          : 'S/F';
+
+                        return (
+                          <tr key={lead.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-all duration-200">
+                            <td className="py-3.5 text-slate-500 font-mono text-[10px] whitespace-nowrap">{dateStr}</td>
+                            <td className="py-3.5 font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">{lead.name}</td>
+                            <td className="py-3.5 space-y-1">
+                              <div className="flex items-center gap-1 text-slate-600 dark:text-slate-350">
+                                <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <span className="truncate max-w-[150px]" title={lead.email}>{lead.email}</span>
+                              </div>
+                              {lead.phone && (
+                                <div className="flex items-center gap-1 text-slate-600 dark:text-slate-350">
+                                  <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span>{lead.phone}</span>
+                                </div>
+                              )}
+                              {lead.instagram && (
+                                <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                                  <InstagramIcon className="w-3.5 h-3.5 text-pink-500/70 shrink-0" />
+                                  <span>@{lead.instagram}</span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3.5">
+                              <span className="px-2.5 py-1 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900 rounded-lg font-bold text-[10px] uppercase tracking-wider">
+                                {lead.service_of_interest || 'General'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 text-slate-500 font-sans max-w-[200px] truncate" title={lead.message}>
+                              {lead.message}
+                            </td>
+                            <td className="py-3.5">
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider whitespace-nowrap ${
+                                lead.status === 'nuevo'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-955/20 dark:text-blue-400 dark:border-blue-900/50'
+                                  : lead.status === 'revisado'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-955/20 dark:text-amber-400 dark:border-amber-900/50'
+                                  : lead.status === 'contactado'
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-955/20 dark:text-purple-400 dark:border-purple-900/50'
+                                  : lead.status === 'propuesta creada'
+                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-955/20 dark:text-indigo-400 dark:border-indigo-900/50'
+                                  : lead.status === 'convertido a prospecto'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-955/20 dark:text-emerald-450 dark:border-emerald-900/50'
+                                  : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                              }`}>
+                                {lead.status || 'nuevo'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setSelectedLead(lead);
+                                    setIsDetailModalOpen(true);
+                                  }}
+                                  className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-805 rounded-lg text-slate-500 hover:text-amber-500 cursor-pointer transition-colors"
+                                  title="Ver detalle"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                
+                                {lead.status === 'nuevo' && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(lead.id, 'revisado')}
+                                    className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-805 rounded-lg text-slate-400 hover:text-amber-600 cursor-pointer transition-colors"
+                                    title="Marcar como revisado"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                )}
+
+                                {(lead.status === 'nuevo' || lead.status === 'revisado') && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(lead.id, 'contactado')}
+                                    className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-805 rounded-lg text-slate-400 hover:text-purple-600 cursor-pointer transition-colors"
+                                    title="Marcar como contactado"
+                                  >
+                                    <Mail className="w-4 h-4" />
+                                  </button>
+                                )}
+
+                                {!lead.converted_to_proposal && lead.status !== 'descartado' && (
+                                  <button
+                                    onClick={() => handleCreateQuotation(lead)}
+                                    className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-805 rounded-lg text-slate-400 hover:text-indigo-650 cursor-pointer transition-colors"
+                                    title="Crear propuesta comercial"
+                                  >
+                                    <FileText className="w-4 h-4" />
+                                  </button>
+                                )}
+
+                                {!lead.converted_to_prospect && lead.status !== 'descartado' && (
+                                  <button
+                                    onClick={() => handleConvertToProspect(lead)}
+                                    className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-805 rounded-lg text-slate-400 hover:text-emerald-650 cursor-pointer transition-colors"
+                                    title="Convertir a prospecto"
+                                  >
+                                    <UserCheck className="w-4 h-4" />
+                                  </button>
+                                )}
+
+                                {lead.status !== 'descartado' && lead.status !== 'convertido a prospecto' && (
+                                  <button
+                                    onClick={() => {
+                                      if (window.confirm('¿Confirmas descartar esta solicitud?')) {
+                                        handleUpdateStatus(lead.id, 'descartado');
+                                      }
+                                    }}
+                                    className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-lg text-slate-400 hover:text-rose-600 cursor-pointer transition-colors"
+                                    title="Descartar solicitud"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* ------------------ MODAL: DETALLE DE SOLICITUD ------------------ */}
+      {isDetailModalOpen && selectedLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-250 dark:border-slate-800 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-scale-up font-sans text-xs">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-150 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950/20 shrink-0">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded text-[9px] font-extrabold uppercase font-mono tracking-wider">
+                    ID: {selectedLead.id.slice(0, 8)}...
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border uppercase tracking-wider ${
+                    selectedLead.status === 'nuevo'
+                      ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-955/20 dark:text-blue-400 dark:border-blue-900/50'
+                      : selectedLead.status === 'revisado'
+                      ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-955/20 dark:text-amber-400 dark:border-amber-900/50'
+                      : selectedLead.status === 'contactado'
+                      ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-955/20 dark:text-purple-400 dark:border-purple-900/50'
+                      : selectedLead.status === 'propuesta creada'
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-955/20 dark:text-indigo-400 dark:border-indigo-900/50'
+                      : selectedLead.status === 'convertido a prospecto'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-955/20 dark:text-emerald-450 dark:border-emerald-900/50'
+                      : 'bg-slate-105 text-slate-655 border-slate-205 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                  }`}>
+                    {selectedLead.status}
+                  </span>
+                </div>
+                <h3 className="text-xl font-bold text-slate-855 dark:text-slate-150 font-serif">{selectedLead.name}</h3>
+              </div>
+              <button 
+                onClick={() => setIsDetailModalOpen(false)}
+                className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white rounded-xl text-slate-500 dark:text-slate-400 cursor-pointer transition-all border border-transparent"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="p-6 overflow-y-auto space-y-5 flex-1 scrollbar-thin">
+              {/* Date & Interest Service */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl space-y-1">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Fecha de Recepción</span>
+                  <div className="flex items-center gap-2 font-mono text-slate-700 dark:text-slate-200 font-bold">
+                    <Calendar className="w-4 h-4 text-slate-400" />
+                    <span>{new Date(selectedLead.created_at).toLocaleString('es-CL')}</span>
+                  </div>
+                </div>
+                <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl space-y-1">
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Servicio de Interés</span>
+                  <div className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-400">
+                    <Globe className="w-4 h-4 text-amber-500/70" />
+                    <span>{selectedLead.service_of_interest || 'Consulta General'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Grid */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl space-y-3">
+                <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Información de Contacto</span>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* Email */}
+                  <div className="flex items-center gap-2 border border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900/50 p-2.5 rounded-xl">
+                    <Mail className="w-4 h-4 text-blue-500 shrink-0" />
+                    <div className="truncate flex-1">
+                      <span className="text-[9px] text-slate-455 block">Correo Electrónico</span>
+                      <a href={`mailto:${selectedLead.email}`} className="font-bold text-slate-800 dark:text-slate-150 hover:underline truncate block">{selectedLead.email}</a>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedLead.email);
+                        alert("Correo copiado al portapapeles.");
+                      }}
+                      className="p-1 text-slate-400 hover:text-slate-655 cursor-pointer bg-transparent border-none"
+                      title="Copiar correo"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Phone */}
+                  <div className="flex items-center gap-2 border border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900/50 p-2.5 rounded-xl">
+                    <Phone className="w-4 h-4 text-green-500 shrink-0" />
+                    <div className="truncate flex-1">
+                      <span className="text-[9px] text-slate-455 block">Teléfono</span>
+                      {selectedLead.phone ? (
+                        <a href={`tel:${selectedLead.phone}`} className="font-bold text-slate-800 dark:text-slate-150 hover:underline block">{selectedLead.phone}</a>
+                      ) : (
+                        <span className="font-bold text-slate-400 block">No provisto</span>
+                      )}
+                    </div>
+                    {selectedLead.phone && (
+                      <a 
+                        href={`https://wa.me/${selectedLead.phone.replace(/[^0-9]/g, '')}`}
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="p-1 text-green-500 hover:text-green-600 cursor-pointer"
+                        title="Enviar WhatsApp"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Instagram */}
+                  <div className="flex items-center gap-2 border border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900/50 p-2.5 rounded-xl">
+                    <InstagramIcon className="w-4 h-4 text-pink-500 shrink-0" />
+                    <div className="truncate flex-1">
+                      <span className="text-[9px] text-slate-455 block">Instagram</span>
+                      {selectedLead.instagram ? (
+                        <a 
+                          href={`https://instagram.com/${selectedLead.instagram.replace(/^@/, '')}`}
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="font-bold text-slate-800 dark:text-slate-150 hover:underline block"
+                        >
+                          @{selectedLead.instagram}
+                        </a>
+                      ) : (
+                        <span className="font-bold text-slate-400 block">No provisto</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Message */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Mensaje Enviado</span>
+                <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap font-sans text-xs italic">
+                  "{selectedLead.message}"
+                </div>
+              </div>
+
+              {/* Conversion Information */}
+              {(selectedLead.converted_to_proposal || selectedLead.converted_to_prospect) && (
+                <div className="p-4 bg-emerald-50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-905 rounded-2xl space-y-2">
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block uppercase tracking-wider">Historial de Conversión</span>
+                  <div className="space-y-1.5 font-sans">
+                    {selectedLead.converted_to_proposal && (
+                      <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-350 font-bold">
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <span>Propuesta comercial creada exitosamente.</span>
+                      </div>
+                    )}
+                    {selectedLead.converted_to_prospect && (
+                      <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-350 font-bold">
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <span>Convertido exitosamente en prospecto del CRM.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions Footer */}
+            <div className="p-5 border-t border-slate-150 dark:border-slate-805 bg-slate-50 dark:bg-slate-950/25 flex flex-wrap gap-2 justify-between shrink-0">
+              <div className="flex gap-2">
+                {selectedLead.status !== 'descartado' && selectedLead.status !== 'convertido a prospecto' && (
+                  <button
+                    onClick={() => {
+                      if(window.confirm('¿Confirmas descartar esta solicitud?')) {
+                        handleUpdateStatus(selectedLead.id, 'descartado');
+                      }
+                    }}
+                    className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-955/20 dark:text-rose-400 dark:hover:bg-rose-950/40 rounded-xl font-bold transition-all border border-transparent cursor-pointer"
+                  >
+                    Descartar
+                  </button>
+                )}
+              </div>
+              
+              <div className="flex gap-2">
+                {selectedLead.status === 'nuevo' && (
+                  <button
+                    onClick={() => handleUpdateStatus(selectedLead.id, 'revisado')}
+                    className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-955/20 dark:text-amber-400 dark:hover:bg-amber-950/40 rounded-xl font-bold transition-all border border-transparent cursor-pointer"
+                  >
+                    Marcar Revisado
+                  </button>
+                )}
+
+                {(selectedLead.status === 'nuevo' || selectedLead.status === 'revisado') && (
+                  <button
+                    onClick={() => handleUpdateStatus(selectedLead.id, 'contactado')}
+                    className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-955/20 dark:text-purple-400 dark:hover:bg-purple-950/40 rounded-xl font-bold transition-all border border-transparent cursor-pointer"
+                  >
+                    Marcar Contactado
+                  </button>
+                )}
+
+                {!selectedLead.converted_to_proposal && selectedLead.status !== 'descartado' && (
+                  <button
+                    onClick={() => handleCreateQuotation(selectedLead)}
+                    className="px-3.5 py-2 bg-indigo-500 hover:bg-indigo-650 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm hover:shadow transition-all border border-transparent cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>Crear Propuesta</span>
+                  </button>
+                )}
+
+                {!selectedLead.converted_to_prospect && selectedLead.status !== 'descartado' && (
+                  <button
+                    onClick={() => handleConvertToProspect(selectedLead)}
+                    className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-650 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm hover:shadow transition-all border border-transparent cursor-pointer"
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span>Convertir a Prospecto</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setIsDetailModalOpen(false)}
+                  className="px-4 py-2 border border-slate-250 dark:border-slate-700 rounded-xl font-bold hover:bg-slate-100 dark:hover:bg-slate-850 text-slate-700 dark:text-slate-350 cursor-pointer"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
+}
 }
