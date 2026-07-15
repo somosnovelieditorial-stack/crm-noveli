@@ -81,6 +81,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const [selectedLead, setSelectedLead] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [leadsFilter, setLeadsFilter] = useState('todos');
+  const [error, setError] = useState(null);
 
   // 1. Configuración Web states
   const [configId, setConfigId] = useState(null);
@@ -168,6 +169,44 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const getOrgId = () => {
     return localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
   };
+
+  const organizationId = getOrgId();
+
+  const fetchLeads = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('website_leads')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setLeads(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error cargando solicitudes web:', error);
+      setError(error.message || 'Error cargando solicitudes web');
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: error.message,
+          error_stack: error.stack || '',
+          module: 'website-solicitudes',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (organizationId) {
+      fetchLeads();
+    }
+  }, [organizationId]);
 
   // --- 1. SETTINGS DATABASE OPS ---
   const fetchSettings = async () => {
@@ -888,32 +927,6 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   };
 
   // --- 6. WEBSITE LEADS OPS ---
-  const fetchLeads = async () => {
-    try {
-      const orgId = getOrgId();
-      // No filtering by user_id
-      const { data, error } = await supabase
-        .from('website_leads')
-        .select('*')
-        .eq('organization_id', orgId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setLeads(data || []);
-    } catch (err) {
-      console.error('Error fetching website leads:', err);
-      try {
-        await supabase.from('crm_error_logs').insert({
-          error_message: err.message,
-          error_stack: err.stack || '',
-          module: 'website-solicitudes',
-          created_at: new Date().toISOString()
-        });
-      } catch (logErr) {
-        console.error('Failed to log error to database:', logErr);
-      }
-    }
-  };
 
   const handleUpdateStatus = async (leadId, newStatus) => {
     if (isReadOnly) return;
