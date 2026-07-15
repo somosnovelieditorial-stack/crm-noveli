@@ -91,6 +91,7 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       pendingFiles: 0,
       readyToStart: 0,
       avgProgress: 0,
+      newWebLeads: 0,
     },
     upcomingMilestones: [],
     recentServices: []
@@ -149,7 +150,8 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         distributionsRes,
         clientFundsRes,
         fundMovementsRes,
-        taxReservationsRes
+        taxReservationsRes,
+        websiteLeadsRes
       ] = await Promise.all([
         fetchWithErrors('clients'),
         fetchWithErrors('prospects'),
@@ -163,7 +165,8 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         fetchWithErrors('income_distributions'),
         fetchWithErrors('client_funds'),
         fetchWithErrors('fund_movements'),
-        fetchWithErrors('income_tax_reservations')
+        fetchWithErrors('income_tax_reservations'),
+        fetchWithErrors('website_leads')
       ]);
 
       const clients = (clientsRes.data || []).filter(item => !isTestData(item));
@@ -179,6 +182,7 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       const clientFunds = (clientFundsRes.data || []).filter(item => !isTestData(item));
       const fundMovements = (fundMovementsRes.data || []).filter(item => !isTestData(item));
       const taxReservations = (taxReservationsRes.data || []).filter(item => !isTestData(item));
+      const websiteLeads = (websiteLeadsRes.data || []).filter(item => !isTestData(item));
 
       const clientsError = clientsRes.error;
       const expensesError = expensesRes.error;
@@ -639,6 +643,9 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         ? Math.round(activeServicesList.reduce((sum, s) => sum + (parseFloat(s.progress || s.advance_percent || 0)), 0) / activeServicesList.length)
         : 0;
 
+      // 12. Solicitudes Web Nuevas
+      const newWebLeadsCount = (websiteLeads || []).filter(l => l.status === 'nuevo').length;
+
       // Recent editorial services for bottom log
       const recentServices = (services || [])
         .sort((a, b) => new Date(b.created_at || b.start_date) - new Date(a.created_at || a.start_date))
@@ -686,6 +693,7 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
           pendingFiles,
           readyToStart,
           avgProgress,
+          newWebLeads: newWebLeadsCount,
         },
         upcomingMilestones: [],
         recentServices

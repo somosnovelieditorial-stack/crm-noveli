@@ -940,6 +940,21 @@ export default function App() {
         }
       });
     }
+    // 6. Solicitudes Web Nuevas
+    if (db.website_leads) {
+      db.website_leads.forEach(lead => {
+        if (lead.status === 'nuevo') {
+          list.push({
+            id: `notif-web-lead-${lead.id}`,
+            type: 'solicitud_web',
+            title: `Nueva Solicitud: ${lead.name}`,
+            desc: `${lead.email} | Servicio: ${lead.service_of_interest || 'General'} | Fecha: ${lead.created_at ? new Date(lead.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'S/F'}`,
+            tab: 'website-solicitudes',
+            severity: 'high'
+          });
+        }
+      });
+    }
     
     // 7. Tipo de cambio no actualizado hoy
     if (db.exchange_rates) {

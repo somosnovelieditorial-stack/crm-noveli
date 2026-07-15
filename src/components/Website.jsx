@@ -151,6 +151,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     fetchLeads();
   }, [realtimeTrigger]);
 
+  useEffect(() => {
+    if (currentPath === 'solicitudes') {
+      fetchLeads();
+    }
+  }, [currentPath]);
+
   const navigateTo = (path) => {
     setCurrentPath(path);
     if (onChangePath) {
@@ -879,6 +885,8 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     setBookFeatured(!!book.featured);
     setBookVisible(book.visible_on_website !== false);
     setBookSaleUrl(book.sale_url || '');
+  };
+
   // --- 6. WEBSITE LEADS OPS ---
   const fetchLeads = async () => {
     try {
@@ -1116,7 +1124,8 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     }
   };
 
-  const filteredLeads = leads.filter(lead => {
+  const safeLeads = Array.isArray(leads) ? leads : [];
+  const filteredLeads = safeLeads.filter(lead => {
     if (leadsFilter === 'todos') return true;
     if (leadsFilter === 'nuevo') return lead.status === 'nuevo';
     if (leadsFilter === 'revisado') return lead.status === 'revisado';
@@ -1316,7 +1325,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   Revisa y gestiona las solicitudes y cotizaciones enviadas por los autores desde el formulario de contacto web.
                 </p>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
-                  {leads.length} solicitudes registradas ({leads.filter(l => l.status === 'nuevo').length} nuevas)
+                  {safeLeads.length} solicitudes registradas ({safeLeads.filter(l => l.status === 'nuevo').length} nuevas)
                 </div>
               </div>
               <button
@@ -1940,13 +1949,13 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
             {/* Filter Tabs */}
             <div className="flex flex-wrap gap-2 pb-2 border-b border-slate-100 dark:border-slate-850">
               {[
-                { id: 'todos', label: 'Todos', count: leads.length },
-                { id: 'nuevo', label: 'Nuevos', count: leads.filter(l => l.status === 'nuevo').length, color: 'bg-blue-500' },
-                { id: 'revisado', label: 'Revisados', count: leads.filter(l => l.status === 'revisado').length, color: 'bg-amber-500' },
-                { id: 'contactado', label: 'Contactados', count: leads.filter(l => l.status === 'contactado').length, color: 'bg-purple-500' },
-                { id: 'propuesta', label: 'Propuesta Creada', count: leads.filter(l => l.status === 'propuesta creada').length, color: 'bg-indigo-500' },
-                { id: 'prospecto', label: 'Convertidos', count: leads.filter(l => l.status === 'convertido a prospecto').length, color: 'bg-emerald-500' },
-                { id: 'descartado', label: 'Descartados', count: leads.filter(l => l.status === 'descartado').length, color: 'bg-slate-500' }
+                { id: 'todos', label: 'Todos', count: safeLeads.length },
+                { id: 'nuevo', label: 'Nuevos', count: safeLeads.filter(l => l.status === 'nuevo').length, color: 'bg-blue-500' },
+                { id: 'revisado', label: 'Revisados', count: safeLeads.filter(l => l.status === 'revisado').length, color: 'bg-amber-500' },
+                { id: 'contactado', label: 'Contactados', count: safeLeads.filter(l => l.status === 'contactado').length, color: 'bg-purple-500' },
+                { id: 'propuesta', label: 'Propuesta Creada', count: safeLeads.filter(l => l.status === 'propuesta creada').length, color: 'bg-indigo-500' },
+                { id: 'prospecto', label: 'Convertidos', count: safeLeads.filter(l => l.status === 'convertido a prospecto').length, color: 'bg-emerald-500' },
+                { id: 'descartado', label: 'Descartados', count: safeLeads.filter(l => l.status === 'descartado').length, color: 'bg-slate-500' }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -1972,7 +1981,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
             {/* Leads Table Container */}
             <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs">
               <div className="overflow-x-auto text-xs">
-                {filteredLeads.length === 0 ? (
+                {safeLeads.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 font-semibold flex flex-col items-center justify-center gap-3">
+                    <Globe className="w-12 h-12 text-slate-300 dark:text-slate-700 animate-pulse" />
+                    <p>No hay solicitudes web registradas.</p>
+                  </div>
+                ) : filteredLeads.length === 0 ? (
                   <div className="py-12 text-center text-slate-400 font-semibold flex flex-col items-center justify-center gap-3">
                     <Globe className="w-12 h-12 text-slate-300 dark:text-slate-700 animate-pulse" />
                     <p>No se encontraron solicitudes con este filtro.</p>
@@ -2355,5 +2369,4 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
 
     </div>
   );
-}
 }
