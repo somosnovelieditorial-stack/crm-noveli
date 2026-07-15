@@ -954,10 +954,10 @@ CREATE TABLE IF NOT EXISTS payroll_payments (
 
 -- RLS policies for payroll_payments
 ALTER TABLE payroll_payments ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Select payroll" ON payroll_payments FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
-CREATE POLICY "Insert payroll" ON payroll_payments FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
-CREATE POLICY "Update payroll" ON payroll_payments FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
-CREATE POLICY "Delete payroll" ON payroll_payments FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Select payroll" ON payroll_payments FOR SELECT USING (organization_id = get_user_org_id());
+CREATE POLICY "Insert payroll" ON payroll_payments FOR INSERT WITH CHECK (organization_id = get_user_org_id() AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update payroll" ON payroll_payments FOR UPDATE USING (organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete payroll" ON payroll_payments FOR DELETE USING (organization_id = get_user_org_id() AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
 
 -- 3. OPERATIONAL RESERVE MOVEMENTS Table
 CREATE TABLE IF NOT EXISTS operational_reserve_movements (
@@ -974,10 +974,10 @@ CREATE TABLE IF NOT EXISTS operational_reserve_movements (
 
 -- RLS policies for operational_reserve_movements
 ALTER TABLE operational_reserve_movements ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Select reserve" ON operational_reserve_movements FOR SELECT USING (auth.uid() = user_id OR organization_id = get_user_org_id());
-CREATE POLICY "Insert reserve" ON operational_reserve_movements FOR INSERT WITH CHECK ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
-CREATE POLICY "Update reserve" ON operational_reserve_movements FOR UPDATE USING (auth.uid() = user_id OR organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
-CREATE POLICY "Delete reserve" ON operational_reserve_movements FOR DELETE USING ((auth.uid() = user_id OR organization_id = get_user_org_id()) AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Select reserve" ON operational_reserve_movements FOR SELECT USING (organization_id = get_user_org_id());
+CREATE POLICY "Insert reserve" ON operational_reserve_movements FOR INSERT WITH CHECK (organization_id = get_user_org_id() AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
+CREATE POLICY "Update reserve" ON operational_reserve_movements FOR UPDATE USING (organization_id = get_user_org_id()) WITH CHECK (get_user_role() IS NULL OR get_user_role() <> 'solo lectura');
+CREATE POLICY "Delete reserve" ON operational_reserve_movements FOR DELETE USING (organization_id = get_user_org_id() AND (get_user_role() IS NULL OR get_user_role() <> 'solo lectura'));
 
 -- 4. INCOME ALLOCATIONS Table
 CREATE TABLE IF NOT EXISTS income_allocations (

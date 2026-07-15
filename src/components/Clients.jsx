@@ -2,6 +2,16 @@ import React, { useEffect, useState, Component } from 'react';
 import { supabase, isMock } from '../supabaseClient';
 import ClientQuotesModal from './ClientQuotesModal';
 import { formatDate, exportToCSV, syncPaymentStatus } from '../utils';
+
+const safeNumber = (value) => {
+  if (value === null || value === undefined) return 0;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const formatCLP = (value) => {
+  return Math.round(safeNumber(value)).toLocaleString('es-CL');
+};
 import { createAutoIncome } from '../financeHelper';
 import IncomeDistributionModal from './IncomeDistributionModal';
 import ExportDropdown from './ExportDropdown';
@@ -1216,7 +1226,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
         baseAmount = parsedInput;
       }
 
-      if (!window.confirm(`¿Marcar este cliente como pagado por un monto de ${client.currency || client.preferred_currency || 'CLP'} ${baseAmount.toLocaleString()}?`)) {
+      if (!window.confirm(`¿Marcar este cliente como pagado por un monto de ${client.currency || client.preferred_currency || 'CLP'} ${formatCLP(baseAmount)}?`)) {
         return;
       }
 
@@ -1588,7 +1598,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
         }
         if (parseFloat(formData.amount_paid) > parseFloat(selectedClient.amount_paid || 0)) {
           const diff = parseFloat(formData.amount_paid) - parseFloat(selectedClient.amount_paid || 0);
-          await logActivity('pago recibido', `Pago de ${formData.currency} ${diff.toLocaleString()} recibido de ${formData.name}`, selectedClient.id);
+          await logActivity('pago recibido', `Pago de ${formData.currency} ${formatCLP(diff)} recibido de ${formData.name}`, selectedClient.id);
         }
 
         if (formData.register_service) {
@@ -1800,7 +1810,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
           await logActivity('servicio listo para iniciar', `Cliente ${formData.name} listo para iniciar trabajo`, createdClient.id);
         }
         if (parseFloat(formData.amount_paid) > 0) {
-          await logActivity('pago recibido', `Pago de ${formData.currency} ${parseFloat(formData.amount_paid).toLocaleString()} recibido de ${formData.name}`, createdClient.id);
+          await logActivity('pago recibido', `Pago de ${formData.currency} ${formatCLP(formData.amount_paid)} recibido de ${formData.name}`, createdClient.id);
         }
       }
 
@@ -2482,14 +2492,14 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
                           {packs.length > 0 && (
                             <optgroup label="Packs Editoriales">
                               {packs.map(p => (
-                                <option key={p.id} value={`pack:${p.id}`}>{p.name} ({p.currency} {p.price_special.toLocaleString()})</option>
+                                <option key={p.id} value={`pack:${p.id}`}>{p.name} ({p.currency} {formatCLP(p.price_special)})</option>
                               ))}
                             </optgroup>
                           )}
                           {catalog.length > 0 && (
                             <optgroup label="Servicios Individuales">
                               {catalog.map(c => (
-                                <option key={c.id} value={`service:${c.id}`}>{c.name} ({c.currency} {c.base_price.toLocaleString()})</option>
+                                <option key={c.id} value={`service:${c.id}`}>{c.name} ({c.currency} {formatCLP(c.base_price)})</option>
                               ))}
                             </optgroup>
                           )}
@@ -2633,7 +2643,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
                     <div>
                       <span className="font-bold text-slate-450 uppercase mr-2">Saldo Pendiente:</span>
                       <span className="font-mono font-extrabold text-rose-600 dark:text-rose-400 text-sm">
-                        {formData.currency} {formData.balance_due.toLocaleString()}
+                        {formData.currency} {formatCLP(formData.balance_due)}
                       </span>
                     </div>
                     
@@ -3203,19 +3213,19 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
                       <div>
                         <span className="text-[9px] text-slate-400 font-bold uppercase block mb-0.5">Acordado</span>
                         <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
-                          {selectedClient.currency || 'CLP'} {Number(selectedClient.total_agreed_amount || 0).toLocaleString()}
+                          {selectedClient.currency || 'CLP'} {formatCLP(selectedClient.total_agreed_amount)}
                         </span>
                       </div>
                       <div>
                         <span className="text-[9px] text-slate-400 font-bold uppercase block mb-0.5">Pagado</span>
                         <span className="font-mono text-xs font-bold text-emerald-650 dark:text-emerald-400">
-                          {selectedClient.currency || 'CLP'} {Number(selectedClient.amount_paid || 0).toLocaleString()}
+                          {selectedClient.currency || 'CLP'} {formatCLP(selectedClient.amount_paid)}
                         </span>
                       </div>
                       <div>
                         <span className="text-[9px] text-slate-400 font-bold uppercase block mb-0.5">Pendiente</span>
                         <span className="font-mono text-xs font-bold text-rose-600 dark:text-rose-455">
-                          {selectedClient.currency || 'CLP'} {Number(selectedClient.balance_due || 0).toLocaleString()}
+                          {selectedClient.currency || 'CLP'} {formatCLP(selectedClient.balance_due)}
                         </span>
                       </div>
                     </div>
@@ -3358,7 +3368,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
                         <div>
                           <span className="font-bold text-slate-700 dark:text-slate-300 block text-[11px]">Pago Recibido</span>
                           <span className="text-[10px] text-slate-400 font-semibold">
-                            Estado: <span className="uppercase text-brand-600 dark:text-brand-400">{selectedClient.payment_status || 'sin pago'}</span> ({selectedClient.currency} {parseFloat(selectedClient.amount_paid || 0).toLocaleString()})
+                            Estado: <span className="uppercase text-brand-600 dark:text-brand-400">{selectedClient.payment_status || 'sin pago'}</span> ({selectedClient.currency} {formatCLP(selectedClient.amount_paid)})
                           </span>
                         </div>
                       </label>
@@ -3459,19 +3469,19 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
                                 <div>
                                   <span className="text-[9px] text-slate-400 font-bold uppercase block">Acordado</span>
                                   <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                                    {service.currency} {Number(service.value).toLocaleString()}
+                                    {service.currency} {formatCLP(service.value)}
                                   </span>
                                 </div>
                                 <div>
                                   <span className="text-[9px] text-slate-400 font-bold uppercase block">Pagado</span>
                                   <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                                    {service.currency} {Number(service.amount_paid || 0).toLocaleString()}
+                                    {service.currency} {formatCLP(service.amount_paid)}
                                   </span>
                                 </div>
                                 <div>
                                   <span className="text-[9px] text-slate-400 font-bold uppercase block">Pendiente</span>
                                   <span className="font-mono font-bold text-rose-600 dark:text-rose-455">
-                                    {service.currency} {Number(service.balance_due || 0).toLocaleString()}
+                                    {service.currency} {formatCLP(service.balance_due)}
                                   </span>
                                 </div>
                               </div>

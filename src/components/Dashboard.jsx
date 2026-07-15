@@ -9,6 +9,28 @@ import {
   Clock, CheckCircle, Award, Landmark, PiggyBank, FileText, ArrowUpRight, ShieldCheck, ChevronRight
 } from 'lucide-react';
 
+const isTestData = (item) => {
+  if (!item) return false;
+  if (item.is_test === true || item.is_test === 'true' || item.is_test === 1 || item.is_test === '1') return true;
+  if (item.test_run_id !== undefined && item.test_run_id !== null && item.test_run_id !== '') return true;
+  
+  for (const key in item) {
+    if (Object.prototype.hasOwnProperty.call(item, key)) {
+      const val = item[key];
+      if (typeof val === 'string' && val.includes('TEST_QA_')) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+const safeNumber = (value) => {
+  if (value === null || value === undefined) return 0;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
 export default function Dashboard({ organizationId, realtimeTrigger }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('finanzas'); // 'finanzas' | 'operativa'
@@ -144,23 +166,25 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         fetchWithErrors('income_tax_reservations')
       ]);
 
-      const clients = clientsRes.data;
+      const clients = (clientsRes.data || []).filter(item => !isTestData(item));
+      const prospects = (prospectsRes.data || []).filter(item => !isTestData(item));
+      const services = (servicesRes.data || []).filter(item => !isTestData(item));
+      const incomes = (incomesRes.data || []).filter(item => !isTestData(item));
+      const expenses = (expensesRes.data || []).filter(item => !isTestData(item));
+      const rawPayroll = (payrollRes.data || []).filter(item => !isTestData(item));
+      const allocations = (allocationsRes.data || []).filter(item => !isTestData(item));
+      const reserveMovements = (reserveMovementsRes.data || []).filter(item => !isTestData(item));
+      const staff = (staffRes.data || []).filter(item => !isTestData(item));
+      const incomeDistributions = (distributionsRes.data || []).filter(item => !isTestData(item));
+      const clientFunds = (clientFundsRes.data || []).filter(item => !isTestData(item));
+      const fundMovements = (fundMovementsRes.data || []).filter(item => !isTestData(item));
+      const taxReservations = (taxReservationsRes.data || []).filter(item => !isTestData(item));
+
       const clientsError = clientsRes.error;
-      const prospects = prospectsRes.data;
-      const services = servicesRes.data;
-      const servicesError = servicesRes.error;
-      const incomes = incomesRes.data;
-      const incomesError = incomesRes.error;
-      const expenses = expensesRes.data;
       const expensesError = expensesRes.error;
-      const rawPayroll = payrollRes.data;
-      const allocations = allocationsRes.data;
-      const reserveMovements = reserveMovementsRes.data;
-      const staff = staffRes.data || [];
-      const incomeDistributions = distributionsRes.data || [];
-      const clientFunds = clientFundsRes.data || [];
-      const fundMovements = fundMovementsRes.data || [];
-      const taxReservations = taxReservationsRes.data || [];
+      const servicesError = servicesRes.error;
+      const incomesError = incomesRes.error;
+
       const payroll = (rawPayroll || []).map(p => {
         const member = (staff || []).find(s => s.id === p.staff_id);
         const name = member ? member.name : 'Colaborador';
@@ -246,12 +270,6 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       const monthExpenses = filterByPeriod(expenses || [], 'date', period);
       const monthPayroll = filterByPeriod(payroll || [], 'date', period);
       
-      const periodAllocations = (allocations || []).filter(alloc => {
-        const parentIncome = (incomes || []).find(inc => inc.id === alloc.income_id);
-        if (!parentIncome) return false;
-        const filtered = filterByPeriod([parentIncome], 'date', period);
-        return filtered.length > 0;
-      });
       const periodMovements = filterByPeriod(reserveMovements || [], 'date', period);
 
       // Period Incomes (Solo contar ingresos pagados)
@@ -260,11 +278,23 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       let incomesVat = 0;
       monthIncomes.forEach(i => {
         if (i.status !== 'pagado') return;
-        const amt = getNormalizedAmount(i);
-        const split = calculateVatSplit(amt, i.includes_vat);
+        const amt = safeNumber(i.amount);
+        const includesIva = i.includes_vat === true || i.includes_vat === 'true' || i.includes_iva === true || i.includes_iva === 'true';
+        let net = 0;
+        if (i.net_amount !== undefined && i.net_amount !== null && Number(i.net_amount) > 0) {
+          net = Number(i.net_amount);
+        } else {
+          if (includesIva) {
+            net = amt / 1.19;
+          } else {
+            net = amt;
+          }
+        }
+        const vat = includesIva ? (amt - net) : 0;
+        
         incomesTotal += convertToClp(amt, i.currency);
-        incomesNet += convertToClp(split.net, i.currency);
-        incomesVat += convertToClp(split.vat, i.currency);
+        incomesNet += convertToClp(net, i.currency);
+        incomesVat += convertToClp(vat, i.currency);
       });
 
       // Period Expenses
@@ -327,14 +357,25 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
       // Period VAT Estimate
       const vatToPay = incomesVat - expensesVat;
 
-      // Period Operational Reserve
-      const allocationsVal = periodAllocations
-        .filter(a => a.area === 'reserva operacional')
-        .reduce((sum, a) => {
-          const parentIncome = (incomes || []).find(inc => inc.id === a.income_id);
-          const rate = parentIncome ? Number(parentIncome.exchange_rate || 1) : 1;
-          return sum + (Number(a.calculated_amount) * rate);
-        }, 0);
+      // Period Operational Reserve from income distributions/allocations (de-duplicated)
+      let allocationsVal = 0;
+      const periodIncomes = filterByPeriod(incomes || [], 'date', period);
+      periodIncomes.forEach(inc => {
+        if (inc.status !== 'pagado') return;
+        
+        const dists = (incomeDistributions || []).filter(d => d.income_id === inc.id);
+        if (dists.length > 0) {
+          const reserveDists = dists.filter(d => d.category === 'reserva' || d.distribution_type === 'reserva');
+          reserveDists.forEach(d => {
+            allocationsVal += convertToClp(parseFloat(d.amount) || 0, inc.currency);
+          });
+        } else {
+          const allocs = (allocations || []).filter(a => a.income_id === inc.id && a.area === 'reserva operacional');
+          allocs.forEach(a => {
+            allocationsVal += convertToClp(parseFloat(a.calculated_amount) || 0, inc.currency);
+          });
+        }
+      });
 
       const movementsVal = (periodMovements || []).reduce((sum, m) => {
         const amt = getNormalizedAmount(m);
@@ -352,18 +393,29 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
 
       // Incomes to distribute
       let toDistribute = 0;
-      const validIncomes = (incomes || []).filter(i => i.status === 'pagado');
-      validIncomes.forEach(i => {
-        const amt = parseFloat(i.amount) || 0;
-        const vat = i.includes_vat ? (amt - (amt / 1.19)) : 0;
-        const netPool = amt - vat;
+      const paidIncomes = (incomes || []).filter(i => i.status === 'pagado');
+      paidIncomes.forEach(i => {
+        const amt = safeNumber(i.amount);
+        const includesIva = i.includes_vat === true || i.includes_vat === 'true' || i.includes_iva === true || i.includes_iva === 'true';
+        let net = 0;
+        if (i.net_amount !== undefined && i.net_amount !== null && Number(i.net_amount) > 0) {
+          net = Number(i.net_amount);
+        } else {
+          if (includesIva) {
+            net = amt / 1.19;
+          } else {
+            net = amt;
+          }
+        }
+        
+        const clpNetPool = convertToClp(net, i.currency);
         
         const distSum = (incomeDistributions || [])
           .filter(d => d.income_id === i.id)
-          .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+          .reduce((sum, d) => sum + convertToClp(safeNumber(d.amount), i.currency), 0);
         
-        if (netPool > distSum) {
-          toDistribute += (netPool - distSum);
+        if (clpNetPool > distSum) {
+          toDistribute += (clpNetPool - distSum);
         }
       });
 
@@ -637,7 +689,10 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         prospects,
         services,
         reserveMovements,
-        allocations
+        allocations,
+        incomeDistributions,
+        clientFunds,
+        taxReservations
       });
 
     } catch (error) {
@@ -665,7 +720,7 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
   };
 
   const getDetailItemsRaw = (cardId) => {
-    const { incomes, expenses, payroll, clients, prospects, services, reserveMovements, allocations } = rawData;
+    const { incomes, expenses, payroll, clients, prospects, services, reserveMovements, allocations, incomeDistributions } = rawData;
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
@@ -753,12 +808,23 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
         const list = [];
         monthIncomes.forEach(i => {
           if (i.status !== 'pagado') return;
-          const split = calculateVatSplit(getNormalizedAmount(i), i.includes_vat);
+          const amt = getNormalizedAmount(i);
+          const includesIva = i.includes_vat === true || i.includes_vat === 'true' || i.includes_iva === true || i.includes_iva === 'true';
+          let net = 0;
+          if (i.net_amount !== undefined && i.net_amount !== null && Number(i.net_amount) > 0) {
+            net = Number(i.net_amount);
+          } else {
+            if (includesIva) {
+              net = amt / 1.19;
+            } else {
+              net = amt;
+            }
+          }
           list.push({
             date: i.date,
             concept: i.concept,
             type: 'Ingreso Neto (+)',
-            amount: convertToClp(split.net, i.currency)
+            amount: convertToClp(net, i.currency)
           });
         });
         monthExpenses.forEach(e => {
@@ -811,15 +877,32 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
 
       case 'reserve': {
         const list = [];
-        periodAllocations.forEach(a => {
-          const parentIncome = (incomes || []).find(inc => inc.id === a.income_id);
-          const rate = parentIncome ? Number(parentIncome.exchange_rate || 1) : 1;
-          list.push({
-            date: parentIncome?.date || '-',
-            concept: `Retención sobre Ingreso: ${parentIncome?.concept || ''}`,
-            type: 'Retención de Venta',
-            amount: Number(a.calculated_amount) * rate
-          });
+        const periodIncomes = filterByPeriod(incomes || [], 'date', period);
+        periodIncomes.forEach(inc => {
+          if (inc.status !== 'pagado') return;
+          
+          const dists = (incomeDistributions || []).filter(d => d.income_id === inc.id);
+          if (dests.length > 0) {
+            const reserveDists = dists.filter(d => d.category === 'reserva' || d.distribution_type === 'reserva');
+            reserveDists.forEach(d => {
+              list.push({
+                date: inc.date || '-',
+                concept: `Retención sobre Ingreso (Smart): ${inc.concept || ''}`,
+                type: 'Retención de Venta',
+                amount: convertToClp(parseFloat(d.amount) || 0, inc.currency)
+              });
+            });
+          } else {
+            const allocs = (allocations || []).filter(a => a.income_id === inc.id && a.area === 'reserva operacional');
+            allocs.forEach(a => {
+              list.push({
+                date: inc.date || '-',
+                concept: `Retención sobre Ingreso: ${inc.concept || ''}`,
+                type: 'Retención de Venta',
+                amount: convertToClp(parseFloat(a.calculated_amount) || 0, inc.currency)
+              });
+            });
+          }
         });
         periodMovements.forEach(m => {
           const amt = convertToClp(getNormalizedAmount(m), m.currency);
@@ -890,25 +973,36 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
 
       case 'to_distribute': {
         const list = [];
-        const validIncomes = (incomes || []).filter(i => i.status === 'pagado');
-        validIncomes.forEach(i => {
-          const amt = parseFloat(i.amount) || 0;
-          const vat = i.includes_vat ? (amt - (amt / 1.19)) : 0;
-          const netPool = amt - vat;
+        const paidIncomes = (incomes || []).filter(i => i.status === 'pagado');
+        paidIncomes.forEach(i => {
+          const amt = safeNumber(i.amount);
+          const includesIva = i.includes_vat === true || i.includes_vat === 'true' || i.includes_iva === true || i.includes_iva === 'true';
+          let net = 0;
+          if (i.net_amount !== undefined && i.net_amount !== null && Number(i.net_amount) > 0) {
+            net = Number(i.net_amount);
+          } else {
+            if (includesIva) {
+              net = amt / 1.19;
+            } else {
+              net = amt;
+            }
+          }
+          
+          const clpNetPool = convertToClp(net, i.currency);
           
           const distSum = (incomeDistributions || [])
             .filter(d => d.income_id === i.id)
-            .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+            .reduce((sum, d) => sum + convertToClp(safeNumber(d.amount), i.currency), 0);
           
-          if (netPool > distSum) {
+          if (clpNetPool > distSum) {
             const clientObj = (clients || []).find(c => c.id === i.client_id);
             list.push({
               date: i.date || '-',
               concept: i.concept || 'Pago recibido',
               clientName: clientObj ? clientObj.name : 'Cliente general',
-              netPool: netPool,
+              netPool: clpNetPool,
               allocated: distSum,
-              pending: netPool - distSum
+              pending: clpNetPool - distSum
             });
           }
         });
@@ -940,14 +1034,25 @@ export default function Dashboard({ organizationId, realtimeTrigger }) {
           rows: monthIncomes.map(i => {
             const client = (clients || []).find(c => c.id === i.client_id) || (prospects || []).find(p => p.id === i.client_id);
             const amt = getNormalizedAmount(i);
-            const split = calculateVatSplit(amt, i.includes_vat);
+            const includesIva = i.includes_vat === true || i.includes_vat === 'true' || i.includes_iva === true || i.includes_iva === 'true';
+            let net = 0;
+            if (i.net_amount !== undefined && i.net_amount !== null && Number(i.net_amount) > 0) {
+              net = Number(i.net_amount);
+            } else {
+              if (includesIva) {
+                net = amt / 1.19;
+              } else {
+                net = amt;
+              }
+            }
+            const vat = includesIva ? (amt - net) : 0;
             return [
               i.date || '-',
               client ? client.name : 'Venta externa',
               i.concept || 'Sin concepto',
               formatCurrency(amt, i.currency),
-              formatCurrency(split.net, i.currency),
-              formatCurrency(split.vat, i.currency),
+              formatCurrency(net, i.currency),
+              formatCurrency(vat, i.currency),
               i.payment_method || '-'
             ];
           }),

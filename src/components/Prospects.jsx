@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { formatDate, exportToCSV } from '../utils';
+import { formatDate, exportToCSV, formatCLP } from '../utils';
 import { createAutoIncome } from '../financeHelper';
 import IncomeDistributionModal from './IncomeDistributionModal';
 import ExportDropdown from './ExportDropdown';
@@ -995,7 +995,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
         await logActivity('cliente listo para iniciar', `Cliente ${payload.name} listo para iniciar trabajo editorial`, clientTargetId);
       }
       if (parseFloat(payload.amount_paid) > 0) {
-        await logActivity('pago recibido', `Pago de ${payload.currency} ${parseFloat(payload.amount_paid).toLocaleString()} recibido de ${payload.name}`, clientTargetId);
+        await logActivity('pago recibido', `Pago de ${payload.currency} ${formatCLP(payload.amount_paid)} recibido de ${payload.name}`, clientTargetId);
       }
 
       // 3. Link prospect with client and update status
@@ -1802,14 +1802,14 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
                         {packs.length > 0 && (
                           <optgroup label="Packs Editoriales">
                             {packs.map(p => (
-                              <option key={p.id} value={`pack:${p.id}`}>{p.name} ({p.currency} {Number(p.price_special || 0).toLocaleString()})</option>
+                              <option key={p.id} value={`pack:${p.id}`}>{p.name} ({p.currency} {formatCLP(p.price_special)})</option>
                             ))}
                           </optgroup>
                         )}
                         {catalog.length > 0 && (
                           <optgroup label="Servicios Individuales">
                             {catalog.map(c => (
-                              <option key={c.id} value={`service:${c.id}`}>{c.name} ({c.currency} {Number(c.base_price || 0).toLocaleString()})</option>
+                              <option key={c.id} value={`service:${c.id}`}>{c.name} ({c.currency} {formatCLP(c.base_price)})</option>
                             ))}
                           </optgroup>
                         )}
@@ -1952,7 +1952,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
                     <div>
                       <span className="font-bold text-slate-455 uppercase mr-2">Saldo Pendiente:</span>
                       <span className="font-mono font-extrabold text-rose-600 dark:text-rose-455 text-sm">
-                        {formData.currency} {Number(formData.balance_due || 0).toLocaleString()}
+                        {formData.currency} {formatCLP(formData.balance_due)}
                       </span>
                     </div>
                     
@@ -2566,14 +2566,14 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
                         {packs.length > 0 && (
                           <optgroup label="Packs Editoriales">
                             {packs.map(p => (
-                              <option key={p.id} value={`pack:${p.id}`}>{p.name} ({p.currency} {Number(p.price_special || 0).toLocaleString()})</option>
+                              <option key={p.id} value={`pack:${p.id}`}>{p.name} ({p.currency} {formatCLP(p.price_special)})</option>
                             ))}
                           </optgroup>
                         )}
                         {catalog.length > 0 && (
                           <optgroup label="Servicios Individuales">
                             {catalog.map(c => (
-                              <option key={c.id} value={`service:${c.id}`}>{c.name} ({c.currency} {Number(c.base_price || 0).toLocaleString()})</option>
+                              <option key={c.id} value={`service:${c.id}`}>{c.name} ({c.currency} {formatCLP(c.base_price)})</option>
                             ))}
                           </optgroup>
                         )}
@@ -2716,7 +2716,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
                     <div>
                       <span className="font-bold text-slate-455 uppercase mr-2">Saldo Pendiente:</span>
                       <span className="font-mono font-extrabold text-rose-600 dark:text-rose-455 text-sm">
-                        {convertData.currency} {Number(convertData.balance_due || 0).toLocaleString()}
+                        {convertData.currency} {formatCLP(convertData.balance_due)}
                       </span>
                     </div>
                     

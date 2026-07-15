@@ -7,6 +7,28 @@ import {
   ArrowUpRight, ArrowDownRight, RefreshCw, BarChart2
 } from 'lucide-react';
 
+const isTestData = (item) => {
+  if (!item) return false;
+  if (item.is_test === true || item.is_test === 'true' || item.is_test === 1 || item.is_test === '1') return true;
+  if (item.test_run_id !== undefined && item.test_run_id !== null && item.test_run_id !== '') return true;
+  
+  for (const key in item) {
+    if (Object.prototype.hasOwnProperty.call(item, key)) {
+      const val = item[key];
+      if (typeof val === 'string' && val.includes('TEST_QA_')) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+const safeNumber = (value) => {
+  if (value === null || value === undefined) return 0;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
 export default function Staff({ defaultSubTab = 'members', realtimeTrigger }) {
   const [loading, setLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState(defaultSubTab);
@@ -80,15 +102,16 @@ export default function Staff({ defaultSubTab = 'members', realtimeTrigger }) {
       
       // Load staff list
       const staffRes = await supabase.from('staff').select('*').eq('organization_id', orgId);
-      setStaffList(staffRes.data || []);
+      const staff = (staffRes.data || []).filter(item => !isTestData(item));
+      setStaffList(staff);
 
       // Load payroll list
       const payrollRes = await supabase.from('payroll_payments').select('*').eq('organization_id', orgId);
-      const rawPayroll = payrollRes.data || [];
+      const rawPayroll = (payrollRes.data || []).filter(item => !isTestData(item));
       
       // Populate staff names manually for mock/real safety
       const enrichedPayroll = rawPayroll.map(pay => {
-        const member = (staffRes.data || []).find(s => s.id === pay.staff_id);
+        const member = staff.find(s => s.id === pay.staff_id);
         return {
           ...pay,
           staff_name: member ? member.name : 'Desconocido',
@@ -99,30 +122,55 @@ export default function Staff({ defaultSubTab = 'members', realtimeTrigger }) {
 
       // Load reserve movements
       const reserveRes = await supabase.from('operational_reserve_movements').select('*').eq('organization_id', orgId);
-      setReserveMovements(reserveRes.data || []);
+      const reserveMovementsData = (reserveRes.data || []).filter(item => !isTestData(item));
+      setReserveMovements(reserveMovementsData);
 
-      // Fetch Incomes & Expenses to calculate Operational Reserve
-      const [incomesRes, expensesRes] = await Promise.all([
-        supabase.from('incomes').select('amount, currency').eq('organization_id', orgId).eq('status', 'pagado'),
-        supabase.from('expenses').select('amount, currency').eq('organization_id', orgId).eq('status', 'pagado')
+      // Fetch Incomes, Expenses, Allocations, and Distributions to calculate Operational Reserve & Utility
+      const [incomesRes, expensesRes, allocationsRes, distributionsRes] = await Promise.all([
+        supabase.from('incomes').select('*').eq('organization_id', orgId).eq('status', 'pagado'),
+        supabase.from('expenses').select('*').eq('organization_id', orgId),
+        supabase.from('income_allocations').select('*').eq('organization_id', orgId),
+        supabase.from('income_distributions').select('*').eq('organization_id', orgId)
       ]);
 
-      // Calculate totals (convert to CLP for simple representation or keep separate, let's treat standard CLP sum for Somos Noveli)
-      const totalIncomes = (incomesRes.data || []).reduce((acc, curr) => acc + (Number(curr.amount) * (curr.currency === 'USD' ? 940 : 1)), 0);
-      const totalExpenses = (expensesRes.data || []).reduce((acc, curr) => acc + (Number(curr.amount) * (curr.currency === 'USD' ? 940 : 1)), 0);
-      const totalPayroll = (payrollRes.data || [])
+      const incomes = (incomesRes.data || []).filter(item => !isTestData(item));
+      const expenses = (expensesRes.data || []).filter(item => !isTestData(item));
+      const allocations = (allocationsRes.data || []).filter(item => !isTestData(item));
+      const incomeDistributions = (distributionsRes.data || []).filter(item => !isTestData(item));
+
+      // Calculate totals
+      const totalIncomes = incomes.reduce((acc, curr) => acc + (Number(curr.amount) * (curr.currency === 'USD' ? 940 : 1)), 0);
+      const totalExpenses = expenses.filter(e => e.status === 'pagado' || !e.status).reduce((acc, curr) => acc + (Number(curr.amount) * (curr.currency === 'USD' ? 940 : 1)), 0);
+      const totalPayroll = rawPayroll
         .filter(p => p.status === 'pagado')
         .reduce((acc, curr) => acc + (Number(curr.amount) * (curr.currency === 'USD' ? 940 : 1)), 0);
 
+      // Calculate operational reserve allocations from incomes (de-duplicated)
+      let allocationsVal = 0;
+      incomes.forEach(inc => {
+        const dists = incomeDistributions.filter(d => d.income_id === inc.id);
+        if (dists.length > 0) {
+          const reserveDists = dists.filter(d => d.category === 'reserva' || d.distribution_type === 'reserva');
+          reserveDists.forEach(d => {
+            allocationsVal += (Number(d.amount) * (inc.currency === 'USD' ? 940 : 1));
+          });
+        } else {
+          const allocs = allocations.filter(a => a.income_id === inc.id && a.area === 'reserva operacional');
+          allocs.forEach(a => {
+            allocationsVal += (Number(a.calculated_amount) * (inc.currency === 'USD' ? 940 : 1));
+          });
+        }
+      });
+
       // Calculate operational reserve sum
-      const totalReserveIn = (reserveRes.data || [])
+      const totalReserveIn = reserveMovementsData
         .filter(m => m.type === 'entrada' || m.type === 'ajuste')
         .reduce((acc, curr) => acc + (Number(curr.amount) * (curr.currency === 'USD' ? 940 : 1)), 0);
-      const totalReserveOut = (reserveRes.data || [])
+      const totalReserveOut = reserveMovementsData
         .filter(m => m.type === 'salida')
         .reduce((acc, curr) => acc + (Number(curr.amount) * (curr.currency === 'USD' ? 940 : 1)), 0);
       
-      const calculatedReserve = totalReserveIn - totalReserveOut;
+      const calculatedReserve = allocationsVal + (totalReserveIn - totalReserveOut);
       const calculatedUtility = totalIncomes - totalExpenses - totalPayroll;
 
       setTotals({

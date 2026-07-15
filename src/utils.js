@@ -754,3 +754,13 @@ export const canPerformAction = (moduleKey, action) => {
   // For other roles, block write actions if they cannot access the module
   return canAccessModule(moduleKey);
 };
+
+export const safeNumber = (value) => {
+  if (value === null || value === undefined) return 0;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+export const formatCLP = (value) => {
+  return safeNumber(value).toLocaleString('es-CL');
+};
