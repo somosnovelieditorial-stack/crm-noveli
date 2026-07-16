@@ -84,6 +84,28 @@ const DEFAULT_FOOTER_GALLERY = [
   { id: 'fg-3', image_url: 'https://images.unsplash.com/photo-1506880018603-83d5b814b5a6?w=150&auto=format&fit=crop&q=60', title: 'Manuscritos', link_url: 'https://instagram.com', display_order: 3, active: true },
   { id: 'fg-4', image_url: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=150&auto=format&fit=crop&q=60', title: 'Nuevos lanzamientos', link_url: 'https://instagram.com', display_order: 4, active: true }
 ];
+const DEFAULT_HERO_SETTINGS = {
+  eyebrow: 'EDITORIAL INDEPENDIENTE',
+  title: 'Tu historia merece ser contada de la manera más',
+  highlighted_word: 'hermosa',
+  subtitle: 'Ayudamos a autores independientes a maquetar, corregir, diseñar y distribuir sus libros a nivel global con calidad profesional.',
+  primary_button_text: 'Ver Servicios',
+  primary_button_url: '#servicios',
+  secondary_button_text: 'Conoce el Catálogo',
+  secondary_button_url: '#libros',
+  background_image_url: '',
+  side_image_url: '',
+  featured_book_id: '',
+  show_featured_book: true,
+  active: true
+};
+
+const DEFAULT_HERO_QUICK_SERVICES = [
+  { id: 'hqs-1', label: 'Feather Pen', icon_name: 'feather', link_url: '#servicios', display_order: 1, active: true },
+  { id: 'hqs-2', label: 'E-Books', icon_name: 'book', link_url: '#servicios', display_order: 2, active: true },
+  { id: 'hqs-3', label: 'Maquetación', icon_name: 'layout', link_url: '#servicios', display_order: 3, active: true },
+  { id: 'hqs-4', label: 'Publicación', icon_name: 'upload', link_url: '#servicios', display_order: 4, active: true }
+];
 
 export default function Website({ isReadOnly, initialPath = 'dashboard', onChangePath, realtimeTrigger }) {
   const [currentPath, setCurrentPath] = useState(initialPath);
@@ -162,6 +184,30 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const [categoryDescription, setCategoryDescription] = useState('');
   const [categoryActive, setCategoryActive] = useState(true);
 
+  // Hero Form states
+  const [heroTab, setHeroTab] = useState('configuracion'); // 'configuracion' o 'servicios'
+  const [heroConfigId, setHeroConfigId] = useState(null);
+  const [heroEyebrow, setHeroEyebrow] = useState('');
+  const [heroTitleState, setHeroTitleState] = useState(''); // named State to avoid name collision with standard browser globals
+  const [heroHighlightedWord, setHeroHighlightedWord] = useState('');
+  const [heroSubtitleText, setHeroSubtitleText] = useState('');
+  const [heroPrimaryBtnText, setHeroPrimaryBtnText] = useState('');
+  const [heroPrimaryBtnUrl, setHeroPrimaryBtnUrl] = useState('');
+  const [heroSecondaryBtnText, setHeroSecondaryBtnText] = useState('');
+  const [heroSecondaryBtnUrl, setHeroSecondaryBtnUrl] = useState('');
+  const [heroBgImageUrl, setHeroBgImageUrl] = useState('');
+  const [heroSideImageUrl, setHeroSideImageUrl] = useState('');
+  const [heroFeaturedBookId, setHeroFeaturedBookId] = useState('');
+  const [heroShowFeaturedBook, setHeroShowFeaturedBook] = useState(true);
+  const [heroActive, setHeroActive] = useState(true);
+
+  const [heroQuickServices, setHeroQuickServices] = useState([]);
+  const [editingQuickService, setEditingQuickService] = useState(null);
+  const [quickServiceLabel, setQuickServiceLabel] = useState('');
+  const [quickServiceIconName, setQuickServiceIconName] = useState('feather');
+  const [quickServiceLinkUrl, setQuickServiceLinkUrl] = useState('');
+  const [quickServiceActive, setQuickServiceActive] = useState(true);
+
   // Footer Form states
   const [footerTab, setFooterTab] = useState('configuracion'); // 'configuracion' o 'galeria'
   const [footerConfigId, setFooterConfigId] = useState(null);
@@ -214,6 +260,8 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     fetchLeads();
     fetchFooterSettings();
     fetchFooterGallery();
+    fetchHeroSettings();
+    fetchHeroQuickServices();
   }, [realtimeTrigger]);
 
   useEffect(() => {
@@ -225,6 +273,10 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     } else if (currentPath === 'footer') {
       fetchFooterSettings();
       fetchFooterGallery();
+    } else if (currentPath === 'hero') {
+      fetchBooks();
+      fetchHeroSettings();
+      fetchHeroQuickServices();
     }
   }, [currentPath]);
 
@@ -597,6 +649,380 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
       }
     } catch (error) {
       console.error('Error moving footer gallery order:', error);
+    }
+  };
+
+  // --- HERO DATABASE OPS ---
+  const fetchHeroSettings = async () => {
+    try {
+      if (isMock) {
+        loadMockHeroSettings();
+        return;
+      }
+      const { data, error } = await supabase
+        .from('website_hero_settings')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .limit(1);
+
+      if (error) {
+        throw error;
+      } else if (data && data.length > 0) {
+        const row = data[0];
+        setHeroConfigId(row.id);
+        setHeroEyebrow(row.eyebrow || '');
+        setHeroTitleState(row.title || '');
+        setHeroHighlightedWord(row.highlighted_word || '');
+        setHeroSubtitleText(row.subtitle || '');
+        setHeroPrimaryBtnText(row.primary_button_text || '');
+        setHeroPrimaryBtnUrl(row.primary_button_url || '');
+        setHeroSecondaryBtnText(row.secondary_button_text || '');
+        setHeroSecondaryBtnUrl(row.secondary_button_url || '');
+        setHeroBgImageUrl(row.background_image_url || '');
+        setHeroSideImageUrl(row.side_image_url || '');
+        setHeroFeaturedBookId(row.featured_book_id || '');
+        setHeroShowFeaturedBook(row.show_featured_book !== false);
+        setHeroActive(row.active !== false);
+      } else {
+        loadMockHeroSettings();
+      }
+    } catch (error) {
+      console.error('Error cargando website_hero_settings:', error);
+      loadMockHeroSettings();
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: error.message,
+          error_stack: error.stack || '',
+          module: 'website-hero',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    }
+  };
+
+  const loadMockHeroSettings = () => {
+    const saved = localStorage.getItem('somos_noveli_hero_settings_cms');
+    const settings = saved ? JSON.parse(saved) : DEFAULT_HERO_SETTINGS;
+    setHeroConfigId(settings.id || 'mock-hero-settings-id');
+    setHeroEyebrow(settings.eyebrow || '');
+    setHeroTitleState(settings.title || '');
+    setHeroHighlightedWord(settings.highlighted_word || '');
+    setHeroSubtitleText(settings.subtitle || '');
+    setHeroPrimaryBtnText(settings.primary_button_text || '');
+    setHeroPrimaryBtnUrl(settings.primary_button_url || '');
+    setHeroSecondaryBtnText(settings.secondary_button_text || '');
+    setHeroSecondaryBtnUrl(settings.secondary_button_url || '');
+    setHeroBgImageUrl(settings.background_image_url || '');
+    setHeroSideImageUrl(settings.side_image_url || '');
+    setHeroFeaturedBookId(settings.featured_book_id || '');
+    setHeroShowFeaturedBook(settings.show_featured_book !== false);
+    setHeroActive(settings.active !== false);
+  };
+
+  const fetchHeroQuickServices = async () => {
+    try {
+      if (isMock) {
+        loadMockHeroQuickServices();
+        return;
+      }
+      const { data, error } = await supabase
+        .from('website_hero_quick_services')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('display_order', { ascending: true });
+
+      if (error) {
+        throw error;
+      } else {
+        setHeroQuickServices(data || []);
+      }
+    } catch (error) {
+      console.error('Error cargando website_hero_quick_services:', error);
+      loadMockHeroQuickServices();
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: error.message,
+          error_stack: error.stack || '',
+          module: 'website-hero',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    }
+  };
+
+  const loadMockHeroQuickServices = () => {
+    const saved = localStorage.getItem('somos_noveli_hero_quick_services_cms');
+    setHeroQuickServices(saved ? JSON.parse(saved) : DEFAULT_HERO_QUICK_SERVICES);
+  };
+
+  const handleSaveHeroSettings = async (e) => {
+    if (e) e.preventDefault();
+    if (isReadOnly) return;
+    setLoading(true);
+    try {
+      const payload = {
+        organization_id: organizationId,
+        eyebrow: heroEyebrow,
+        title: heroTitleState,
+        highlighted_word: heroHighlightedWord,
+        subtitle: heroSubtitleText,
+        primary_button_text: heroPrimaryBtnText,
+        primary_button_url: heroPrimaryBtnUrl,
+        secondary_button_text: heroSecondaryBtnText,
+        secondary_button_url: heroSecondaryBtnUrl,
+        background_image_url: heroBgImageUrl,
+        side_image_url: heroSideImageUrl,
+        featured_book_id: heroFeaturedBookId || null,
+        show_featured_book: heroShowFeaturedBook,
+        active: heroActive,
+        updated_at: new Date().toISOString()
+      };
+
+      if (isMock || usingMockDb) {
+        localStorage.setItem('somos_noveli_hero_settings_cms', JSON.stringify({ id: heroConfigId, ...payload }));
+      } else {
+        if (heroConfigId) {
+          const { error } = await supabase
+            .from('website_hero_settings')
+            .update(payload)
+            .eq('id', heroConfigId);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from('website_hero_settings')
+            .insert([payload])
+            .select();
+          if (error) throw error;
+          if (data && data.length > 0) {
+            setHeroConfigId(data[0].id);
+          }
+        }
+      }
+      alert("Configuración de Hero guardada con éxito.");
+      await fetchHeroSettings();
+    } catch (error) {
+      console.error('Error guardando hero settings:', error);
+      alert(`Error al guardar configuración: ${error.message}`);
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: error.message,
+          error_stack: error.stack || '',
+          module: 'website-hero',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveHeroQuickService = async (e) => {
+    if (e) e.preventDefault();
+    if (isReadOnly) return;
+    if (!quickServiceLabel) {
+      alert("Por favor introduce una etiqueta.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const payload = {
+        organization_id: organizationId,
+        label: quickServiceLabel,
+        icon_name: quickServiceIconName,
+        link_url: quickServiceLinkUrl,
+        active: quickServiceActive
+      };
+
+      if (editingQuickService) {
+        if (isMock || usingMockDb) {
+          const updated = heroQuickServices.map(qs => qs.id === editingQuickService.id ? { ...qs, ...payload } : qs);
+          setHeroQuickServices(updated);
+          localStorage.setItem('somos_noveli_hero_quick_services_cms', JSON.stringify(updated));
+        } else {
+          const { error } = await supabase
+            .from('website_hero_quick_services')
+            .update(payload)
+            .eq('id', editingQuickService.id);
+          if (error) throw error;
+        }
+      } else {
+        const nextOrder = heroQuickServices.length > 0 ? Math.max(...heroQuickServices.map(qs => qs.display_order || 0)) + 1 : 1;
+        const insertPayload = { ...payload, display_order: nextOrder };
+
+        if (isMock || usingMockDb) {
+          const updated = [...heroQuickServices, { id: `hqs-${Date.now()}`, ...insertPayload }];
+          setHeroQuickServices(updated);
+          localStorage.setItem('somos_noveli_hero_quick_services_cms', JSON.stringify(updated));
+        } else {
+          const { error } = await supabase
+            .from('website_hero_quick_services')
+            .insert([insertPayload]);
+          if (error) throw error;
+        }
+      }
+      resetHeroQuickServiceForm();
+      await fetchHeroQuickServices();
+      alert("Servicio rápido guardado con éxito.");
+    } catch (error) {
+      console.error('Error guardando servicio rápido de hero:', error);
+      alert(`Error al guardar: ${error.message}`);
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: error.message,
+          error_stack: error.stack || '',
+          module: 'website-hero',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetHeroQuickServiceForm = () => {
+    setEditingQuickService(null);
+    setQuickServiceLabel('');
+    setQuickServiceIconName('feather');
+    setQuickServiceLinkUrl('');
+    setQuickServiceActive(true);
+  };
+
+  const startEditHeroQuickService = (qs) => {
+    setEditingQuickService(qs);
+    setQuickServiceLabel(qs.label || '');
+    setQuickServiceIconName(qs.icon_name || 'feather');
+    setQuickServiceLinkUrl(qs.link_url || '');
+    setQuickServiceActive(qs.active !== false);
+  };
+
+  const handleDeleteHeroQuickService = async (id) => {
+    if (isReadOnly) return;
+    if (!window.confirm("¿Seguro que deseas eliminar este servicio rápido de hero?")) return;
+    setLoading(true);
+    try {
+      if (isMock || usingMockDb) {
+        const updated = heroQuickServices.filter(qs => qs.id !== id);
+        setHeroQuickServices(updated);
+        localStorage.setItem('somos_noveli_hero_quick_services_cms', JSON.stringify(updated));
+      } else {
+        const { error } = await supabase
+          .from('website_hero_quick_services')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+      }
+      await fetchHeroQuickServices();
+      alert("Servicio rápido de hero eliminado.");
+    } catch (error) {
+      console.error('Error eliminando servicio rápido de hero:', error);
+      alert(`Error al eliminar: ${error.message}`);
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: error.message,
+          error_stack: error.stack || '',
+          module: 'website-hero',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleHeroQuickServiceActive = async (qs) => {
+    if (isReadOnly) return;
+    const newVal = !qs.active;
+    try {
+      if (isMock || usingMockDb) {
+        const updated = heroQuickServices.map(i => i.id === qs.id ? { ...i, active: newVal } : i);
+        setHeroQuickServices(updated);
+        localStorage.setItem('somos_noveli_hero_quick_services_cms', JSON.stringify(updated));
+      } else {
+        const { error } = await supabase
+          .from('website_hero_quick_services')
+          .update({ active: newVal })
+          .eq('id', qs.id);
+        if (error) throw error;
+      }
+      setHeroQuickServices(heroQuickServices.map(i => i.id === qs.id ? { ...i, active: newVal } : i));
+    } catch (error) {
+      console.error('Error toggling active state on hero quick service:', error);
+    }
+  };
+
+  const moveHeroQuickServiceOrder = async (index, direction) => {
+    if (isReadOnly) return;
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= heroQuickServices.length) return;
+
+    const list = [...heroQuickServices];
+    const temp = list[index];
+    list[index] = list[targetIdx];
+    list[targetIdx] = temp;
+
+    const updated = list.map((item, idx) => ({ ...item, display_order: idx + 1 }));
+    setHeroQuickServices(updated);
+
+    try {
+      if (isMock || usingMockDb) {
+        localStorage.setItem('somos_noveli_hero_quick_services_cms', JSON.stringify(updated));
+      } else {
+        const promises = updated.map(item => supabase
+          .from('website_hero_quick_services')
+          .update({ display_order: item.display_order })
+          .eq('id', item.id)
+        );
+        await Promise.all(promises);
+      }
+    } catch (error) {
+      console.error('Error moving hero quick service order:', error);
+    }
+  };
+
+  const handleUploadHeroFile = async (e, field) => {
+    const file = e.target.files[0];
+    if (!file || isReadOnly) return;
+    setLoading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_hero_${field}.${fileExt}`;
+      const storagePath = `${getOrgId()}/website/hero/${fileName}`;
+
+      let finalUrl = '';
+      if (isMock || usingMockDb) {
+        finalUrl = `mock://hero/${storagePath}`;
+      } else {
+        const { error: uploadErr } = await supabase.storage
+          .from('documents')
+          .upload(storagePath, file, { upsert: true });
+        if (uploadErr) throw uploadErr;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(storagePath);
+        finalUrl = publicUrlData?.publicUrl || '';
+      }
+
+      if (field === 'background') {
+        setHeroBgImageUrl(finalUrl);
+      } else if (field === 'side') {
+        setHeroSideImageUrl(finalUrl);
+      }
+      alert("Imagen subida correctamente.");
+    } catch (err) {
+      alert(`Error al subir archivo: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -2141,6 +2567,29 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
               </button>
             </div>
 
+            {/* 8. Hero Principal */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-6 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="p-2.5 bg-sky-50 dark:bg-sky-955/20 text-sky-650 dark:text-sky-400 rounded-xl w-fit">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">8. Hero Principal</h3>
+                <p className="text-xs text-slate-455 dark:text-slate-400 leading-relaxed">
+                  Configura la sección principal de la landing page con títulos, subtítulos, botones, imágenes y servicios rápidos.
+                </p>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
+                  {heroQuickServices.length} servicios rápidos ({heroQuickServices.filter(i => i.active).length} activos)
+                </div>
+              </div>
+              <button
+                onClick={() => navigateTo('hero')}
+                className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
+              >
+                <span>Configurar Hero</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
           </div>
         </>
       )}
@@ -3559,6 +4008,447 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ------------------ SUB-VIEW: HERO PRINCIPAL ------------------ */}
+      {currentPath === 'hero' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center space-x-3">
+              <button onClick={() => navigateTo('dashboard')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-855 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer">
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <div>
+                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Sección Hero Principal</h2>
+                <p className="text-xs text-slate-400 mt-0.5 font-sans">Administra los textos, botones, imágenes y servicios directos de la cabecera principal de la web pública.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Sub-tabs header */}
+          <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-800 pb-px">
+            <button
+              onClick={() => setHeroTab('configuracion')}
+              className={`pb-2.5 px-4 text-xs font-bold transition-all border-b-2 bg-transparent border-none cursor-pointer ${
+                heroTab === 'configuracion'
+                  ? 'border-amber-500 text-amber-500 dark:text-amber-400'
+                  : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400'
+              }`}
+            >
+              1. Configuración Hero
+            </button>
+            <button
+              onClick={() => setHeroTab('servicios')}
+              className={`pb-2.5 px-4 text-xs font-bold transition-all border-b-2 bg-transparent border-none cursor-pointer ${
+                heroTab === 'servicios'
+                  ? 'border-amber-500 text-amber-500 dark:text-amber-400'
+                  : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400'
+              }`}
+            >
+              2. Servicios Rápidos del Hero
+            </button>
+          </div>
+
+          {/* Tab 1: Configuración Hero */}
+          {heroTab === 'configuracion' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Form */}
+              <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4">
+                <form onSubmit={handleSaveHeroSettings} className="space-y-4 text-xs">
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 pb-2 border-b border-slate-50 dark:border-slate-805">Textos del Hero</h3>
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Eyebrow / Antetítulo (Texto superior)</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. EDITORIAL INDEPENDIENTE"
+                      value={heroEyebrow}
+                      onChange={e => setHeroEyebrow(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-sans"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2 space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Título Principal</label>
+                      <input
+                        type="text"
+                        placeholder="Ej. Tu historia merece ser contada de la manera más"
+                        value={heroTitleState}
+                        onChange={e => setHeroTitleState(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Palabra Resaltada (Itálica/Dorado)</label>
+                      <input
+                        type="text"
+                        placeholder="Ej. hermosa"
+                        value={heroHighlightedWord}
+                        onChange={e => setHeroHighlightedWord(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-serif"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Subtítulo / Introducción</label>
+                    <textarea
+                      placeholder="Ej. Ayudamos a autores independientes a maquetar, corregir, diseñar..."
+                      value={heroSubtitleText}
+                      onChange={e => setHeroSubtitleText(e.target.value)}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    />
+                  </div>
+
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 pt-2 pb-2 border-b border-slate-50 dark:border-slate-805">Botones de Acción</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <h4 className="font-bold text-slate-500">Botón Principal (Relleno)</h4>
+                      <div className="space-y-1.5">
+                        <label className="text-slate-400">Texto del Botón</label>
+                        <input
+                          type="text"
+                          placeholder="Ej. Ver Servicios"
+                          value={heroPrimaryBtnText}
+                          onChange={e => setHeroPrimaryBtnText(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-slate-400">URL del Botón</label>
+                        <input
+                          type="text"
+                          placeholder="Ej. #servicios o /contacto"
+                          value={heroPrimaryBtnUrl}
+                          onChange={e => setHeroPrimaryBtnUrl(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h4 className="font-bold text-slate-500">Botón Secundario (Bordeado)</h4>
+                      <div className="space-y-1.5">
+                        <label className="text-slate-400">Texto del Botón</label>
+                        <input
+                          type="text"
+                          placeholder="Ej. Conoce el Catálogo"
+                          value={heroSecondaryBtnText}
+                          onChange={e => setHeroSecondaryBtnText(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-slate-400">URL del Botón</label>
+                        <input
+                          type="text"
+                          placeholder="Ej. #libros o /nosotros"
+                          value={heroSecondaryBtnUrl}
+                          onChange={e => setHeroSecondaryBtnUrl(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 pt-2 pb-2 border-b border-slate-50 dark:border-slate-805">Imágenes y Destacados</h3>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Fondo de Cabecera (background_image_url)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="https://..."
+                        value={heroBgImageUrl}
+                        onChange={e => setHeroBgImageUrl(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                      />
+                      <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Subir</span>
+                        <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadHeroFile(e, 'background')} className="hidden" />
+                      </label>
+                    </div>
+                    {heroBgImageUrl && (
+                      <div className="w-20 h-20 bg-slate-100 dark:bg-slate-950/40 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden mt-1">
+                        <img src={heroBgImageUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=100&auto=format&fit=crop&q=60' : heroBgImageUrl} className="w-full h-full object-cover" alt="Preview" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Imagen Lateral Hero (side_image_url)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="https://..."
+                        value={heroSideImageUrl}
+                        onChange={e => setHeroSideImageUrl(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                      />
+                      <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Subir</span>
+                        <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadHeroFile(e, 'side')} className="hidden" />
+                      </label>
+                    </div>
+                    {heroSideImageUrl && (
+                      <div className="w-20 h-20 bg-slate-100 dark:bg-slate-950/40 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden mt-1">
+                        <img src={heroSideImageUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?w=100&auto=format&fit=crop&q=60' : heroSideImageUrl} className="w-full h-full object-cover" alt="Preview" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Libro Destacado en Hero</label>
+                      <select
+                        value={heroFeaturedBookId}
+                        onChange={e => setHeroFeaturedBookId(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                      >
+                        <option value="">-- Ninguno / Ocultar --</option>
+                        {books.map(b => (
+                          <option key={b.id} value={b.id}>{b.title} ({b.author})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-2 pt-6">
+                      <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={heroShowFeaturedBook}
+                          onChange={e => setHeroShowFeaturedBook(e.target.checked)}
+                          className="rounded text-amber-500 h-4 w-4"
+                        />
+                        <span>Mostrar Libro Destacado</span>
+                      </label>
+                      <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={heroActive}
+                          onChange={e => setHeroActive(e.target.checked)}
+                          className="rounded text-amber-500 h-4 w-4"
+                        />
+                        <span>Sección Hero Activa</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button type="submit" disabled={isReadOnly} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center gap-1.5 border border-transparent shadow-md cursor-pointer transition-all">
+                      <Save className="w-4 h-4" />
+                      <span>Guardar Configuración de Hero</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Live Preview Panel */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-white shadow-2xs space-y-6 flex flex-col justify-between h-fit">
+                <div className="space-y-4">
+                  <h3 className="font-bold text-slate-300 text-xs uppercase tracking-wider pb-2 border-b border-slate-800">Vista Previa Simple</h3>
+                  
+                  {heroActive ? (
+                    <div className="space-y-4 text-xs">
+                      <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold block">{heroEyebrow || 'EDITORIAL INDEPENDIENTE'}</span>
+                      <h1 className="text-xl font-bold font-serif leading-tight">
+                        {heroTitleState || 'Tu historia merece ser contada de la manera más'}{' '}
+                        <span className="text-amber-400 italic font-normal">{heroHighlightedWord || 'hermosa'}</span>
+                      </h1>
+                      <p className="text-slate-400 leading-relaxed text-[11px]">{heroSubtitleText}</p>
+                      
+                      <div className="flex gap-2 pt-1">
+                        {heroPrimaryBtnText && (
+                          <span className="px-3 py-1.5 bg-amber-500 rounded-lg text-[9px] font-bold text-white tracking-wider uppercase">{heroPrimaryBtnText}</span>
+                        )}
+                        {heroSecondaryBtnText && (
+                          <span className="px-3 py-1.5 border border-slate-700 rounded-lg text-[9px] font-bold text-slate-300 tracking-wider uppercase">{heroSecondaryBtnText}</span>
+                        )}
+                      </div>
+
+                      {heroShowFeaturedBook && heroFeaturedBookId && (
+                        <div className="pt-4 border-t border-slate-800 flex items-center gap-2.5">
+                          <div className="w-8 h-12 bg-slate-800 rounded border border-slate-700 overflow-hidden flex-shrink-0">
+                            {(() => {
+                              const b = books.find(book => book.id === heroFeaturedBookId);
+                              if (b && b.cover_url) {
+                                return <img src={b.cover_url} className="w-full h-full object-cover" />;
+                              }
+                              return <div className="w-full h-full flex items-center justify-center text-[8px] text-slate-500">No Img</div>;
+                            })()}
+                          </div>
+                          <div className="text-[10px] truncate">
+                            <span className="text-slate-500 block">Libro Destacado</span>
+                            <span className="font-bold text-slate-350 truncate block">
+                              {(() => {
+                                const b = books.find(book => book.id === heroFeaturedBookId);
+                                return b ? `${b.title} - ${b.author}` : 'Libro no encontrado';
+                              })()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="py-16 text-center text-slate-500 text-xs">
+                      El Hero Web principal se encuentra desactivado.
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-3 bg-slate-950/50 border border-slate-850 rounded-xl text-[10px] text-slate-500 leading-relaxed font-mono">
+                  Se actualizará automáticamente en noveli-web.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: Servicios Rápidos del Hero */}
+          {heroTab === 'servicios' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* List */}
+              <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4">
+                <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">Servicios Rápidos Activos</h3>
+                
+                <div className="overflow-x-auto text-xs">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-150 dark:border-slate-800 text-slate-400 font-bold">
+                        <th className="py-2.5">Orden</th>
+                        <th className="py-2.5">Etiqueta</th>
+                        <th className="py-2.5">Icono</th>
+                        <th className="py-2.5">Enlace Opcional</th>
+                        <th className="py-2.5 text-center">Estado</th>
+                        <th className="py-2.5 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 dark:divide-slate-855">
+                      {heroQuickServices.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400">No hay servicios rápidos registrados para el Hero.</td>
+                        </tr>
+                      ) : (
+                        heroQuickServices.map((qs, idx) => (
+                          <tr key={qs.id || idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-955/20">
+                            {/* Order arrows */}
+                            <td className="py-3">
+                              <div className="flex items-center space-x-1">
+                                <span className="font-bold text-slate-400 w-4">{qs.display_order || idx + 1}</span>
+                                <div className="flex flex-col">
+                                  <button type="button" disabled={idx === 0 || isReadOnly} onClick={() => moveHeroQuickServiceOrder(idx, -1)} className="text-slate-350 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowUp className="w-3 h-3" /></button>
+                                  <button type="button" disabled={idx === heroQuickServices.length - 1 || isReadOnly} onClick={() => moveHeroQuickServiceOrder(idx, 1)} className="text-slate-350 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowDown className="w-3 h-3" /></button>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 font-bold text-slate-755 dark:text-slate-200">{qs.label}</td>
+                            <td className="py-3 font-mono text-[10px] text-slate-500 uppercase tracking-wider">{qs.icon_name}</td>
+                            <td className="py-3 font-mono text-slate-455">
+                              {qs.link_url ? (
+                                <a href={qs.link_url} className="text-amber-550 hover:underline">{qs.link_url}</a>
+                              ) : (
+                                <span className="text-slate-350 italic">Ninguno</span>
+                              )}
+                            </td>
+                            {/* Status */}
+                            <td className="py-3 text-center">
+                              <button type="button" onClick={() => toggleHeroQuickServiceActive(qs)} className="focus:outline-none bg-transparent border-none cursor-pointer">
+                                {qs.active !== false ? (
+                                  <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-955/20 text-emerald-650 dark:text-emerald-450 border border-emerald-100 rounded text-[9px] font-bold">activo</span>
+                                ) : (
+                                  <span className="px-2 py-0.5 bg-slate-50 dark:bg-slate-955/10 text-slate-500 border border-slate-250 rounded text-[9px] font-bold">inactivo</span>
+                                )}
+                              </button>
+                            </td>
+                            {/* Actions */}
+                            <td className="py-3 text-right space-x-1">
+                              <button onClick={() => startEditHeroQuickService(qs)} className="p-1 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => handleDeleteHeroQuickService(qs.id)} className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Form */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4 h-fit">
+                <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">
+                  {editingQuickService ? 'Editar Servicio Hero' : 'Agregar Servicio al Hero'}
+                </h3>
+                <form onSubmit={handleSaveHeroQuickService} className="space-y-4 text-xs">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Etiqueta del Servicio</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Registro de Derechos"
+                      value={quickServiceLabel}
+                      onChange={e => setQuickServiceLabel(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Icono</label>
+                      <select
+                        value={quickServiceIconName}
+                        onChange={e => setQuickServiceIconName(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                      >
+                        <option value="feather">Pluma (feather)</option>
+                        <option value="book">Libro (book)</option>
+                        <option value="layout">Diseño (layout)</option>
+                        <option value="upload">Subir (upload)</option>
+                        <option value="pen">Lápiz (pen)</option>
+                        <option value="file">Archivo (file)</option>
+                        <option value="megaphone">Megáfono (megaphone)</option>
+                        <option value="shield">Escudo (shield)</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Enlace Opcional (link_url)</label>
+                      <input
+                        type="text"
+                        placeholder="Ej. #servicios"
+                        value={quickServiceLinkUrl}
+                        onChange={e => setQuickServiceLinkUrl(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-1.5 font-bold cursor-pointer select-none py-1">
+                    <input
+                      type="checkbox"
+                      checked={quickServiceActive}
+                      onChange={e => setQuickServiceActive(e.target.checked)}
+                      className="rounded text-amber-500 h-4 w-4"
+                    />
+                    <span>Activo / Visible en Hero</span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={isReadOnly} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1 border border-transparent cursor-pointer">
+                      <Plus className="w-4 h-4" />
+                      <span>{editingQuickService ? 'Actualizar' : 'Agregar'}</span>
+                    </button>
+                    {editingQuickService && (
+                      <button type="button" onClick={resetHeroQuickServiceForm} className="px-3.5 py-2.5 border border-slate-250 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-xl font-bold cursor-pointer">
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

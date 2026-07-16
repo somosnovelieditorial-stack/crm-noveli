@@ -688,7 +688,7 @@ const ROLE_PERMISSIONS = {
     modules: [
       'dashboard', 'notifications', 'quotations', 'clients', 'prospects', 'seguimientos',
       'services', 'completed_sales', 'documents', 'catalog', 'packs', 'website', 
-      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones', 'website-solicitudes', 'website-footer',
+      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones', 'website-solicitudes', 'website-footer', 'website-hero',
       'reports'
     ]
   },
@@ -696,7 +696,7 @@ const ROLE_PERMISSIONS = {
     modules: [
       'dashboard', 'notifications', 'clients', 'prospects', 'seguimientos', 'services', 
       'completed_sales', 'documents', 'website', 
-      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones', 'website-solicitudes', 'website-footer',
+      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones', 'website-solicitudes', 'website-footer', 'website-hero',
       'reports'
     ]
   },
@@ -704,7 +704,7 @@ const ROLE_PERMISSIONS = {
     modules: [
       'dashboard', 'notifications', 'clients', 'prospects', 'seguimientos', 'services', 
       'completed_sales', 'documents', 'website', 
-      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones', 'website-solicitudes', 'website-footer',
+      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones', 'website-solicitudes', 'website-footer', 'website-hero',
       'reports'
     ]
   },
@@ -719,7 +719,7 @@ const ROLE_PERMISSIONS = {
     modules: [
       'dashboard', 'notifications', 'quotations', 'clients', 'prospects', 'seguimientos',
       'services', 'completed_sales', 'documents', 'catalog', 'packs', 'website', 
-      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones', 'website-solicitudes', 'website-footer',
+      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones', 'website-solicitudes', 'website-footer', 'website-hero',
       'reports'
     ]
   }
