@@ -208,6 +208,16 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const [quickServiceLinkUrl, setQuickServiceLinkUrl] = useState('');
   const [quickServiceActive, setQuickServiceActive] = useState(true);
 
+  // Identidad Visual Form states
+  const [identityBrandName, setIdentityBrandName] = useState('');
+  const [identityBrandSubtitle, setIdentityBrandSubtitle] = useState('');
+  const [identityLogoUrl, setIdentityLogoUrl] = useState('');
+  const [identityLogoDarkUrl, setIdentityLogoDarkUrl] = useState('');
+  const [identityLogoLightUrl, setIdentityLogoLightUrl] = useState('');
+  const [identityFaviconUrl, setIdentityFaviconUrl] = useState('');
+  const [identityActive, setIdentityActive] = useState(true);
+  const [identityConfigId, setIdentityConfigId] = useState(null);
+
   // Footer Form states
   const [footerTab, setFooterTab] = useState('configuracion'); // 'configuracion' o 'galeria'
   const [footerConfigId, setFooterConfigId] = useState(null);
@@ -1055,6 +1065,16 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         setLogoUrl(row.logo_url || '');
         setFaviconUrl(row.favicon_url || '');
         setConfigActive(row.active !== false);
+
+        // brand identity visual states
+        setIdentityConfigId(row.id);
+        setIdentityBrandName(row.brand_name || 'NOVELI');
+        setIdentityBrandSubtitle(row.brand_subtitle || '— EDITORIAL');
+        setIdentityLogoUrl(row.logo_url || '');
+        setIdentityLogoDarkUrl(row.logo_dark_url || '');
+        setIdentityLogoLightUrl(row.logo_light_url || '');
+        setIdentityFaviconUrl(row.favicon_url || '');
+        setIdentityActive(row.active !== false);
       } else {
         await seedDefaultSettings();
       }
@@ -1080,7 +1100,118 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         setLogoUrl(row.logo_url);
         setFaviconUrl(row.favicon_url);
         setConfigActive(row.active);
+
+        // brand identity visual states
+        setIdentityConfigId(row.id || 'mock-identity-id');
+        setIdentityBrandName(row.brand_name || 'NOVELI');
+        setIdentityBrandSubtitle(row.brand_subtitle || '— EDITORIAL');
+        setIdentityLogoUrl(row.logo_url || '');
+        setIdentityLogoDarkUrl(row.logo_dark_url || '');
+        setIdentityLogoLightUrl(row.logo_light_url || '');
+        setIdentityFaviconUrl(row.favicon_url || '');
+        setIdentityActive(row.active !== false);
       } catch (_) {}
+    } else {
+      setIdentityBrandName('NOVELI');
+      setIdentityBrandSubtitle('— EDITORIAL');
+    }
+  };
+
+  const handleSaveIdentitySettings = async (e) => {
+    if (e) e.preventDefault();
+    if (isReadOnly) return;
+    setLoading(true);
+    try {
+      const payload = {
+        organization_id: getOrgId(),
+        brand_name: identityBrandName,
+        brand_subtitle: identityBrandSubtitle,
+        logo_url: identityLogoUrl,
+        logo_dark_url: identityLogoDarkUrl,
+        logo_light_url: identityLogoLightUrl,
+        favicon_url: identityFaviconUrl,
+        active: identityActive,
+        updated_at: new Date().toISOString()
+      };
+
+      if (isMock || usingMockDb) {
+        localStorage.setItem('somos_noveli_website_settings_cms', JSON.stringify({ id: identityConfigId || 'mock-id', ...payload }));
+      } else {
+        if (identityConfigId) {
+          const { error } = await supabase
+            .from('website_settings')
+            .update(payload)
+            .eq('id', identityConfigId);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from('website_settings')
+            .insert([payload])
+            .select();
+          if (error) throw error;
+          if (data && data.length > 0) {
+            setIdentityConfigId(data[0].id);
+          }
+        }
+      }
+      alert("Identidad visual guardada con éxito.");
+      await fetchSettings();
+    } catch (error) {
+      console.error('Error guardando identidad visual:', error);
+      alert(`Error al guardar identidad visual: ${error.message}`);
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: error.message,
+          error_stack: error.stack || '',
+          module: 'website-identidad',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUploadIdentityFile = async (e, field) => {
+    const file = e.target.files[0];
+    if (!file || isReadOnly) return;
+    setLoading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_identity_${field}.${fileExt}`;
+      const storagePath = `${getOrgId()}/website/identity/${fileName}`;
+
+      let finalUrl = '';
+      if (isMock || usingMockDb) {
+        finalUrl = `mock://identity/${storagePath}`;
+      } else {
+        const { error: uploadErr } = await supabase.storage
+          .from('documents')
+          .upload(storagePath, file, { upsert: true });
+        if (uploadErr) throw uploadErr;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(storagePath);
+        finalUrl = publicUrlData?.publicUrl || '';
+      }
+
+      if (field === 'main') {
+        setIdentityLogoUrl(finalUrl);
+      } else if (field === 'dark') {
+        setIdentityLogoDarkUrl(finalUrl);
+      } else if (field === 'light') {
+        setIdentityLogoLightUrl(finalUrl);
+      } else if (field === 'favicon') {
+        setIdentityFaviconUrl(finalUrl);
+      }
+      alert("Imagen subida correctamente.");
+    } catch (err) {
+      alert(`Error al subir archivo: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -2586,6 +2717,29 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                 className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
                 <span>Configurar Hero</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* 9. Identidad Visual */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-6 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="p-2.5 bg-rose-50 dark:bg-rose-955/20 text-rose-600 dark:text-rose-400 rounded-xl w-fit">
+                  <Star className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">9. Identidad Visual</h3>
+                <p className="text-xs text-slate-455 dark:text-slate-400 leading-relaxed">
+                  Configura el nombre de la marca, subtítulos del logo, archivos de logotipo principal, oscuro, claro y favicon de la web.
+                </p>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
+                  Logo principal: {identityLogoUrl ? 'Definido' : 'No definido'}
+                </div>
+              </div>
+              <button
+                onClick={() => navigateTo('identidad')}
+                className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
+              >
+                <span>Configurar Identidad</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -4793,6 +4947,248 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ------------------ SUB-VIEW: IDENTIDAD VISUAL ------------------ */}
+      {currentPath === 'identidad' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center space-x-3">
+              <button onClick={() => navigateTo('dashboard')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-855 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer">
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <div>
+                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Identidad Visual Web</h2>
+                <p className="text-xs text-slate-400 mt-0.5 font-sans">Administra los logotipos de la marca, favicons y textos de identidad visual para noveli-web.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Form */}
+            <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4">
+              <form onSubmit={handleSaveIdentitySettings} className="space-y-4 text-xs">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 pb-2 border-b border-slate-50 dark:border-slate-805">Textos de Marca</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Nombre de la Marca</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. NOVELI"
+                      value={identityBrandName}
+                      onChange={e => setIdentityBrandName(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Subtítulo de la Marca</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. — EDITORIAL"
+                      value={identityBrandSubtitle}
+                      onChange={e => setIdentityBrandSubtitle(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    />
+                  </div>
+                </div>
+
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 pt-2 pb-2 border-b border-slate-50 dark:border-slate-805">Logotipos e Iconografía</h3>
+
+                {/* Logo Principal */}
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Logo Principal (logo_url)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={identityLogoUrl}
+                      onChange={e => setIdentityLogoUrl(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                    />
+                    <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Subir</span>
+                      <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadIdentityFile(e, 'main')} className="hidden" />
+                    </label>
+                  </div>
+                  {identityLogoUrl && (
+                    <div className="w-24 h-12 bg-slate-100 dark:bg-slate-955/40 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden mt-1 flex items-center justify-center p-2">
+                      <img src={identityLogoUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=60' : identityLogoUrl} className="max-w-full max-h-full object-contain" alt="Preview Logo Principal" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Logo Fondo Claro */}
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Logo para Fondo Claro (logo_light_url)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={identityLogoLightUrl}
+                      onChange={e => setIdentityLogoLightUrl(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                    />
+                    <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Subir</span>
+                      <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadIdentityFile(e, 'light')} className="hidden" />
+                    </label>
+                  </div>
+                  {identityLogoLightUrl && (
+                    <div className="w-24 h-12 bg-white rounded-xl border border-slate-200 overflow-hidden mt-1 flex items-center justify-center p-2">
+                      <img src={identityLogoLightUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=60' : identityLogoLightUrl} className="max-w-full max-h-full object-contain" alt="Preview Logo Fondo Claro" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Logo Fondo Oscuro */}
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Logo para Fondo Oscuro (logo_dark_url)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={identityLogoDarkUrl}
+                      onChange={e => setIdentityLogoDarkUrl(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                    />
+                    <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Subir</span>
+                      <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadIdentityFile(e, 'dark')} className="hidden" />
+                    </label>
+                  </div>
+                  {identityLogoDarkUrl && (
+                    <div className="w-24 h-12 bg-slate-950 rounded-xl border border-slate-850 overflow-hidden mt-1 flex items-center justify-center p-2">
+                      <img src={identityLogoDarkUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=60' : identityLogoDarkUrl} className="max-w-full max-h-full object-contain" alt="Preview Logo Fondo Oscuro" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Favicon */}
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Favicon de la Web (favicon_url)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={identityFaviconUrl}
+                      onChange={e => setIdentityFaviconUrl(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                    />
+                    <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Subir</span>
+                      <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadIdentityFile(e, 'favicon')} className="hidden" />
+                    </label>
+                  </div>
+                  {identityFaviconUrl && (
+                    <div className="w-10 h-10 bg-slate-100 dark:bg-slate-955/45 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden mt-1 flex items-center justify-center p-1.5">
+                      <img src={identityFaviconUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=32&auto=format&fit=crop&q=60' : identityFaviconUrl} className="w-full h-full object-contain" alt="Preview Favicon" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center space-x-1.5 font-bold cursor-pointer select-none py-1">
+                  <input
+                    type="checkbox"
+                    checked={identityActive}
+                    onChange={e => setIdentityActive(e.target.checked)}
+                    className="rounded text-amber-500 h-4 w-4"
+                  />
+                  <span>Identidad de Marca Activa</span>
+                </div>
+
+                <div className="pt-2">
+                  <button type="submit" disabled={isReadOnly} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center gap-1.5 border border-transparent shadow-md cursor-pointer transition-all">
+                    <Save className="w-4 h-4" />
+                    <span>Guardar Identidad Visual</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Preview Panel */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-white shadow-2xs space-y-6 flex flex-col justify-between h-fit">
+              <div className="space-y-4">
+                <h3 className="font-bold text-slate-300 text-xs uppercase tracking-wider pb-2 border-b border-slate-800">Visualización de Marca</h3>
+                
+                {/* Preview 1: Header Claro */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">Cabecera en Fondo Claro</span>
+                  <div className="p-4 bg-[#F6EFE3] rounded-xl border border-amber-100 flex items-center justify-between text-slate-900 font-sans shadow-xs">
+                    <div className="flex items-center gap-1.5">
+                      {identityLogoLightUrl || identityLogoUrl ? (
+                        <img 
+                          src={identityLogoLightUrl || identityLogoUrl} 
+                          className="h-5 max-w-[80px] object-contain" 
+                          alt="Logo claro preview" 
+                        />
+                      ) : (
+                        <span className="font-bold text-sm text-[#17352F] tracking-wider font-mono">
+                          {identityBrandName || 'NOVELI'}
+                          <span className="text-[10px] font-normal text-slate-500 font-sans">{identityBrandSubtitle || ' — EDITORIAL'}</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2 text-[8px] font-bold text-slate-500">
+                      <span>INICIO</span>
+                      <span>SERVICIOS</span>
+                      <span>LIBROS</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preview 2: Header Oscuro */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">Cabecera/Pie en Fondo Oscuro</span>
+                  <div className="p-4 bg-[#17352F] rounded-xl border border-slate-850 flex items-center justify-between text-white font-sans shadow-xs">
+                    <div className="flex items-center gap-1.5">
+                      {identityLogoDarkUrl || identityLogoUrl ? (
+                        <img 
+                          src={identityLogoDarkUrl || identityLogoUrl} 
+                          className="h-5 max-w-[80px] object-contain" 
+                          alt="Logo oscuro preview" 
+                        />
+                      ) : (
+                        <span className="font-bold text-sm text-white tracking-wider font-mono">
+                          {identityBrandName || 'NOVELI'}
+                          <span className="text-[10px] font-normal text-emerald-300/60 font-sans">{identityBrandSubtitle || ' — EDITORIAL'}</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2 text-[8px] font-bold text-slate-400">
+                      <span>INICIO</span>
+                      <span>SERVICIOS</span>
+                      <span>LIBROS</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preview 3: Browser Favicon Tab */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">Pestaña del Navegador</span>
+                  <div className="p-2.5 bg-slate-950 border border-slate-850 rounded-xl flex items-center gap-2 text-slate-350 text-[10px] font-sans">
+                    <div className="w-4 h-4 bg-slate-900 rounded flex items-center justify-center overflow-hidden shrink-0 border border-slate-800">
+                      {identityFaviconUrl ? (
+                        <img src={identityFaviconUrl} className="w-full h-full object-contain" />
+                      ) : (
+                        <span className="text-[8px] font-bold text-amber-500 font-mono">N</span>
+                      )}
+                    </div>
+                    <span className="truncate">{identityBrandName || 'NOVELI'} | Editorial Independiente</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-955/50 border border-slate-850 rounded-xl text-[10px] text-slate-500 leading-relaxed font-mono">
+                Se actualizará automáticamente en noveli-web.
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

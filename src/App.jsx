@@ -110,6 +110,7 @@ const menuGroups = [
       { id: 'website', label: 'Gestión Web', tab: 'website' },
       { id: 'website-libros', label: 'Catálogo Web', tab: 'website-libros' },
       { id: 'website-hero', label: 'Hero Principal', tab: 'website-hero' },
+      { id: 'website-identidad', label: 'Identidad Visual', tab: 'website-identidad' },
       { id: 'website-footer', label: 'Footer Web', tab: 'website-footer' },
       { id: 'website-solicitudes', label: 'Solicitudes Web', tab: 'website-solicitudes' }
     ]
@@ -241,6 +242,7 @@ const getTabFromPath = (path) => {
   if (cleanPath === 'sitio-web/secciones') return 'website-secciones';
   if (cleanPath === 'sitio-web/footer') return 'website-footer';
   if (cleanPath === 'sitio-web/hero') return 'website-hero';
+  if (cleanPath === 'sitio-web/identidad') return 'website-identidad';
   if (cleanPath === 'sitio-web/solicitudes') return 'website-solicitudes';
   if (cleanPath === 'sitio-web') return 'website';
 
@@ -325,6 +327,7 @@ const getPathFromTab = (tab) => {
     'website-footer': '/sitio-web/footer',
     'website-hero': '/sitio-web/hero',
     'website-solicitudes': '/sitio-web/solicitudes',
+    'website-identidad': '/sitio-web/identidad',
     'settings-audit': '/configuracion/auditoria',
     'settings-users': '/configuracion/usuarios'
   };
@@ -1039,8 +1042,8 @@ export default function App() {
     { id: 'website-configuracion', label: 'Configuración Web', icon: <Globe className="w-4.5 h-4.5" /> },
     { id: 'website-enlaces', label: 'Enlaces Web', icon: <Globe className="w-4.5 h-4.5" /> },
     { id: 'website-secciones', label: 'Secciones Web', icon: <Globe className="w-4.5 h-4.5" /> },
-    { id: 'website-footer', label: 'Footer Web', icon: <Globe className="w-4.5 h-4.5" /> },
     { id: 'website-hero', label: 'Hero Principal', icon: <Globe className="w-4.5 h-4.5" /> },
+    { id: 'website-identidad', label: 'Identidad Visual', icon: <Globe className="w-4.5 h-4.5" /> },
     { id: 'website-solicitudes', label: 'Solicitudes Web', icon: <Globe className="w-4.5 h-4.5" /> }
   ];
 
@@ -1053,6 +1056,7 @@ export default function App() {
     else if (path === 'secciones') setActiveTab('website-secciones');
     else if (path === 'footer') setActiveTab('website-footer');
     else if (path === 'hero') setActiveTab('website-hero');
+    else if (path === 'identidad') setActiveTab('website-identidad');
     else if (path === 'solicitudes') setActiveTab('website-solicitudes');
   };
 
@@ -1085,6 +1089,7 @@ export default function App() {
         case 'website-secciones': return <Website {...commonProps} initialPath="secciones" onChangePath={handleWebsitePathChange} />;
         case 'website-footer': return <Website {...commonProps} initialPath="footer" onChangePath={handleWebsitePathChange} />;
         case 'website-hero': return <Website {...commonProps} initialPath="hero" onChangePath={handleWebsitePathChange} />;
+        case 'website-identidad': return <Website {...commonProps} initialPath="identidad" onChangePath={handleWebsitePathChange} />;
         case 'website-solicitudes': return <Website {...commonProps} initialPath="solicitudes" onChangePath={handleWebsitePathChange} />;
         case 'documents': return <Documents {...commonProps} />;
         case 'taxes': return <Taxes {...commonProps} />;
