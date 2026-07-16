@@ -67,6 +67,24 @@ const DEFAULT_WEB_SECTIONS = [
   { section_key: 'contacto', title: 'Ponte en contacto', subtitle: 'Hablemos hoy', content: '¿Tienes un manuscrito listo? Escríbenos a contacto@somosnovelieditorial.com o búscanos en redes sociales.', active: true, display_order: 3 }
 ];
 
+const DEFAULT_FOOTER_SETTINGS = {
+  contact_title: 'Ponte en contacto',
+  contact_email: 'contacto@somosnovelieditorial.com',
+  contact_location: 'Santiago, Chile',
+  contact_description: 'Ayudamos a autores independientes a maquetar, corregir, diseñar y distribuir sus libros a nivel global con calidad profesional.',
+  instagram_title: 'Síguenos en Instagram',
+  instagram_url: 'https://instagram.com/somosnovelieditorial',
+  instagram_enabled: true,
+  active: true
+};
+
+const DEFAULT_FOOTER_GALLERY = [
+  { id: 'fg-1', image_url: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=150&auto=format&fit=crop&q=60', title: 'Lectura otoñal', link_url: 'https://instagram.com', display_order: 1, active: true },
+  { id: 'fg-2', image_url: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=150&auto=format&fit=crop&q=60', title: 'Nuestra biblioteca', link_url: 'https://instagram.com', display_order: 2, active: true },
+  { id: 'fg-3', image_url: 'https://images.unsplash.com/photo-1506880018603-83d5b814b5a6?w=150&auto=format&fit=crop&q=60', title: 'Manuscritos', link_url: 'https://instagram.com', display_order: 3, active: true },
+  { id: 'fg-4', image_url: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=150&auto=format&fit=crop&q=60', title: 'Nuevos lanzamientos', link_url: 'https://instagram.com', display_order: 4, active: true }
+];
+
 export default function Website({ isReadOnly, initialPath = 'dashboard', onChangePath, realtimeTrigger }) {
   const [currentPath, setCurrentPath] = useState(initialPath);
   const [loading, setLoading] = useState(false);
@@ -144,6 +162,25 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const [categoryDescription, setCategoryDescription] = useState('');
   const [categoryActive, setCategoryActive] = useState(true);
 
+  // Footer Form states
+  const [footerTab, setFooterTab] = useState('configuracion'); // 'configuracion' o 'galeria'
+  const [footerConfigId, setFooterConfigId] = useState(null);
+  const [footerContactTitle, setFooterContactTitle] = useState('');
+  const [footerContactEmail, setFooterContactEmail] = useState('');
+  const [footerContactLocation, setFooterContactLocation] = useState('');
+  const [footerContactDescription, setFooterContactDescription] = useState('');
+  const [footerInstagramTitle, setFooterInstagramTitle] = useState('');
+  const [footerInstagramUrl, setFooterInstagramUrl] = useState('');
+  const [footerInstagramEnabled, setFooterInstagramEnabled] = useState(true);
+  const [footerActive, setFooterActive] = useState(true);
+
+  const [footerGallery, setFooterGallery] = useState([]);
+  const [editingFooterImage, setEditingFooterImage] = useState(null);
+  const [footerImageUrl, setFooterImageUrl] = useState('');
+  const [footerImageTitle, setFooterImageTitle] = useState('');
+  const [footerImageLinkUrl, setFooterImageLinkUrl] = useState('');
+  const [footerImageActive, setFooterImageActive] = useState(true);
+
   // 4. Enlaces Form states
   const [editingLink, setEditingLink] = useState(null);
   const [linkLabel, setLinkLabel] = useState('');
@@ -175,6 +212,8 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     fetchLinks();
     fetchSections();
     fetchLeads();
+    fetchFooterSettings();
+    fetchFooterGallery();
   }, [realtimeTrigger]);
 
   useEffect(() => {
@@ -183,6 +222,9 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     } else if (currentPath === 'libros') {
       fetchCategories();
       fetchBooks();
+    } else if (currentPath === 'footer') {
+      fetchFooterSettings();
+      fetchFooterGallery();
     }
   }, [currentPath]);
 
@@ -235,6 +277,328 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
       fetchLeads();
     }
   }, [organizationId]);
+
+  // --- FOOTER DATABASE OPS ---
+  const fetchFooterSettings = async () => {
+    try {
+      if (isMock) {
+        loadMockFooterSettings();
+        return;
+      }
+      const { data, error } = await supabase
+        .from('website_footer_settings')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .limit(1);
+
+      if (error) {
+        throw error;
+      } else if (data && data.length > 0) {
+        const row = data[0];
+        setFooterConfigId(row.id);
+        setFooterContactTitle(row.contact_title || '');
+        setFooterContactEmail(row.contact_email || '');
+        setFooterContactLocation(row.contact_location || '');
+        setFooterContactDescription(row.contact_description || '');
+        setFooterInstagramTitle(row.instagram_title || '');
+        setFooterInstagramUrl(row.instagram_url || '');
+        setFooterInstagramEnabled(row.instagram_enabled !== false);
+        setFooterActive(row.active !== false);
+      } else {
+        loadMockFooterSettings();
+      }
+    } catch (error) {
+      console.error('Error cargando website_footer_settings:', error);
+      loadMockFooterSettings();
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: error.message,
+          error_stack: error.stack || '',
+          module: 'website-footer',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    }
+  };
+
+  const loadMockFooterSettings = () => {
+    const saved = localStorage.getItem('somos_noveli_footer_settings_cms');
+    const settings = saved ? JSON.parse(saved) : DEFAULT_FOOTER_SETTINGS;
+    setFooterConfigId(settings.id || 'mock-footer-settings-id');
+    setFooterContactTitle(settings.contact_title || '');
+    setFooterContactEmail(settings.contact_email || '');
+    setFooterContactLocation(settings.contact_location || '');
+    setFooterContactDescription(settings.contact_description || '');
+    setFooterInstagramTitle(settings.instagram_title || '');
+    setFooterInstagramUrl(settings.instagram_url || '');
+    setFooterInstagramEnabled(settings.instagram_enabled !== false);
+    setFooterActive(settings.active !== false);
+  };
+
+  const fetchFooterGallery = async () => {
+    try {
+      if (isMock) {
+        loadMockFooterGallery();
+        return;
+      }
+      const { data, error } = await supabase
+        .from('website_footer_gallery')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('display_order', { ascending: true });
+
+      if (error) {
+        throw error;
+      } else {
+        setFooterGallery(data || []);
+      }
+    } catch (error) {
+      console.error('Error cargando website_footer_gallery:', error);
+      loadMockFooterGallery();
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: error.message,
+          error_stack: error.stack || '',
+          module: 'website-footer',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    }
+  };
+
+  const loadMockFooterGallery = () => {
+    const saved = localStorage.getItem('somos_noveli_footer_gallery_cms');
+    setFooterGallery(saved ? JSON.parse(saved) : DEFAULT_FOOTER_GALLERY);
+  };
+
+  const handleSaveFooterSettings = async (e) => {
+    if (e) e.preventDefault();
+    if (isReadOnly) return;
+    setLoading(true);
+    try {
+      const payload = {
+        organization_id: organizationId,
+        contact_title: footerContactTitle,
+        contact_email: footerContactEmail,
+        contact_location: footerContactLocation,
+        contact_description: footerContactDescription,
+        instagram_title: footerInstagramTitle,
+        instagram_url: footerInstagramUrl,
+        instagram_enabled: footerInstagramEnabled,
+        active: footerActive,
+        updated_at: new Date().toISOString()
+      };
+
+      if (isMock || usingMockDb) {
+        localStorage.setItem('somos_noveli_footer_settings_cms', JSON.stringify({ id: footerConfigId, ...payload }));
+      } else {
+        if (footerConfigId) {
+          const { error } = await supabase
+            .from('website_footer_settings')
+            .update(payload)
+            .eq('id', footerConfigId);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from('website_footer_settings')
+            .insert([payload])
+            .select();
+          if (error) throw error;
+          if (data && data.length > 0) {
+            setFooterConfigId(data[0].id);
+          }
+        }
+      }
+      alert("Configuración de footer guardada con éxito.");
+      await fetchFooterSettings();
+    } catch (error) {
+      console.error('Error guardando footer settings:', error);
+      alert(`Error al guardar configuración: ${error.message}`);
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: error.message,
+          error_stack: error.stack || '',
+          module: 'website-footer',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveFooterGalleryImage = async (e) => {
+    if (e) e.preventDefault();
+    if (isReadOnly) return;
+    if (!footerImageUrl) {
+      alert("Por favor carga o introduce una URL de imagen.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const payload = {
+        organization_id: organizationId,
+        image_url: footerImageUrl,
+        title: footerImageTitle,
+        link_url: footerImageLinkUrl,
+        active: footerImageActive
+      };
+
+      if (editingFooterImage) {
+        if (isMock || usingMockDb) {
+          const updated = footerGallery.map(img => img.id === editingFooterImage.id ? { ...img, ...payload } : img);
+          setFooterGallery(updated);
+          localStorage.setItem('somos_noveli_footer_gallery_cms', JSON.stringify(updated));
+        } else {
+          const { error } = await supabase
+            .from('website_footer_gallery')
+            .update(payload)
+            .eq('id', editingFooterImage.id);
+          if (error) throw error;
+        }
+      } else {
+        const nextOrder = footerGallery.length > 0 ? Math.max(...footerGallery.map(img => img.display_order || 0)) + 1 : 1;
+        const insertPayload = { ...payload, display_order: nextOrder };
+
+        if (isMock || usingMockDb) {
+          const updated = [...footerGallery, { id: `fg-${Date.now()}`, ...insertPayload }];
+          setFooterGallery(updated);
+          localStorage.setItem('somos_noveli_footer_gallery_cms', JSON.stringify(updated));
+        } else {
+          const { error } = await supabase
+            .from('website_footer_gallery')
+            .insert([insertPayload]);
+          if (error) throw error;
+        }
+      }
+      resetFooterImageForm();
+      await fetchFooterGallery();
+      alert("Imagen de galería guardada con éxito.");
+    } catch (error) {
+      console.error('Error guardando imagen en galería:', error);
+      alert(`Error al guardar imagen: ${error.message}`);
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: error.message,
+          error_stack: error.stack || '',
+          module: 'website-footer',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetFooterImageForm = () => {
+    setEditingFooterImage(null);
+    setFooterImageUrl('');
+    setFooterImageTitle('');
+    setFooterImageLinkUrl('');
+    setFooterImageActive(true);
+  };
+
+  const startEditFooterImage = (img) => {
+    setEditingFooterImage(img);
+    setFooterImageUrl(img.image_url || '');
+    setFooterImageTitle(img.title || '');
+    setFooterImageLinkUrl(img.link_url || '');
+    setFooterImageActive(img.active !== false);
+  };
+
+  const handleDeleteFooterGalleryImage = async (id) => {
+    if (isReadOnly) return;
+    if (!window.confirm("¿Seguro que deseas eliminar esta imagen de la galería?")) return;
+    setLoading(true);
+    try {
+      if (isMock || usingMockDb) {
+        const updated = footerGallery.filter(img => img.id !== id);
+        setFooterGallery(updated);
+        localStorage.setItem('somos_noveli_footer_gallery_cms', JSON.stringify(updated));
+      } else {
+        const { error } = await supabase
+          .from('website_footer_gallery')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
+      }
+      await fetchFooterGallery();
+      alert("Imagen eliminada de la galería.");
+    } catch (error) {
+      console.error('Error eliminando imagen de galería:', error);
+      alert(`Error al eliminar: ${error.message}`);
+      try {
+        await supabase.from('crm_error_logs').insert({
+          error_message: error.message,
+          error_stack: error.stack || '',
+          module: 'website-footer',
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error('Failed to log error to database:', logErr);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleFooterImageActive = async (img) => {
+    if (isReadOnly) return;
+    const newVal = !img.active;
+    try {
+      if (isMock || usingMockDb) {
+        const updated = footerGallery.map(i => i.id === img.id ? { ...i, active: newVal } : i);
+        setFooterGallery(updated);
+        localStorage.setItem('somos_noveli_footer_gallery_cms', JSON.stringify(updated));
+      } else {
+        const { error } = await supabase
+          .from('website_footer_gallery')
+          .update({ active: newVal })
+          .eq('id', img.id);
+        if (error) throw error;
+      }
+      setFooterGallery(footerGallery.map(i => i.id === img.id ? { ...i, active: newVal } : i));
+    } catch (error) {
+      console.error('Error toggling active state on footer image:', error);
+    }
+  };
+
+  const moveFooterGalleryImageOrder = async (index, direction) => {
+    if (isReadOnly) return;
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= footerGallery.length) return;
+
+    const list = [...footerGallery];
+    const temp = list[index];
+    list[index] = list[targetIdx];
+    list[targetIdx] = temp;
+
+    const updated = list.map((item, idx) => ({ ...item, display_order: idx + 1 }));
+    setFooterGallery(updated);
+
+    try {
+      if (isMock || usingMockDb) {
+        localStorage.setItem('somos_noveli_footer_gallery_cms', JSON.stringify(updated));
+      } else {
+        const promises = updated.map(item => supabase
+          .from('website_footer_gallery')
+          .update({ display_order: item.display_order })
+          .eq('id', item.id)
+        );
+        await Promise.all(promises);
+      }
+    } catch (error) {
+      console.error('Error moving footer gallery order:', error);
+    }
+  };
 
   // --- 1. SETTINGS DATABASE OPS ---
   const fetchSettings = async () => {
@@ -935,6 +1299,39 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         setServiceBackgroundUrl(finalUrl);
       }
       alert("Archivo subido correctamente.");
+    } catch (err) {
+      alert(`Error al subir archivo: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUploadFooterImage = async (e) => {
+    const file = e.target.files[0];
+    if (!file || isReadOnly) return;
+    setLoading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_footer_${Math.round(Math.random() * 1000)}.${fileExt}`;
+      const storagePath = `${getOrgId()}/website/footer/${fileName}`;
+
+      let finalUrl = '';
+      if (isMock || usingMockDb) {
+        finalUrl = `mock://footer/${storagePath}`;
+      } else {
+        const { error: uploadErr } = await supabase.storage
+          .from('documents')
+          .upload(storagePath, file, { upsert: true });
+        if (uploadErr) throw uploadErr;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(storagePath);
+        finalUrl = publicUrlData?.publicUrl || '';
+      }
+
+      setFooterImageUrl(finalUrl);
+      alert("Imagen subida correctamente.");
     } catch (err) {
       alert(`Error al subir archivo: ${err.message}`);
     } finally {
@@ -1717,6 +2114,29 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                 className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
               >
                 <span>Ver Solicitudes</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* 7. Footer Web */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-6 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 rounded-xl w-fit">
+                  <Layout className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">7. Footer Web</h3>
+                <p className="text-xs text-slate-455 dark:text-slate-400 leading-relaxed">
+                  Configura el contacto, enlace de Instagram y la galería de fotos miniaturas que se muestran en el pie de página.
+                </p>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
+                  {footerGallery.length} fotos en galería ({footerGallery.filter(i => i.active).length} activas)
+                </div>
+              </div>
+              <button
+                onClick={() => navigateTo('footer')}
+                className="flex items-center justify-center space-x-1.5 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border border-transparent"
+              >
+                <span>Configurar Footer</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -3139,6 +3559,350 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ------------------ SUB-VIEW: FOOTER ------------------ */}
+      {currentPath === 'footer' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center space-x-3">
+              <button onClick={() => navigateTo('dashboard')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-855 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer">
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <div>
+                <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Administración del Footer Web</h2>
+                <p className="text-xs text-slate-400 mt-0.5 font-sans">Gestiona el contacto, enlace de Instagram y galería de imágenes de la parte inferior de la web pública.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Sub-tabs header */}
+          <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-slate-800 pb-px">
+            <button
+              onClick={() => setFooterTab('configuracion')}
+              className={`pb-2.5 px-4 text-xs font-bold transition-all border-b-2 bg-transparent border-none cursor-pointer ${
+                footerTab === 'configuracion'
+                  ? 'border-amber-500 text-amber-500 dark:text-amber-400'
+                  : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400'
+              }`}
+            >
+              1. Configuración Footer
+            </button>
+            <button
+              onClick={() => setFooterTab('galeria')}
+              className={`pb-2.5 px-4 text-xs font-bold transition-all border-b-2 bg-transparent border-none cursor-pointer ${
+                footerTab === 'galeria'
+                  ? 'border-amber-500 text-amber-500 dark:text-amber-400'
+                  : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400'
+              }`}
+            >
+              2. Galería Footer / Instagram
+            </button>
+          </div>
+
+          {/* Tab 1: Configuración Footer */}
+          {footerTab === 'configuracion' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Form */}
+              <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4">
+                <form onSubmit={handleSaveFooterSettings} className="space-y-4 text-xs">
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 pb-2 border-b border-slate-50 dark:border-slate-805">Datos de Contacto</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Título de Contacto</label>
+                      <input
+                        type="text"
+                        placeholder="Ej. Ponte en contacto"
+                        value={footerContactTitle}
+                        onChange={e => setFooterContactTitle(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Email de Contacto</label>
+                      <input
+                        type="email"
+                        placeholder="Ej. contacto@somosnovelieditorial.com"
+                        value={footerContactEmail}
+                        onChange={e => setFooterContactEmail(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Ubicación / Dirección</label>
+                      <input
+                        type="text"
+                        placeholder="Ej. Santiago, Chile"
+                        value={footerContactLocation}
+                        onChange={e => setFooterContactLocation(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none pt-7">
+                        <input
+                          type="checkbox"
+                          checked={footerActive}
+                          onChange={e => setFooterActive(e.target.checked)}
+                          className="rounded text-amber-500 h-4 w-4"
+                        />
+                        <span>Sección Footer Activa</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Descripción Corta / Quiénes Somos</label>
+                    <textarea
+                      placeholder="Ej. Ayudamos a autores independientes a maquetar, corregir, diseñar..."
+                      value={footerContactDescription}
+                      onChange={e => setFooterContactDescription(e.target.value)}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    />
+                  </div>
+
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 pt-2 pb-2 border-b border-slate-50 dark:border-slate-805">Configuración Instagram</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Título de Instagram</label>
+                      <input
+                        type="text"
+                        placeholder="Ej. Síguenos en Instagram"
+                        value={footerInstagramTitle}
+                        onChange={e => setFooterInstagramTitle(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">URL de Instagram</label>
+                      <input
+                        type="url"
+                        placeholder="Ej. https://instagram.com/somosnovelieditorial"
+                        value={footerInstagramUrl}
+                        onChange={e => setFooterInstagramUrl(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-1.5 font-bold cursor-pointer select-none py-1">
+                    <input
+                      type="checkbox"
+                      checked={footerInstagramEnabled}
+                      onChange={e => setFooterInstagramEnabled(e.target.checked)}
+                      className="rounded text-amber-500 h-4 w-4"
+                    />
+                    <span>Mostrar Bloque de Instagram en Footer</span>
+                  </div>
+
+                  <div className="pt-2">
+                    <button type="submit" disabled={isReadOnly} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center gap-1.5 border border-transparent shadow-md cursor-pointer transition-all">
+                      <Save className="w-4 h-4" />
+                      <span>Guardar Configuración de Footer</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Simple Preview Panel */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-white shadow-2xs space-y-6 flex flex-col justify-between">
+                <div>
+                  <h3 className="font-bold text-slate-300 text-xs uppercase tracking-wider mb-4 pb-2 border-b border-slate-800">Vista Previa Simple</h3>
+                  
+                  {footerActive ? (
+                    <div className="space-y-6 text-xs text-slate-400">
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-bold text-white font-serif">{footerContactTitle || 'Contacto'}</h4>
+                        <p className="leading-relaxed">{footerContactDescription || 'Descripción del footer.'}</p>
+                        {footerContactLocation && <p className="text-[10px] text-slate-500">📍 {footerContactLocation}</p>}
+                        {footerContactEmail && <p className="text-[10px] text-slate-500">✉️ {footerContactEmail}</p>}
+                      </div>
+
+                      {footerInstagramEnabled && (
+                        <div className="space-y-2 pt-2 border-t border-slate-800">
+                          <h4 className="text-sm font-bold text-white font-serif">{footerInstagramTitle || 'Instagram'}</h4>
+                          <a href={footerInstagramUrl} target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline inline-flex items-center gap-1">
+                            <span>{footerInstagramUrl || '@somosnovelieditorial'}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="py-12 text-center text-slate-500">
+                      El Footer Web se encuentra desactivado.
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-3.5 bg-slate-955/50 border border-slate-850 rounded-xl text-[10px] text-slate-500 leading-relaxed font-mono">
+                  Se actualizará automáticamente en noveli-web.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: Galería Footer / Instagram */}
+          {footerTab === 'galeria' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Image List */}
+              <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4">
+                <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">Listado de Imágenes en Footer</h3>
+                
+                <div className="overflow-x-auto text-xs">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-150 dark:border-slate-800 text-slate-400 font-bold">
+                        <th className="py-2.5">Orden</th>
+                        <th className="py-2.5">Miniatura</th>
+                        <th className="py-2.5">Título</th>
+                        <th className="py-2.5">Enlace Opcional</th>
+                        <th className="py-2.5 text-center">Estado</th>
+                        <th className="py-2.5 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 dark:divide-slate-855">
+                      {footerGallery.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400">No hay imágenes en la galería del footer.</td>
+                        </tr>
+                      ) : (
+                        footerGallery.map((img, idx) => (
+                          <tr key={img.id || idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-955/20">
+                            {/* Order arrows */}
+                            <td className="py-3">
+                              <div className="flex items-center space-x-1">
+                                <span className="font-bold text-slate-400 w-4">{img.display_order || idx + 1}</span>
+                                <div className="flex flex-col">
+                                  <button type="button" disabled={idx === 0 || isReadOnly} onClick={() => moveFooterGalleryImageOrder(idx, -1)} className="text-slate-350 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowUp className="w-3 h-3" /></button>
+                                  <button type="button" disabled={idx === footerGallery.length - 1 || isReadOnly} onClick={() => moveFooterGalleryImageOrder(idx, 1)} className="text-slate-350 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowDown className="w-3 h-3" /></button>
+                                </div>
+                              </div>
+                            </td>
+                            {/* Image Thumbnail */}
+                            <td className="py-3">
+                              <div className="w-10 h-10 rounded-lg border overflow-hidden bg-slate-100 dark:bg-slate-850">
+                                <img
+                                  src={img.image_url.startsWith('mock://') ? 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=100&auto=format&fit=crop&q=60' : img.image_url}
+                                  className="w-full h-full object-cover"
+                                  alt={img.title || "Thumbnail"}
+                                />
+                              </div>
+                            </td>
+                            <td className="py-3 font-bold text-slate-755 dark:text-slate-200">{img.title || <span className="text-slate-400 italic">Sin título</span>}</td>
+                            <td className="py-3">
+                              {img.link_url ? (
+                                <a href={img.link_url} target="_blank" rel="noopener noreferrer" className="text-amber-550 hover:underline font-mono truncate max-w-[150px] inline-block">{img.link_url}</a>
+                              ) : (
+                                <span className="text-slate-400 italic">Ninguno</span>
+                              )}
+                            </td>
+                            {/* Active Toggle */}
+                            <td className="py-3 text-center">
+                              <button type="button" onClick={() => toggleFooterImageActive(img)} className="focus:outline-none bg-transparent border-none cursor-pointer">
+                                {img.active !== false ? (
+                                  <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-955/20 text-emerald-650 dark:text-emerald-450 border border-emerald-100 rounded text-[9px] font-bold">activo</span>
+                                ) : (
+                                  <span className="px-2 py-0.5 bg-slate-50 dark:bg-slate-955/10 text-slate-500 border border-slate-250 rounded text-[9px] font-bold">inactivo</span>
+                                )}
+                              </button>
+                            </td>
+                            {/* Actions */}
+                            <td className="py-3 text-right space-x-1">
+                              <button onClick={() => startEditFooterImage(img)} className="p-1 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => handleDeleteFooterGalleryImage(img.id)} className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Form */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4 h-fit">
+                <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">
+                  {editingFooterImage ? 'Editar Imagen' : 'Agregar Imagen al Footer'}
+                </h3>
+                <form onSubmit={handleSaveFooterGalleryImage} className="space-y-4 text-xs">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Título de la Imagen</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Lectura otoñal"
+                      value={footerImageTitle}
+                      onChange={e => setFooterImageTitle(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">URL de la Imagen (image_url)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="https://..."
+                        value={footerImageUrl}
+                        onChange={e => setFooterImageUrl(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                      />
+                      <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Subir</span>
+                        <input type="file" accept="image/*" disabled={isReadOnly} onChange={handleUploadFooterImage} className="hidden" />
+                      </label>
+                    </div>
+                    {footerImageUrl && (
+                      <div className="w-20 h-20 bg-slate-100 dark:bg-slate-955/40 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden mt-1">
+                        <img src={footerImageUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=100&auto=format&fit=crop&q=60' : footerImageUrl} className="w-full h-full object-cover" alt="Preview" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Enlace Opcional (link_url)</label>
+                    <input
+                      type="url"
+                      placeholder="Ej. https://instagram.com/p/..."
+                      value={footerImageLinkUrl}
+                      onChange={e => setFooterImageLinkUrl(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                    />
+                  </div>
+
+                  <div className="flex items-center space-x-1.5 font-bold cursor-pointer select-none py-1">
+                    <input
+                      type="checkbox"
+                      checked={footerImageActive}
+                      onChange={e => setFooterImageActive(e.target.checked)}
+                      className="rounded text-amber-500 h-4 w-4"
+                    />
+                    <span>Activa / Visible</span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={isReadOnly} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1 border border-transparent cursor-pointer">
+                      <Plus className="w-4 h-4" />
+                      <span>{editingFooterImage ? 'Actualizar' : 'Agregar'}</span>
+                    </button>
+                    {editingFooterImage && (
+                      <button type="button" onClick={resetFooterImageForm} className="px-3.5 py-2.5 border border-slate-250 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-xl font-bold cursor-pointer">
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
