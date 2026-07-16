@@ -150,6 +150,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const [serviceBackgroundUrl, setServiceBackgroundUrl] = useState('');
   const [serviceIconName, setServiceIconName] = useState('feather');
   const [serviceColorTheme, setServiceColorTheme] = useState('gold');
+  const [serviceIncludes, setServiceIncludes] = useState('');
+  const [serviceNotIncluded, setServiceNotIncluded] = useState('');
+  const [serviceProcessSteps, setServiceProcessSteps] = useState('');
+  const [serviceEstimatedTime, setServiceEstimatedTime] = useState('');
+  const [serviceRequiresManuscriptInfo, setServiceRequiresManuscriptInfo] = useState(false);
+  const [serviceQuoteNote, setServiceQuoteNote] = useState('');
 
   // 3. Libros Form states
   const [booksTab, setBooksTab] = useState('libros'); // 'libros' o 'categorias'
@@ -1326,7 +1332,13 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         image_url: serviceImageUrl,
         background_url: serviceBackgroundUrl,
         icon_name: serviceIconName,
-        color_theme: serviceColorTheme
+        color_theme: serviceColorTheme,
+        includes: serviceIncludes,
+        not_included: serviceNotIncluded,
+        process_steps: serviceProcessSteps,
+        estimated_time: serviceEstimatedTime,
+        requires_manuscript_info: serviceRequiresManuscriptInfo,
+        quote_note: serviceQuoteNote
       };
 
       if (editingService) {
@@ -1335,7 +1347,8 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
           setServices(updated);
           localStorage.setItem('somos_noveli_services_cms', JSON.stringify(updated));
         } else {
-          await supabase.from('website_services').update(payload).eq('id', editingService.id);
+          const { error } = await supabase.from('website_services').update(payload).eq('id', editingService.id);
+          if (error) throw error;
         }
       } else {
         const newOrder = services.length > 0 ? Math.max(...services.map(s => s.display_order || 0)) + 1 : 1;
@@ -1345,14 +1358,28 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
           setServices(updated);
           localStorage.setItem('somos_noveli_services_cms', JSON.stringify(updated));
         } else {
-          await supabase.from('website_services').insert([insertPayload]);
+          const { error } = await supabase.from('website_services').insert([insertPayload]);
+          if (error) throw error;
         }
       }
       resetForm();
       await fetchServices();
       alert("Servicio guardado.");
     } catch (err) {
+      console.error('Error saving web service:', err);
       alert(err.message);
+      if (!isMock && !usingMockDb) {
+        try {
+          await supabase.from('crm_error_logs').insert({
+            error_message: err.message,
+            error_stack: err.stack || '',
+            module: 'website-servicios',
+            created_at: new Date().toISOString()
+          });
+        } catch (logErr) {
+          console.error('Failed to log error to database:', logErr);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -2140,6 +2167,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     setServiceBackgroundUrl('');
     setServiceIconName('feather');
     setServiceColorTheme('gold');
+    setServiceIncludes('');
+    setServiceNotIncluded('');
+    setServiceProcessSteps('');
+    setServiceEstimatedTime('');
+    setServiceRequiresManuscriptInfo(false);
+    setServiceQuoteNote('');
   };
 
   const startEditService = (service) => {
@@ -2156,6 +2189,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     setServiceBackgroundUrl(service.background_url || '');
     setServiceIconName(service.icon_name || 'feather');
     setServiceColorTheme(service.color_theme || 'gold');
+    setServiceIncludes(service.includes || '');
+    setServiceNotIncluded(service.not_included || '');
+    setServiceProcessSteps(service.process_steps || '');
+    setServiceEstimatedTime(service.estimated_time || '');
+    setServiceRequiresManuscriptInfo(!!service.requires_manuscript_info);
+    setServiceQuoteNote(service.quote_note || '');
   };
 
   const resetBookForm = () => {
@@ -3062,6 +3101,71 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   </div>
                 </div>
                 
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">¿Qué incluye? (separado por líneas)</label>
+                  <textarea 
+                    value={serviceIncludes} 
+                    onChange={e => setServiceIncludes(e.target.value)} 
+                    rows={3} 
+                    placeholder="Ej. Revisión ortotipográfica&#10;Revisión de estilo&#10;Informe de lectura"
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" 
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">¿Qué NO incluye? (separado por líneas)</label>
+                  <textarea 
+                    value={serviceNotIncluded} 
+                    onChange={e => setServiceNotIncluded(e.target.value)} 
+                    rows={2} 
+                    placeholder="Ej. Diseño de portada&#10;Traducción a otros idiomas"
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" 
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Proceso / Etapas (separado por líneas)</label>
+                  <textarea 
+                    value={serviceProcessSteps} 
+                    onChange={e => setServiceProcessSteps(e.target.value)} 
+                    rows={3} 
+                    placeholder="Ej. Recepción del manuscrito&#10;Primera ronda de revisión&#10;Aprobación final del autor"
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" 
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Tiempo Estimado</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ej. Según extensión del manuscrito" 
+                    value={serviceEstimatedTime} 
+                    onChange={e => setServiceEstimatedTime(e.target.value)} 
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" 
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Nota para Cotización</label>
+                  <textarea 
+                    value={serviceQuoteNote} 
+                    onChange={e => setServiceQuoteNote(e.target.value)} 
+                    rows={2} 
+                    placeholder="Ej. Costo final sujeto a variaciones del manuscrito."
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" 
+                  />
+                </div>
+
+                <div className="flex items-center space-x-1.5 font-bold cursor-pointer select-none py-1">
+                  <input 
+                    type="checkbox" 
+                    checked={serviceRequiresManuscriptInfo} 
+                    onChange={e => setServiceRequiresManuscriptInfo(e.target.checked)} 
+                    className="rounded text-amber-500 h-4 w-4" 
+                  />
+                  <span>Requiere información del manuscrito</span>
+                </div>
+
                 <div className="flex gap-4 py-1">
                   <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
                     <input type="checkbox" checked={serviceFeatured} onChange={e => setServiceFeatured(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
