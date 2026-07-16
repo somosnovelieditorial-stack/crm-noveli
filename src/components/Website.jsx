@@ -40,14 +40,14 @@ const DEFAULT_SITE_SETTINGS = {
 };
 
 const DEFAULT_WEB_SERVICES = [
-  { title: 'Full eBook', category: 'Digitalización', price_from: 80000, short_description: 'Publicación completa de tu eBook en plataformas globales', featured: true, visible_on_website: true, active: true, display_order: 1 },
-  { title: 'Full Físico', category: 'Producción', price_from: 250000, short_description: 'Edición e impresión física de tu obra literaria', featured: true, visible_on_website: true, active: true, display_order: 2 },
-  { title: 'Full Total', category: 'Producción', price_from: 450000, short_description: 'El pack definitivo: eBook, libro físico, tapa blanda e ilustración', featured: true, visible_on_website: true, active: true, display_order: 3 },
-  { title: 'Corrección', category: 'Editorial', price_from: 2500, short_description: 'Corrección de estilo, gramática y ortografía profesional', featured: false, visible_on_website: true, active: true, display_order: 4 },
-  { title: 'Portada', category: 'Diseño', price_from: 120000, short_description: 'Diseño de portada personalizado y adaptado al género', featured: false, visible_on_website: true, active: true, display_order: 5 },
-  { title: 'Maquetación', category: 'Editorial', price_from: 90000, short_description: 'Maquetación interior profesional para impresión y digital', featured: false, visible_on_website: true, active: true, display_order: 6 },
-  { title: 'Difusión Editorial', category: 'Marketing', price_from: 150000, short_description: 'Campañas de marketing, notas de prensa y difusión', featured: false, visible_on_website: true, active: true, display_order: 7 },
-  { title: 'Registro de Derechos de Autor', category: 'Legal', price_from: 50000, short_description: 'Gestión legal de registro de propiedad intelectual', featured: false, visible_on_website: true, active: true, display_order: 8 }
+  { title: 'Full eBook', category: 'Digitalización', price_from: 80000, short_description: 'Publicación completa de tu eBook en plataformas globales', featured: true, visible_on_website: true, active: true, display_order: 1, image_url: '', background_url: '', icon_name: 'book', color_theme: 'blue' },
+  { title: 'Full Físico', category: 'Producción', price_from: 250000, short_description: 'Edición e impresión física de tu obra literaria', featured: true, visible_on_website: true, active: true, display_order: 2, image_url: '', background_url: '', icon_name: 'layout', color_theme: 'gold' },
+  { title: 'Full Total', category: 'Producción', price_from: 450000, short_description: 'El pack definitivo: eBook, libro físico, tapa blanda e ilustración', featured: true, visible_on_website: true, active: true, display_order: 3, image_url: '', background_url: '', icon_name: 'upload', color_theme: 'purple' },
+  { title: 'Corrección', category: 'Editorial', price_from: 2500, short_description: 'Corrección de estilo, gramática y ortografía profesional', featured: false, visible_on_website: true, active: true, display_order: 4, image_url: '', background_url: '', icon_name: 'pen', color_theme: 'rose' },
+  { title: 'Portada', category: 'Diseño', price_from: 120000, short_description: 'Diseño de portada personalizado y adaptado al género', featured: false, visible_on_website: true, active: true, display_order: 5, image_url: '', background_url: '', icon_name: 'layout', color_theme: 'burgundy' },
+  { title: 'Maquetación', category: 'Editorial', price_from: 90000, short_description: 'Maquetación interior profesional para impresión y digital', featured: false, visible_on_website: true, active: true, display_order: 6, image_url: '', background_url: '', icon_name: 'file', color_theme: 'green' },
+  { title: 'Difusión Editorial', category: 'Marketing', price_from: 150000, short_description: 'Campañas de marketing, notas de prensa y difusión', featured: false, visible_on_website: true, active: true, display_order: 7, image_url: '', background_url: '', icon_name: 'megaphone', color_theme: 'blue' },
+  { title: 'Registro de Derechos de Autor', category: 'Legal', price_from: 50000, short_description: 'Gestión legal de registro de propiedad intelectual', featured: false, visible_on_website: true, active: true, display_order: 8, image_url: '', background_url: '', icon_name: 'shield', color_theme: 'gold' }
 ];
 
 const DEFAULT_WEB_BOOKS = [
@@ -106,8 +106,13 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const [serviceFeatured, setServiceFeatured] = useState(false);
   const [serviceVisible, setServiceVisible] = useState(true);
   const [serviceActive, setServiceActive] = useState(true);
+  const [serviceImageUrl, setServiceImageUrl] = useState('');
+  const [serviceBackgroundUrl, setServiceBackgroundUrl] = useState('');
+  const [serviceIconName, setServiceIconName] = useState('feather');
+  const [serviceColorTheme, setServiceColorTheme] = useState('gold');
 
   // 3. Libros Form states
+  const [booksTab, setBooksTab] = useState('libros'); // 'libros' o 'categorias'
   const [editingBook, setEditingBook] = useState(null);
   const [bookTitle, setBookTitle] = useState('');
   const [bookAuthor, setBookAuthor] = useState('');
@@ -119,6 +124,25 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const [bookVisible, setBookVisible] = useState(true);
   const [bookSaleUrl, setBookSaleUrl] = useState('');
   const [bookSalePlatform, setBookSalePlatform] = useState('Amazon');
+
+  // New Libros fields
+  const [bookOrigin, setBookOrigin] = useState('published_by_noveli'); // published_by_noveli, author_purchase
+  const [bookPurchaseType, setBookPurchaseType] = useState('noveli'); // noveli, external_author, no_purchase
+  const [bookAuthorPurchaseLink, setBookAuthorPurchaseLink] = useState('');
+  const [bookNoveliPurchaseLink, setBookNoveliPurchaseLink] = useState('');
+  const [bookNovelty, setBookNovelty] = useState(false);
+  const [bookUpcoming, setBookUpcoming] = useState(false);
+  const [bookSelectedCategories, setBookSelectedCategories] = useState([]); // array of category IDs
+
+  // Categorías Form states
+  const [categories, setCategories] = useState([]);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [categoryName, setCategoryName] = useState('');
+  const [categorySlug, setCategorySlug] = useState('');
+  const [categoryType, setCategoryType] = useState('genre'); // main, genre, collection
+  const [categoryParentId, setCategoryParentId] = useState('');
+  const [categoryDescription, setCategoryDescription] = useState('');
+  const [categoryActive, setCategoryActive] = useState(true);
 
   // 4. Enlaces Form states
   const [editingLink, setEditingLink] = useState(null);
@@ -146,6 +170,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   useEffect(() => {
     fetchSettings();
     fetchServices();
+    fetchCategories();
     fetchBooks();
     fetchLinks();
     fetchSections();
@@ -155,6 +180,9 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   useEffect(() => {
     if (currentPath === 'solicitudes') {
       fetchLeads();
+    } else if (currentPath === 'libros') {
+      fetchCategories();
+      fetchBooks();
     }
   }, [currentPath]);
 
@@ -373,7 +401,11 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         featured: serviceFeatured,
         visible_on_website: serviceVisible,
         active: serviceActive,
-        organization_id: getOrgId()
+        organization_id: getOrgId(),
+        image_url: serviceImageUrl,
+        background_url: serviceBackgroundUrl,
+        icon_name: serviceIconName,
+        color_theme: serviceColorTheme
       };
 
       if (editingService) {
@@ -477,7 +509,19 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
       if (error) {
         loadMockBooks();
       } else {
-        setBooks(data || []);
+        // Fetch categories and links
+        const { data: catLinks } = await supabase
+          .from('website_book_category_links')
+          .select('*');
+
+        const booksWithCategories = (data || []).map(b => {
+          const linksForBook = (catLinks || []).filter(l => l.book_id === b.id);
+          return {
+            ...b,
+            categories: linksForBook.map(l => l.category_id)
+          };
+        });
+        setBooks(booksWithCategories);
       }
     } catch (_) {
       loadMockBooks();
@@ -486,7 +530,18 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
 
   const loadMockBooks = () => {
     const saved = localStorage.getItem('somos_noveli_books_cms');
-    setBooks(saved ? JSON.parse(saved) : DEFAULT_WEB_BOOKS);
+    const mockBooks = saved ? JSON.parse(saved) : DEFAULT_WEB_BOOKS;
+    const savedLinks = localStorage.getItem('somos_noveli_category_links_cms');
+    const mockLinks = savedLinks ? JSON.parse(savedLinks) : [];
+
+    const mapped = mockBooks.map(b => {
+      const linksForBook = mockLinks.filter(l => l.book_id === b.id);
+      return {
+        ...b,
+        categories: linksForBook.map(l => l.category_id)
+      };
+    });
+    setBooks(mapped);
   };
 
   const handleSaveBook = async (e) => {
@@ -506,28 +561,79 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         visible_on_website: bookVisible,
         sale_url: bookSaleUrl,
         sale_platform: bookSalePlatform,
-        organization_id: getOrgId()
+        organization_id: getOrgId(),
+        // New fields
+        book_origin: bookOrigin,
+        purchase_type: bookPurchaseType,
+        author_purchase_link: bookAuthorPurchaseLink,
+        noveli_purchase_link: bookNoveliPurchaseLink,
+        novelty: bookNovelty,
+        upcoming: bookUpcoming
       };
 
+      let bookId = editingBook?.id;
       if (editingBook) {
         if (isMock || usingMockDb) {
           const updated = books.map(b => b.id === editingBook.id ? { ...b, ...payload } : b);
           setBooks(updated);
           localStorage.setItem('somos_noveli_books_cms', JSON.stringify(updated));
         } else {
-          await supabase.from('website_books').update(payload).eq('id', editingBook.id);
+          await supabase.from('website_books').update(payload).eq('id', bookId);
         }
       } else {
         const newOrder = books.length > 0 ? Math.max(...books.map(b => b.display_order || 0)) + 1 : 1;
         const insertPayload = { ...payload, display_order: newOrder };
         if (isMock || usingMockDb) {
-          const updated = [...books, { ...insertPayload, id: `wb-${Date.now()}` }];
+          bookId = `wb-${Date.now()}`;
+          const updated = [...books, { ...insertPayload, id: bookId }];
           setBooks(updated);
           localStorage.setItem('somos_noveli_books_cms', JSON.stringify(updated));
         } else {
-          await supabase.from('website_books').insert([insertPayload]);
+          const { data: insertedData, error: insertError } = await supabase
+            .from('website_books')
+            .insert([insertPayload])
+            .select();
+          if (insertError) throw insertError;
+          bookId = insertedData[0].id;
         }
       }
+
+      // Save category links
+      if (isMock || usingMockDb) {
+        const savedLinks = localStorage.getItem('somos_noveli_category_links_cms');
+        let mockLinks = savedLinks ? JSON.parse(savedLinks) : [];
+        // Delete existing links for this book
+        mockLinks = mockLinks.filter(l => l.book_id !== bookId);
+        // Insert new ones
+        bookSelectedCategories.forEach(catId => {
+          mockLinks.push({
+            id: `bl-${Date.now()}-${catId}`,
+            book_id: bookId,
+            category_id: catId,
+            organization_id: getOrgId()
+          });
+        });
+        localStorage.setItem('somos_noveli_category_links_cms', JSON.stringify(mockLinks));
+      } else {
+        // Delete existing links for this book in Supabase
+        await supabase
+          .from('website_book_category_links')
+          .delete()
+          .eq('book_id', bookId);
+        
+        // Insert new links
+        if (bookSelectedCategories.length > 0) {
+          const linksToInsert = bookSelectedCategories.map(catId => ({
+            book_id: bookId,
+            category_id: catId,
+            organization_id: getOrgId()
+          }));
+          await supabase
+            .from('website_book_category_links')
+            .insert(linksToInsert);
+        }
+      }
+
       resetBookForm();
       await fetchBooks();
       alert("Libro guardado.");
@@ -588,10 +694,170 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         const updated = books.filter(b => b.id !== id);
         setBooks(updated);
         localStorage.setItem('somos_noveli_books_cms', JSON.stringify(updated));
+        
+        // Also delete category links
+        const savedLinks = localStorage.getItem('somos_noveli_category_links_cms');
+        if (savedLinks) {
+          const mockLinks = JSON.parse(savedLinks).filter(l => l.book_id !== id);
+          localStorage.setItem('somos_noveli_category_links_cms', JSON.stringify(mockLinks));
+        }
       } else {
         await supabase.from('website_books').delete().eq('id', id);
       }
       setBooks(books.filter(b => b.id !== id));
+    } catch (_) {}
+  };
+
+  // --- CATEGORÍAS DATABASE OPS ---
+  const fetchCategories = async () => {
+    try {
+      if (isMock) {
+        loadMockCategories();
+        return;
+      }
+      const { data, error } = await supabase
+        .from('website_book_categories')
+        .select('*')
+        .order('display_order', { ascending: true });
+
+      if (error) {
+        loadMockCategories();
+      } else {
+        setCategories(data || []);
+      }
+    } catch (_) {
+      loadMockCategories();
+    }
+  };
+
+  const loadMockCategories = () => {
+    const saved = localStorage.getItem('somos_noveli_categories_cms');
+    if (saved) {
+      setCategories(JSON.parse(saved));
+    } else {
+      const defaultCats = [
+        { id: 'cat-main-1', name: 'Publicados por Noveli', slug: 'publicados-por-noveli', type: 'main', active: true, display_order: 1, organization_id: getOrgId() },
+        { id: 'cat-main-2', name: 'Compra con el autor', slug: 'compra-con-el-autor', type: 'main', active: true, display_order: 2, organization_id: getOrgId() }
+      ];
+      setCategories(defaultCats);
+      localStorage.setItem('somos_noveli_categories_cms', JSON.stringify(defaultCats));
+    }
+  };
+
+  const handleSaveCategory = async (e) => {
+    e.preventDefault();
+    if (isReadOnly) return;
+    setLoading(true);
+
+    const payload = {
+      name: categoryName,
+      slug: categorySlug || generateSlug(categoryName),
+      type: categoryType,
+      parent_id: categoryParentId || null,
+      description: categoryDescription,
+      active: categoryActive,
+      organization_id: getOrgId()
+    };
+
+    try {
+      if (editingCategory) {
+        if (isMock || usingMockDb) {
+          const updated = categories.map(c => c.id === editingCategory.id ? { ...c, ...payload } : c);
+          setCategories(updated);
+          localStorage.setItem('somos_noveli_categories_cms', JSON.stringify(updated));
+        } else {
+          await supabase.from('website_book_categories').update(payload).eq('id', editingCategory.id);
+        }
+      } else {
+        const nextOrder = categories.length > 0 ? Math.max(...categories.map(c => c.display_order || 0)) + 1 : 1;
+        const insertPayload = { ...payload, display_order: nextOrder };
+
+        if (isMock || usingMockDb) {
+          const newId = `cat-${Date.now()}`;
+          const updated = [...categories, { ...insertPayload, id: newId }];
+          setCategories(updated);
+          localStorage.setItem('somos_noveli_categories_cms', JSON.stringify(updated));
+        } else {
+          await supabase.from('website_book_categories').insert([insertPayload]);
+        }
+      }
+      resetCategoryForm();
+      await fetchCategories();
+      alert("Categoría guardada.");
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleCategoryBool = async (category, field) => {
+    if (isReadOnly) return;
+    const newVal = !category[field];
+    try {
+      if (isMock || usingMockDb) {
+        const updated = categories.map(c => c.id === category.id ? { ...c, [field]: newVal } : c);
+        setCategories(updated);
+        localStorage.setItem('somos_noveli_categories_cms', JSON.stringify(updated));
+      } else {
+        await supabase.from('website_book_categories').update({ [field]: newVal }).eq('id', category.id);
+      }
+      setCategories(categories.map(c => c.id === category.id ? { ...c, [field]: newVal } : c));
+    } catch (_) {}
+  };
+
+  const moveCategoryOrder = async (index, direction) => {
+    if (isReadOnly) return;
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= categories.length) return;
+
+    const list = [...categories];
+    const temp = list[index];
+    list[index] = list[targetIdx];
+    list[targetIdx] = temp;
+
+    const updated = list.map((item, idx) => ({ ...item, display_order: idx + 1 }));
+    setCategories(updated);
+
+    try {
+      if (isMock || usingMockDb) {
+        localStorage.setItem('somos_noveli_categories_cms', JSON.stringify(updated));
+      } else {
+        const promises = updated.map(item => supabase
+          .from('website_book_categories')
+          .update({ display_order: item.display_order })
+          .eq('id', item.id)
+        );
+        await Promise.all(promises);
+      }
+    } catch (_) {}
+  };
+
+  const handleDeleteCategory = async (cat) => {
+    if (isReadOnly) return;
+    if (cat.type === 'main' && (cat.slug === 'publicados-por-noveli' || cat.slug === 'compra-con-el-autor')) {
+      alert("No se pueden eliminar las categorías principales por defecto.");
+      return;
+    }
+    if (!window.confirm(`¿Eliminar la categoría "${cat.name}"?`)) return;
+
+    try {
+      if (isMock || usingMockDb) {
+        const updated = categories.filter(c => c.id !== cat.id);
+        setCategories(updated);
+        localStorage.setItem('somos_noveli_categories_cms', JSON.stringify(updated));
+        
+        // Also delete category links for this category
+        const savedLinks = localStorage.getItem('somos_noveli_category_links_cms');
+        if (savedLinks) {
+          const mockLinks = JSON.parse(savedLinks).filter(l => l.category_id !== cat.id);
+          localStorage.setItem('somos_noveli_category_links_cms', JSON.stringify(mockLinks));
+        }
+      } else {
+        await supabase.from('website_book_categories').delete().eq('id', cat.id);
+      }
+      setCategories(categories.filter(c => c.id !== cat.id));
+      await fetchBooks(); // Refresh book categories mapping since category was deleted
     } catch (_) {}
   };
 
@@ -634,6 +900,43 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
       alert("Portada subida correctamente.");
     } catch (err) {
       alert(`Error al subir portada: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUploadServiceFile = async (e, field) => {
+    const file = e.target.files[0];
+    if (!file || isReadOnly) return;
+    setLoading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_service_${field}.${fileExt}`;
+      const storagePath = `${getOrgId()}/website/services/${fileName}`;
+
+      let finalUrl = '';
+      if (isMock || usingMockDb) {
+        finalUrl = `mock://services/${storagePath}`;
+      } else {
+        const { error: uploadErr } = await supabase.storage
+          .from('documents')
+          .upload(storagePath, file, { upsert: true });
+        if (uploadErr) throw uploadErr;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(storagePath);
+        finalUrl = publicUrlData?.publicUrl || '';
+      }
+
+      if (field === 'image') {
+        setServiceImageUrl(finalUrl);
+      } else if (field === 'background') {
+        setServiceBackgroundUrl(finalUrl);
+      }
+      alert("Archivo subido correctamente.");
+    } catch (err) {
+      alert(`Error al subir archivo: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -879,6 +1182,26 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     setServiceFeatured(false);
     setServiceVisible(true);
     setServiceActive(true);
+    setServiceImageUrl('');
+    setServiceBackgroundUrl('');
+    setServiceIconName('feather');
+    setServiceColorTheme('gold');
+  };
+
+  const startEditService = (service) => {
+    setEditingService(service);
+    setServiceTitle(service.title || '');
+    setServiceShortDesc(service.short_description || '');
+    setServiceFullDesc(service.full_description || '');
+    setServicePrice(service.price_from ? String(service.price_from) : '0');
+    setServiceCategory(service.category || 'Editorial');
+    setServiceFeatured(!!service.featured);
+    setServiceVisible(service.visible_on_website !== false);
+    setServiceActive(service.active !== false);
+    setServiceImageUrl(service.image_url || '');
+    setServiceBackgroundUrl(service.background_url || '');
+    setServiceIconName(service.icon_name || 'feather');
+    setServiceColorTheme(service.color_theme || 'gold');
   };
 
   const resetBookForm = () => {
@@ -893,6 +1216,23 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     setBookVisible(true);
     setBookSaleUrl('');
     setBookSalePlatform('Amazon');
+    setBookOrigin('published_by_noveli');
+    setBookPurchaseType('noveli');
+    setBookAuthorPurchaseLink('');
+    setBookNoveliPurchaseLink('');
+    setBookNovelty(false);
+    setBookUpcoming(false);
+    setBookSelectedCategories([]);
+  };
+
+  const resetCategoryForm = () => {
+    setEditingCategory(null);
+    setCategoryName('');
+    setCategorySlug('');
+    setCategoryType('genre');
+    setCategoryParentId('');
+    setCategoryDescription('');
+    setCategoryActive(true);
   };
 
   const resetLinkForm = () => {
@@ -924,6 +1264,37 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     setBookFeatured(!!book.featured);
     setBookVisible(book.visible_on_website !== false);
     setBookSaleUrl(book.sale_url || '');
+    setBookSalePlatform(book.sale_platform || 'Amazon');
+    setBookOrigin(book.book_origin || 'published_by_noveli');
+    setBookPurchaseType(book.purchase_type || 'noveli');
+    setBookAuthorPurchaseLink(book.author_purchase_link || '');
+    setBookNoveliPurchaseLink(book.noveli_purchase_link || '');
+    setBookNovelty(!!book.novelty);
+    setBookUpcoming(!!book.upcoming);
+    setBookSelectedCategories(book.categories || []);
+  };
+
+  const startEditCategory = (cat) => {
+    setEditingCategory(cat);
+    setCategoryName(cat.name || '');
+    setCategorySlug(cat.slug || '');
+    setCategoryType(cat.type || 'genre');
+    setCategoryParentId(cat.parent_id || '');
+    setCategoryDescription(cat.description || '');
+    setCategoryActive(cat.active !== false);
+  };
+
+  const generateSlug = (text) => {
+    return text
+      .toString()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/[^\w\-]+/g, '')
+      .replace(/\-\-+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '');
   };
 
   // --- 6. WEBSITE LEADS OPS ---
@@ -1166,7 +1537,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
             <span className="text-slate-700 dark:text-slate-200 capitalize font-bold">
               {currentPath === 'configuracion' ? 'Configuración Web' :
                currentPath === 'servicios' ? 'Servicios Web' : 
-               currentPath === 'libros' ? 'Libros Web' : 
+               currentPath === 'libros' ? 'Catálogo Web' : 
                currentPath === 'enlaces' ? 'Enlaces de Venta' : 'Secciones de Página'}
             </span>
           </>
@@ -1258,15 +1629,15 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
               </button>
             </div>
 
-            {/* 3. Libros Web */}
+            {/* 3. Catálogo Web */}
             <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-6 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="p-2.5 bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400 rounded-xl w-fit">
                   <BookOpen className="w-5 h-5" />
                 </div>
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">3. Libros Web</h3>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">3. Catálogo Web</h3>
                 <p className="text-xs text-slate-455 dark:text-slate-400 leading-relaxed">
-                  Carga libros destacados en el catálogo, sube portadas de libros y asocia enlaces de venta directa.
+                  Carga libros destacados en el catálogo, administra sus categorías/subcategorías, sube portadas de libros y asocia enlaces de venta directa.
                 </p>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
                   {books.length} libros cargados ({books.filter(b => b.visible_on_website).length} visibles)
@@ -1501,7 +1872,22 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 font-bold text-slate-750 dark:text-slate-200">{s.title}</td>
+                        <td className="py-3 font-bold text-slate-750 dark:text-slate-200">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${
+                              s.color_theme === 'gold' ? 'bg-amber-500' :
+                              s.color_theme === 'burgundy' ? 'bg-red-700' :
+                              s.color_theme === 'green' ? 'bg-emerald-600' :
+                              s.color_theme === 'blue' ? 'bg-blue-600' :
+                              s.color_theme === 'purple' ? 'bg-purple-600' :
+                              s.color_theme === 'rose' ? 'bg-rose-500' : 'bg-amber-500'
+                            }`} title={`Tema: ${s.color_theme || 'gold'}`} />
+                            <div className="flex flex-col">
+                              <span>{s.title}</span>
+                              <span className="text-[9px] text-slate-400 font-mono font-normal">Icono: {s.icon_name || 'feather'}</span>
+                            </div>
+                          </div>
+                        </td>
                         <td className="py-3"><span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-350 rounded font-bold text-[9px] uppercase tracking-wider">{s.category}</span></td>
                         <td className="py-3 font-mono font-bold">{formatCurrency(s.price_from, s.currency || 'CLP')}</td>
                         
@@ -1571,6 +1957,87 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   <label className="text-slate-400 font-bold block">Descripción Completa</label>
                   <textarea value={serviceFullDesc} onChange={e => setServiceFullDesc(e.target.value)} rows={3} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
                 </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Imagen Principal del Servicio (image_url)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={serviceImageUrl}
+                      onChange={e => setServiceImageUrl(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                    />
+                    <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Subir</span>
+                      <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadServiceFile(e, 'image')} className="hidden" />
+                    </label>
+                  </div>
+                  {serviceImageUrl && (
+                    <div className="w-20 h-20 bg-slate-100 dark:bg-slate-950/40 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden mt-1">
+                      <img src={serviceImageUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=100&auto=format&fit=crop&q=60' : serviceImageUrl} className="w-full h-full object-cover" alt="Preview" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Fondo Decorativo (background_url)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={serviceBackgroundUrl}
+                      onChange={e => setServiceBackgroundUrl(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                    />
+                    <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Subir</span>
+                      <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadServiceFile(e, 'background')} className="hidden" />
+                    </label>
+                  </div>
+                  {serviceBackgroundUrl && (
+                    <div className="w-20 h-20 bg-slate-100 dark:bg-slate-950/40 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden mt-1">
+                      <img src={serviceBackgroundUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=100&auto=format&fit=crop&q=60' : serviceBackgroundUrl} className="w-full h-full object-cover" alt="Preview" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Icono</label>
+                    <select
+                      value={serviceIconName}
+                      onChange={e => setServiceIconName(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    >
+                      <option value="feather">Pluma (feather)</option>
+                      <option value="book">Libro (book)</option>
+                      <option value="layout">Diseño (layout)</option>
+                      <option value="upload">Subir (upload)</option>
+                      <option value="megaphone">Megáfono (megaphone)</option>
+                      <option value="shield">Escudo (shield)</option>
+                      <option value="file">Archivo (file)</option>
+                      <option value="pen">Lápiz (pen)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Tema de Color</label>
+                    <select
+                      value={serviceColorTheme}
+                      onChange={e => setServiceColorTheme(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    >
+                      <option value="gold">Dorado (gold)</option>
+                      <option value="burgundy">Burdeos (burgundy)</option>
+                      <option value="green">Verde (green)</option>
+                      <option value="blue">Azul (blue)</option>
+                      <option value="purple">Morado (purple)</option>
+                      <option value="rose">Rosa (rose)</option>
+                    </select>
+                  </div>
+                </div>
                 
                 <div className="flex gap-4 py-1">
                   <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
@@ -1612,138 +2079,433 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-4">
-              {books.map((b, idx) => (
-                <div key={b.id || idx} className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-5 shadow-2xs flex gap-4 relative">
-                  {/* Reorder Arrows in Book Container */}
-                  <div className="flex flex-col justify-center items-center gap-2 border-r border-slate-50 dark:border-slate-800 pr-3 shrink-0">
-                    <button type="button" disabled={idx === 0 || isReadOnly} onClick={() => moveBookOrder(idx, -1)} className="text-slate-300 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowUp className="w-4 h-4" /></button>
-                    <span className="text-[10px] font-bold text-slate-400">{b.display_order || idx + 1}</span>
-                    <button type="button" disabled={idx === books.length - 1 || isReadOnly} onClick={() => moveBookOrder(idx, 1)} className="text-slate-300 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowDown className="w-4 h-4" /></button>
+          {/* Sub-tab selection */}
+          <div className="flex border-b border-slate-150 dark:border-slate-800 gap-6">
+            <button
+              onClick={() => setBooksTab('libros')}
+              className={`pb-2.5 text-sm font-semibold border-b-2 cursor-pointer transition-all ${
+                booksTab === 'libros'
+                  ? 'border-amber-500 text-amber-600 dark:text-amber-500'
+                  : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-350'
+              }`}
+            >
+              Libros
+            </button>
+            <button
+              onClick={() => setBooksTab('categorias')}
+              className={`pb-2.5 text-sm font-semibold border-b-2 cursor-pointer transition-all ${
+                booksTab === 'categorias'
+                  ? 'border-amber-500 text-amber-600 dark:text-amber-500'
+                  : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-350'
+              }`}
+            >
+              Categorías
+            </button>
+          </div>
+
+          {booksTab === 'libros' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-4">
+                {books.map((b, idx) => (
+                  <div key={b.id || idx} className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-5 shadow-2xs flex gap-4 relative">
+                    {/* Reorder Arrows in Book Container */}
+                    <div className="flex flex-col justify-center items-center gap-2 border-r border-slate-50 dark:border-slate-800 pr-3 shrink-0">
+                      <button type="button" disabled={idx === 0 || isReadOnly} onClick={() => moveBookOrder(idx, -1)} className="text-slate-300 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowUp className="w-4 h-4" /></button>
+                      <span className="text-[10px] font-bold text-slate-400">{b.display_order || idx + 1}</span>
+                      <button type="button" disabled={idx === books.length - 1 || isReadOnly} onClick={() => moveBookOrder(idx, 1)} className="text-slate-300 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowDown className="w-4 h-4" /></button>
+                    </div>
+
+                    <div className="w-20 h-28 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-lg flex flex-col items-center justify-center overflow-hidden shrink-0 relative group">
+                      {b.cover_url ? <img src={b.cover_url.startsWith('mock://') ? `https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=100&auto=format&fit=crop&q=60` : b.cover_url} className="w-full h-full object-cover" /> : <BookOpen className="w-7 h-7 text-slate-350" />}
+                      <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[9px] font-bold cursor-pointer">
+                        <Upload className="w-4 h-4 mb-1" />
+                        <span>Subir foto</span>
+                        <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadCover(e, b.id)} className="hidden" />
+                      </label>
+                    </div>
+
+                    <div className="flex-1 space-y-2">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">{b.title}</h4>
+                            {b.novelty && (
+                              <span className="text-[8px] font-extrabold uppercase px-1.5 py-0.5 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 rounded-md">
+                                Novedad
+                              </span>
+                            )}
+                            {b.upcoming && (
+                              <span className="text-[8px] font-extrabold uppercase px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 rounded-md">
+                                Próximamente
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Autor: {b.author} • Género: {b.genre} • <span className="text-purple-600 dark:text-purple-400 font-bold uppercase text-[9px] bg-purple-50 dark:bg-purple-950/20 px-1.5 py-0.5 rounded">{b.status || 'Destacado'}</span>
+                          </p>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                            Origen: <span className="font-bold">{b.book_origin === 'published_by_noveli' ? 'Publicado por Noveli' : 'Compra con el autor'}</span> • Compra: <span className="font-bold">{b.purchase_type === 'noveli' ? 'Noveli' : b.purchase_type === 'external_author' ? 'Autor Externo' : 'Sin Compra'}</span>
+                          </p>
+                          
+                          {/* Categories Display */}
+                          {b.categories && b.categories.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {b.categories.map(catId => {
+                                const cat = categories.find(c => c.id === catId);
+                                if (!cat) return null;
+                                return (
+                                  <span key={catId} className="px-1.5 py-0.2 bg-amber-50 dark:bg-amber-950/10 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/50 rounded-full text-[9px] font-medium">
+                                    {cat.name}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center space-x-1 shrink-0">
+                          {/* Destacado */}
+                          <button type="button" onClick={() => toggleBookBool(b, 'featured')} className="p-1 hover:bg-slate-100 rounded border-none bg-transparent cursor-pointer">
+                            <Star className={`w-4 h-4 ${b.featured ? 'text-amber-500 fill-amber-500' : 'text-slate-350'}`} />
+                          </button>
+                          {/* En Web / visible_on_website */}
+                          <button type="button" onClick={() => toggleBookBool(b, 'visible_on_website')} className="p-1 hover:bg-slate-100 rounded border-none bg-transparent cursor-pointer">
+                            {b.visible_on_website !== false ? <Eye className="w-4 h-4 text-emerald-600" /> : <EyeOff className="w-4 h-4 text-slate-350" />}
+                          </button>
+                          
+                          <button onClick={() => startEditBook(b)} className="p-1 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-4 h-4" /></button>
+                          <button onClick={() => handleDeleteBook(b.id)} className="p-1 hover:bg-rose-50 text-slate-400 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                      {b.short_description && <p className="text-xs text-slate-500 italic font-sans leading-relaxed">"{b.short_description}"</p>}
+                      
+                      {/* Enlaces de compra */}
+                      {(b.noveli_purchase_link || b.author_purchase_link || b.sale_url) && (
+                        <div className="space-y-1 mt-2 text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/20 p-2 rounded-xl">
+                          {b.noveli_purchase_link && (
+                            <p className="flex items-center gap-1.5">
+                              <ShoppingBag className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span className="font-semibold text-slate-600 dark:text-slate-300">Noveli:</span>
+                              <a href={b.noveli_purchase_link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate max-w-[250px] font-mono">{b.noveli_purchase_link}</a>
+                            </p>
+                          )}
+                          {b.author_purchase_link && (
+                            <p className="flex items-center gap-1.5">
+                              <ShoppingBag className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                              <span className="font-semibold text-slate-600 dark:text-slate-300">Autor:</span>
+                              <a href={b.author_purchase_link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate max-w-[250px] font-mono">{b.author_purchase_link}</a>
+                            </p>
+                          )}
+                          {!b.noveli_purchase_link && !b.author_purchase_link && b.sale_url && (
+                            <p className="flex items-center gap-1.5">
+                              <ShoppingBag className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                              <span className="font-semibold text-slate-600 dark:text-slate-300">{b.sale_platform || 'Venta'}:</span>
+                              <a href={b.sale_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate max-w-[250px] font-mono">{b.sale_url}</a>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Form */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4 h-fit">
+                <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">{editingBook ? 'Editar Libro' : 'Destacar Libro'}</h3>
+                <form onSubmit={handleSaveBook} className="space-y-4 text-xs">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Título</label>
+                    <input type="text" required value={bookTitle} onChange={e => setBookTitle(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Autor</label>
+                    <input type="text" required value={bookAuthor} onChange={e => setBookAuthor(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Género</label>
+                      <input type="text" value={bookGenre} onChange={e => setBookGenre(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Estado/Etiqueta</label>
+                      <select value={bookStatus} onChange={e => setBookStatus(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent">
+                        <option value="Destacado">Destacado</option>
+                        <option value="Novedad">Novedad</option>
+                        <option value="Preventa">Preventa</option>
+                        <option value="Lanzamiento">Lanzamiento</option>
+                      </select>
+                    </div>
                   </div>
 
-                  <div className="w-20 h-28 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-lg flex flex-col items-center justify-center overflow-hidden shrink-0 relative group">
-                    {b.cover_url ? <img src={b.cover_url.startsWith('mock://') ? `https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=100&auto=format&fit=crop&q=60` : b.cover_url} className="w-full h-full object-cover" /> : <BookOpen className="w-7 h-7 text-slate-350" />}
-                    <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[9px] font-bold cursor-pointer">
-                      <Upload className="w-4 h-4 mb-1" />
-                      <span>Subir foto</span>
-                      <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadCover(e, b.id)} className="hidden" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Origen del libro</label>
+                      <select value={bookOrigin} onChange={e => setBookOrigin(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent">
+                        <option value="published_by_noveli">Publicados por Noveli</option>
+                        <option value="author_purchase">Compra con el autor</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Tipo de compra</label>
+                      <select value={bookPurchaseType} onChange={e => setBookPurchaseType(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent">
+                        <option value="noveli">Noveli</option>
+                        <option value="external_author">Autor Externo</option>
+                        <option value="no_purchase">Sin Compra</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Link Compra Noveli</label>
+                    <input type="url" value={bookNoveliPurchaseLink} onChange={e => setBookNoveliPurchaseLink(e.target.value)} placeholder="https://..." className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Link Compra con Autor</label>
+                    <input type="url" value={bookAuthorPurchaseLink} onChange={e => setBookAuthorPurchaseLink(e.target.value)} placeholder="https://..." className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Portada URL</label>
+                    <div className="flex gap-2">
+                      <input type="text" value={bookCoverUrl} onChange={e => setBookCoverUrl(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono" />
+                      <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Subir</span>
+                        <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadCover(e)} className="hidden" />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Categorías Asignadas</label>
+                    <div className="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl p-3 space-y-2">
+                      {categories.filter(c => c.active).length === 0 ? (
+                        <span className="text-slate-450 italic">No hay categorías activas</span>
+                      ) : (
+                        categories.filter(c => c.active).map(cat => (
+                          <label key={cat.id} className="flex items-center space-x-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={bookSelectedCategories.includes(cat.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setBookSelectedCategories([...bookSelectedCategories, cat.id]);
+                                } else {
+                                  setBookSelectedCategories(bookSelectedCategories.filter(id => id !== cat.id));
+                                }
+                              }}
+                              className="rounded text-amber-500 h-3.5 w-3.5 focus:ring-amber-500 cursor-pointer"
+                            />
+                            <span className="text-slate-700 dark:text-slate-300 text-[11px]">
+                              {cat.name} <span className="text-[8px] font-bold uppercase px-1 py-0.2 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded ml-1">{cat.type === 'main' ? 'Principal' : cat.type === 'genre' ? 'Género' : 'Colección'}</span>
+                            </span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Reseña</label>
+                    <textarea value={bookShortDesc} onChange={e => setBookShortDesc(e.target.value)} rows={3} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Plataforma de Venta (Secundario)</label>
+                      <select value={bookSalePlatform} onChange={e => setBookSalePlatform(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent">
+                        <option value="Amazon">Amazon</option>
+                        <option value="Buscalibre">Buscalibre</option>
+                        <option value="Wattpad">Wattpad</option>
+                        <option value="Página del autor">Página del autor</option>
+                        <option value="Otro">Otro</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-slate-400 font-bold block">Enlace de Compra (Secundario)</label>
+                      <input type="url" value={bookSaleUrl} onChange={e => setBookSaleUrl(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 py-1">
+                    <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
+                      <input type="checkbox" checked={bookFeatured} onChange={e => setBookFeatured(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
+                      <span>Destacado</span>
+                    </label>
+                    <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
+                      <input type="checkbox" checked={bookVisible} onChange={e => setBookVisible(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
+                      <span>Visible en Web</span>
+                    </label>
+                    <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
+                      <input type="checkbox" checked={bookNovelty} onChange={e => setBookNovelty(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
+                      <span>Novedad</span>
+                    </label>
+                    <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
+                      <input type="checkbox" checked={bookUpcoming} onChange={e => setBookUpcoming(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
+                      <span>Próximamente</span>
                     </label>
                   </div>
 
-                  <div className="flex-1 space-y-2">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">{b.title}</h4>
-                        <p className="text-xs text-slate-400 mt-0.5">Autor: {b.author} • Género: {b.genre} • <span className="text-purple-600 dark:text-purple-400 font-bold uppercase text-[9px] bg-purple-50 dark:bg-purple-950/20 px-1.5 py-0.5 rounded">{b.status || 'Destacado'}</span></p>
-                      </div>
-
-                      <div className="flex items-center space-x-1 shrink-0">
-                        {/* Destacado */}
-                        <button type="button" onClick={() => toggleBookBool(b, 'featured')} className="p-1 hover:bg-slate-100 rounded border-none bg-transparent cursor-pointer">
-                          <Star className={`w-4 h-4 ${b.featured ? 'text-amber-500 fill-amber-500' : 'text-slate-350'}`} />
-                        </button>
-                        {/* En Web / visible_on_website */}
-                        <button type="button" onClick={() => toggleBookBool(b, 'visible_on_website')} className="p-1 hover:bg-slate-100 rounded border-none bg-transparent cursor-pointer">
-                          {b.visible_on_website !== false ? <Eye className="w-4 h-4 text-emerald-600" /> : <EyeOff className="w-4 h-4 text-slate-350" />}
-                        </button>
-                        
-                        <button onClick={() => startEditBook(b)} className="p-1 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-4 h-4" /></button>
-                        <button onClick={() => handleDeleteBook(b.id)} className="p-1 hover:bg-rose-50 text-slate-400 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-4 h-4" /></button>
-                      </div>
-                    </div>
-                    {b.short_description && <p className="text-xs text-slate-500 italic">"{b.short_description}"</p>}
-                    {b.sale_url && (
-                      <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
-                        <ShoppingBag className="w-3.5 h-3.5" />
-                        <span>Enlace: {b.sale_platform} ➔ </span>
-                        <a href={b.sale_url} target="_blank" rel="noopener noreferrer" className="hover:underline truncate max-w-[200px] font-mono">{b.sale_url}</a>
-                      </p>
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={isReadOnly} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1 border border-transparent">
+                      <Plus className="w-4 h-4" />
+                      <span>Guardar Libro</span>
+                    </button>
+                    {editingBook && (
+                      <button type="button" onClick={resetBookForm} className="px-4 py-2.5 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-250 rounded-xl font-bold">
+                        Cancelar
+                      </button>
                     )}
                   </div>
-                </div>
-              ))}
+                </form>
+              </div>
             </div>
+          )}
 
-            {/* Form */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4 h-fit">
-              <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">{editingBook ? 'Editar Libro' : 'Destacar Libro'}</h3>
-              <form onSubmit={handleSaveBook} className="space-y-4 text-xs">
-                <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Título</label>
-                  <input type="text" required value={bookTitle} onChange={e => setBookTitle(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Autor</label>
-                  <input type="text" required value={bookAuthor} onChange={e => setBookAuthor(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+          {booksTab === 'categorias' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Categorías List */}
+              <div className="lg:col-span-2 space-y-4">
+                {categories.map((c, idx) => (
+                  <div key={c.id || idx} className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-5 shadow-2xs flex gap-4 relative justify-between items-center animate-fade-in">
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col justify-center items-center gap-1 border-r border-slate-50 dark:border-slate-800 pr-3 shrink-0">
+                        <button type="button" disabled={idx === 0 || isReadOnly} onClick={() => moveCategoryOrder(idx, -1)} className="text-slate-350 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowUp className="w-4 h-4" /></button>
+                        <span className="text-[10px] font-bold text-slate-400">{c.display_order || idx + 1}</span>
+                        <button type="button" disabled={idx === categories.length - 1 || isReadOnly} onClick={() => moveCategoryOrder(idx, 1)} className="text-slate-350 hover:text-amber-500 disabled:opacity-30 cursor-pointer bg-transparent border-none p-0"><ArrowDown className="w-4 h-4" /></button>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-sm text-slate-855 dark:text-slate-100">{c.name}</h4>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                            c.type === 'main' ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400' :
+                            c.type === 'genre' ? 'bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400' :
+                            'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400'
+                          }`}>
+                            {c.type === 'main' ? 'Principal' : c.type === 'genre' ? 'Género' : 'Colección'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5 font-mono">Slug: {c.slug}</p>
+                        {c.description && <p className="text-xs text-slate-500 mt-1 italic">"{c.description}"</p>}
+                        {c.parent_id && (
+                          <p className="text-[10px] text-slate-455 mt-1 font-semibold">
+                            Padre: {categories.find(parent => parent.id === c.parent_id)?.name || 'Desconocido'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-1 shrink-0">
+                      {/* Active Toggle */}
+                      <button type="button" onClick={() => toggleCategoryBool(c, 'active')} className="p-1 hover:bg-slate-100 rounded border-none bg-transparent cursor-pointer">
+                        {c.active !== false ? <Eye className="w-4 h-4 text-emerald-600" /> : <EyeOff className="w-4 h-4 text-slate-350" />}
+                      </button>
+                      <button onClick={() => startEditCategory(c)} className="p-1 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-4 h-4" /></button>
+                      <button 
+                        onClick={() => handleDeleteCategory(c)} 
+                        disabled={c.type === 'main' && (c.slug === 'publicados-por-noveli' || c.slug === 'compra-con-el-autor')}
+                        className="p-1 hover:bg-rose-50 text-slate-400 disabled:opacity-30 rounded border-none bg-transparent cursor-pointer inline-flex items-center"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {categories.length === 0 && (
+                  <div className="text-center py-10 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                    <BookOpen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm text-slate-550">No hay categorías registradas.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Categorías Form */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs space-y-4 h-fit">
+                <h3 className="font-bold text-slate-855 dark:text-slate-100 text-sm">{editingCategory ? 'Editar Categoría' : 'Nueva Categoría'}</h3>
+                <form onSubmit={handleSaveCategory} className="space-y-4 text-xs">
                   <div className="space-y-1.5">
-                    <label className="text-slate-400 font-bold block">Género</label>
-                    <input type="text" value={bookGenre} onChange={e => setBookGenre(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
+                    <label className="text-slate-400 font-bold block">Nombre</label>
+                    <input 
+                      type="text" 
+                      required 
+                      value={categoryName} 
+                      onChange={e => {
+                        setCategoryName(e.target.value);
+                        if (!editingCategory) {
+                          setCategorySlug(generateSlug(e.target.value));
+                        }
+                      }} 
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" 
+                    />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-slate-400 font-bold block">Estado/Etiqueta</label>
-                    <select value={bookStatus} onChange={e => setBookStatus(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent">
-                      <option value="Destacado">Destacado</option>
-                      <option value="Novedad">Novedad</option>
-                      <option value="Preventa">Preventa</option>
-                      <option value="Lanzamiento">Lanzamiento</option>
+                    <label className="text-slate-400 font-bold block">Slug (automático)</label>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={categorySlug} 
+                      className="w-full px-3 py-2 border border-slate-150 dark:border-slate-855 bg-slate-50 dark:bg-slate-950/40 rounded-xl text-slate-500 font-mono" 
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Tipo</label>
+                    <select 
+                      value={categoryType} 
+                      onChange={e => setCategoryType(e.target.value)} 
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    >
+                      <option value="genre">Género</option>
+                      <option value="collection">Colección</option>
+                      <option value="main">Principal (Main)</option>
                     </select>
                   </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Portada URL</label>
-                  <div className="flex gap-2">
-                    <input type="text" value={bookCoverUrl} onChange={e => setBookCoverUrl(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono" />
-                    <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Subir</span>
-                      <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadCover(e)} className="hidden" />
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Categoría Padre (opcional)</label>
+                    <select 
+                      value={categoryParentId} 
+                      onChange={e => setCategoryParentId(e.target.value)} 
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    >
+                      <option value="">Ninguna</option>
+                      {categories.filter(c => c.type === 'main' && c.id !== editingCategory?.id).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Descripción</label>
+                    <textarea 
+                      value={categoryDescription} 
+                      onChange={e => setCategoryDescription(e.target.value)} 
+                      rows={3} 
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" 
+                    />
+                  </div>
+                  <div className="flex gap-4 py-1">
+                    <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
+                      <input type="checkbox" checked={categoryActive} onChange={e => setCategoryActive(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
+                      <span>Activa / Visible</span>
                     </label>
                   </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Reseña</label>
-                  <textarea value={bookShortDesc} onChange={e => setBookShortDesc(e.target.value)} rows={3} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-slate-400 font-bold block">Plataforma de Venta</label>
-                    <select value={bookSalePlatform} onChange={e => setBookSalePlatform(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent">
-                      <option value="Amazon">Amazon</option>
-                      <option value="Buscalibre">Buscalibre</option>
-                      <option value="Wattpad">Wattpad</option>
-                      <option value="Página del autor">Página del autor</option>
-                      <option value="Otro">Otro</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-slate-400 font-bold block">Enlace de Compra</label>
-                    <input type="url" value={bookSaleUrl} onChange={e => setBookSaleUrl(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent" />
-                  </div>
-                </div>
 
-                <div className="flex gap-4 py-1">
-                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
-                    <input type="checkbox" checked={bookFeatured} onChange={e => setBookFeatured(e.target.checked)} className="rounded text-purple-550 h-4 w-4" />
-                    <span>Destacado</span>
-                  </label>
-                  <label className="flex items-center space-x-1.5 font-bold cursor-pointer select-none">
-                    <input type="checkbox" checked={bookVisible} onChange={e => setBookVisible(e.target.checked)} className="rounded text-purple-550 h-4 w-4" />
-                    <span>Visible en Web</span>
-                  </label>
-                </div>
-
-                <button type="submit" disabled={isReadOnly} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1 border border-transparent">
-                  <Plus className="w-4 h-4" />
-                  <span>Guardar Libro</span>
-                </button>
-              </form>
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={isReadOnly} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center gap-1 border border-transparent">
+                      <Plus className="w-4 h-4" />
+                      <span>Guardar</span>
+                    </button>
+                    {editingCategory && (
+                      <button type="button" onClick={resetCategoryForm} className="px-4 py-2.5 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-250 rounded-xl font-bold">
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 

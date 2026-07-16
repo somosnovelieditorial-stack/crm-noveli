@@ -108,6 +108,7 @@ const menuGroups = [
     icon: <Globe className="w-4 h-4" />,
     items: [
       { id: 'website', label: 'Gestión Web', tab: 'website' },
+      { id: 'website-libros', label: 'Catálogo Web', tab: 'website-libros' },
       { id: 'website-solicitudes', label: 'Solicitudes Web', tab: 'website-solicitudes' }
     ]
   },
@@ -1028,7 +1029,7 @@ export default function App() {
     { id: 'reserve', label: 'Reserva operacional', icon: <Wallet className="w-4.5 h-4.5" /> },
     { id: 'website', label: 'Sitio Web', icon: <Globe className="w-4.5 h-4.5" /> },
     { id: 'website-servicios', label: 'Servicios Web', icon: <Globe className="w-4.5 h-4.5" /> },
-    { id: 'website-libros', label: 'Libros Web', icon: <Globe className="w-4.5 h-4.5" /> },
+    { id: 'website-libros', label: 'Catálogo Web', icon: <Globe className="w-4.5 h-4.5" /> },
     { id: 'website-configuracion', label: 'Configuración Web', icon: <Globe className="w-4.5 h-4.5" /> },
     { id: 'website-enlaces', label: 'Enlaces Web', icon: <Globe className="w-4.5 h-4.5" /> },
     { id: 'website-secciones', label: 'Secciones Web', icon: <Globe className="w-4.5 h-4.5" /> },
