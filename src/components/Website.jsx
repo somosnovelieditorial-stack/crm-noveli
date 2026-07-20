@@ -1049,10 +1049,25 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         loadMockSettings();
         return;
       }
-      const { data, error } = await supabase
+      // Fetch the active setting row for the current organization
+      let { data, error } = await supabase
         .from('website_settings')
         .select('*')
+        .eq('organization_id', getOrgId())
+        .eq('active', true)
         .limit(1);
+
+      if (!error && (!data || data.length === 0)) {
+        // Fallback: Fetch any row for the organization
+        const { data: anyData, error: anyError } = await supabase
+          .from('website_settings')
+          .select('*')
+          .eq('organization_id', getOrgId())
+          .limit(1);
+        if (!anyError && anyData && anyData.length > 0) {
+          data = anyData;
+        }
+      }
 
       if (error) {
         console.warn("Table website_settings query failed, using local fallback settings:", error.message);
@@ -1130,12 +1145,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     try {
       const payload = {
         organization_id: getOrgId(),
-        brand_name: identityBrandName,
-        brand_subtitle: identityBrandSubtitle,
-        logo_url: identityLogoUrl,
-        logo_dark_url: identityLogoDarkUrl,
-        logo_light_url: identityLogoLightUrl,
-        favicon_url: identityFaviconUrl,
+        brand_name: identityBrandName || null,
+        brand_subtitle: identityBrandSubtitle || null,
+        logo_url: identityLogoUrl || null,
+        logo_dark_url: identityLogoDarkUrl || null,
+        logo_light_url: identityLogoLightUrl || null,
+        favicon_url: identityFaviconUrl || null,
         active: identityActive,
         updated_at: new Date().toISOString()
       };
@@ -1143,20 +1158,60 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
       if (isMock || usingMockDb) {
         localStorage.setItem('somos_noveli_website_settings_cms', JSON.stringify({ id: identityConfigId || 'mock-id', ...payload }));
       } else {
-        if (identityConfigId) {
+        // Enforce Rules 6, 7 & 8: check for existing active or any settings row first
+        let activeRecordId = identityConfigId;
+        if (!activeRecordId) {
+          const { data: activeRows, error: activeErr } = await supabase
+            .from('website_settings')
+            .select('id')
+            .eq('organization_id', getOrgId())
+            .eq('active', true)
+            .limit(1);
+
+          if (!activeErr && activeRows && activeRows.length > 0) {
+            activeRecordId = activeRows[0].id;
+          } else {
+            // Check for any record at all to update instead of inserting a new one
+            const { data: anyRows, error: anyErr } = await supabase
+              .from('website_settings')
+              .select('id')
+              .eq('organization_id', getOrgId())
+              .limit(1);
+            if (!anyErr && anyRows && anyRows.length > 0) {
+              activeRecordId = anyRows[0].id;
+            }
+          }
+        }
+
+        if (activeRecordId) {
           const { error } = await supabase
             .from('website_settings')
             .update(payload)
-            .eq('id', identityConfigId);
+            .eq('id', activeRecordId);
           if (error) throw error;
+          setIdentityConfigId(activeRecordId);
+          setConfigId(activeRecordId);
         } else {
-          const { data, error } = await supabase
+          const { data: inserted, error } = await supabase
             .from('website_settings')
             .insert([payload])
             .select();
           if (error) throw error;
-          if (data && data.length > 0) {
-            setIdentityConfigId(data[0].id);
+          if (inserted && inserted.length > 0) {
+            setIdentityConfigId(inserted[0].id);
+            setConfigId(inserted[0].id);
+          }
+        }
+
+        // Rule 6: Maintain only one active = true record per organization_id
+        if (identityActive) {
+          const currentId = identityConfigId || activeRecordId || configId;
+          if (currentId) {
+            await supabase
+              .from('website_settings')
+              .update({ active: false })
+              .eq('organization_id', getOrgId())
+              .neq('id', currentId);
           }
         }
       }
