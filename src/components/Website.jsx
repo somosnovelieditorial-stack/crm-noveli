@@ -5126,31 +5126,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
 
                 {/* Logo Fondo Claro */}
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Logo para Fondo Claro (logo_light_url)</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="https://..."
-                      value={identityLogoLightUrl}
-                      onChange={e => setIdentityLogoLightUrl(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
-                    />
-                    <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Subir</span>
-                      <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadIdentityFile(e, 'light')} className="hidden" />
-                    </label>
-                  </div>
-                  {identityLogoLightUrl && (
-                    <div className="w-24 h-12 bg-white rounded-xl border border-slate-200 overflow-hidden mt-1 flex items-center justify-center p-2">
-                      <img src={identityLogoLightUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=60' : identityLogoLightUrl} className="max-w-full max-h-full object-contain" alt="Preview Logo Fondo Claro" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Logo Fondo Oscuro */}
-                <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Logo para Fondo Oscuro (logo_dark_url)</label>
+                  <label className="text-slate-400 font-bold block">Logo para Fondo Claro (logo_dark_url)</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -5166,8 +5142,32 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                     </label>
                   </div>
                   {identityLogoDarkUrl && (
+                    <div className="w-24 h-12 bg-white rounded-xl border border-slate-200 overflow-hidden mt-1 flex items-center justify-center p-2">
+                      <img src={identityLogoDarkUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=60' : identityLogoDarkUrl} className="max-w-full max-h-full object-contain" alt="Preview Logo Fondo Claro" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Logo Fondo Oscuro */}
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Logo para Fondo Oscuro (logo_light_url)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={identityLogoLightUrl}
+                      onChange={e => setIdentityLogoLightUrl(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent font-mono"
+                    />
+                    <label className="px-3 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 rounded-xl border cursor-pointer text-xs font-bold shrink-0 flex items-center gap-1">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Subir</span>
+                      <input type="file" accept="image/*" disabled={isReadOnly} onChange={(e) => handleUploadIdentityFile(e, 'light')} className="hidden" />
+                    </label>
+                  </div>
+                  {identityLogoLightUrl && (
                     <div className="w-24 h-12 bg-slate-950 rounded-xl border border-slate-850 overflow-hidden mt-1 flex items-center justify-center p-2">
-                      <img src={identityLogoDarkUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=60' : identityLogoDarkUrl} className="max-w-full max-h-full object-contain" alt="Preview Logo Fondo Oscuro" />
+                      <img src={identityLogoLightUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=60' : identityLogoLightUrl} className="max-w-full max-h-full object-contain" alt="Preview Logo Fondo Oscuro" />
                     </div>
                   )}
                 </div>
@@ -5225,9 +5225,9 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">Cabecera en Fondo Claro</span>
                   <div className="p-4 bg-[#F6EFE3] rounded-xl border border-amber-100 flex items-center justify-between text-slate-900 font-sans shadow-xs">
                     <div className="flex items-center gap-1.5">
-                      {identityLogoLightUrl || identityLogoUrl ? (
+                      {identityLogoDarkUrl || identityLogoUrl ? (
                         <img 
-                          src={identityLogoLightUrl || identityLogoUrl} 
+                          src={identityLogoDarkUrl || identityLogoUrl} 
                           className="h-5 max-w-[80px] object-contain" 
                           alt="Logo claro preview" 
                         />
@@ -5251,9 +5251,9 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">Cabecera/Pie en Fondo Oscuro</span>
                   <div className="p-4 bg-[#17352F] rounded-xl border border-slate-850 flex items-center justify-between text-white font-sans shadow-xs">
                     <div className="flex items-center gap-1.5">
-                      {identityLogoDarkUrl || identityLogoUrl ? (
+                      {identityLogoLightUrl || identityLogoUrl ? (
                         <img 
-                          src={identityLogoDarkUrl || identityLogoUrl} 
+                          src={identityLogoLightUrl || identityLogoUrl} 
                           className="h-5 max-w-[80px] object-contain" 
                           alt="Logo oscuro preview" 
                         />
