@@ -1072,6 +1072,10 @@ CREATE TABLE IF NOT EXISTS website_settings (
     hero_subtitle TEXT DEFAULT 'Tu historia merece ser contada',
     logo_url TEXT,
     favicon_url TEXT,
+    logo_header_height INTEGER DEFAULT 42,
+    logo_footer_height INTEGER DEFAULT 46,
+    logo_menu_height INTEGER DEFAULT 42,
+    logo_mobile_height INTEGER DEFAULT 32,
     active BOOLEAN DEFAULT TRUE,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { supabase, isMock, getValidOrgId, subscribeToOrganizationChanges } from './supabaseClient';
 
 // Original Components
@@ -29,6 +29,7 @@ import Staff from './components/Staff';
 import Website from './components/Website';
 import CRMAudit from './components/CRMAudit';
 import UsersPermissions from './components/UsersPermissions';
+import useWebsiteLeadNotifications, { isNewWebsiteLead } from './hooks/useWebsiteLeadNotifications';
 
 // Permission Helper
 import { hasPermission, formatCurrency, canAccessModule, canPerformAction } from './utils';
@@ -472,10 +473,57 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const newLeadsCount = notifications.filter(n => n.type === 'solicitud_web').length;
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [websiteLeadsInitialFilter, setWebsiteLeadsInitialFilter] = useState('todos');
 
   const userRef = useRef(null);
+
+  const goToWebsiteLeads = useCallback((filter = 'nuevo') => {
+    setWebsiteLeadsInitialFilter(filter);
+    setActiveTab('website-solicitudes');
+    setIsNotifOpen(false);
+  }, []);
+
+  const handleNewWebsiteLeadToast = useCallback((lead) => {
+    setRealtimeToast({
+      message: `Nueva solicitud web de ${lead.name || 'un autor'}`,
+      table: 'website_leads',
+      type: 'INSERT',
+      lead
+    });
+
+    setTimeout(() => {
+      setRealtimeToast(prev => {
+        if (prev && prev.table === 'website_leads' && prev.type === 'INSERT' && prev.lead?.id === lead.id) {
+          return null;
+        }
+        return prev;
+      });
+    }, 7000);
+  }, []);
+
+  const {
+    newWebsiteLeadsCount,
+    recentNewWebsiteLeads,
+    refreshWebsiteLeadNotifications
+  } = useWebsiteLeadNotifications(user ? organizationId : null, {
+    realtime: true,
+    onNewLead: handleNewWebsiteLeadToast
+  });
+
+  const newLeadsCount = newWebsiteLeadsCount;
+  const notificationItems = useMemo(() => {
+    const webNotifications = recentNewWebsiteLeads.map((lead) => ({
+      id: `notif-web-lead-${lead.id}`,
+      type: 'solicitud_web',
+      title: 'Nueva solicitud web',
+      desc: `${lead.name || 'Sin nombre'} • ${lead.service_of_interest || 'General'} • ${lead.created_at ? new Date(lead.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'S/F'}`,
+      tab: 'website-solicitudes',
+      severity: 'high',
+      lead
+    }));
+    return [...webNotifications, ...notifications.filter((notification) => notification.type !== 'solicitud_web')];
+  }, [notifications, recentNewWebsiteLeads]);
 
   const [expandedGroups, setExpandedGroups] = useState(() => {
     try {
@@ -692,10 +740,16 @@ export default function App() {
         website_settings: 'Configuración Web',
         website_services: 'Servicios Web',
         website_books: 'Libros Web',
-        website_sections: 'Secciones Web'
+        website_sections: 'Secciones Web',
+        website_leads: 'Solicitudes Web'
       };
 
       const tableName = tableNamesMap[payload.table] || payload.table;
+
+      if (payload.table === 'website_leads') {
+        refreshWebsiteLeadNotifications();
+        return;
+      }
       
       setRealtimeToast({
         message: `Datos de ${tableName} actualizados`,
@@ -963,10 +1017,7 @@ export default function App() {
     // 6. Solicitudes Web Nuevas
     if (db.website_leads) {
       db.website_leads.forEach(lead => {
-        if (lead.status === 'nuevo') {
-          if (lead.is_test === true || lead.is_test === 'true' || lead.is_test === 1 || lead.is_test === '1') {
-            return;
-          }
+        if (isNewWebsiteLead(lead) && (!lead.organization_id || lead.organization_id === organizationId)) {
           list.push({
             id: `notif-web-lead-${lead.id}`,
             type: 'solicitud_web',
@@ -1067,7 +1118,7 @@ export default function App() {
 
     const getComponent = () => {
       switch (activeTab) {
-        case 'dashboard': return <Dashboard {...commonProps} onChangeTab={setActiveTab} />;
+        case 'dashboard': return <Dashboard {...commonProps} onChangeTab={(tab) => tab === 'website-solicitudes' ? goToWebsiteLeads('nuevo') : setActiveTab(tab)} />;
         case 'quotations': return <CommercialProposals {...commonProps} />;
         case 'clients': return <Clients {...commonProps} />;
         case 'prospects': return <Prospects {...commonProps} />;
@@ -1081,16 +1132,16 @@ export default function App() {
         case 'providers': return <Providers {...commonProps} />;
         case 'staff': return <Staff {...commonProps} defaultSubTab="members" />;
         case 'reserve': return <Staff {...commonProps} defaultSubTab="reserve" />;
-        case 'website': return <Website {...commonProps} initialPath="dashboard" onChangePath={handleWebsitePathChange} />;
-        case 'website-servicios': return <Website {...commonProps} initialPath="servicios" onChangePath={handleWebsitePathChange} />;
-        case 'website-libros': return <Website {...commonProps} initialPath="libros" onChangePath={handleWebsitePathChange} />;
-        case 'website-configuracion': return <Website {...commonProps} initialPath="configuracion" onChangePath={handleWebsitePathChange} />;
-        case 'website-enlaces': return <Website {...commonProps} initialPath="enlaces" onChangePath={handleWebsitePathChange} />;
-        case 'website-secciones': return <Website {...commonProps} initialPath="secciones" onChangePath={handleWebsitePathChange} />;
-        case 'website-footer': return <Website {...commonProps} initialPath="footer" onChangePath={handleWebsitePathChange} />;
-        case 'website-hero': return <Website {...commonProps} initialPath="hero" onChangePath={handleWebsitePathChange} />;
-        case 'website-identidad': return <Website {...commonProps} initialPath="identidad" onChangePath={handleWebsitePathChange} />;
-        case 'website-solicitudes': return <Website {...commonProps} initialPath="solicitudes" onChangePath={handleWebsitePathChange} />;
+        case 'website': return <Website {...commonProps} initialPath="dashboard" initialLeadsFilter={websiteLeadsInitialFilter} onChangePath={handleWebsitePathChange} onWebsiteLeadNotificationsRefresh={refreshWebsiteLeadNotifications} />;
+        case 'website-servicios': return <Website {...commonProps} initialPath="servicios" initialLeadsFilter={websiteLeadsInitialFilter} onChangePath={handleWebsitePathChange} onWebsiteLeadNotificationsRefresh={refreshWebsiteLeadNotifications} />;
+        case 'website-libros': return <Website {...commonProps} initialPath="libros" initialLeadsFilter={websiteLeadsInitialFilter} onChangePath={handleWebsitePathChange} onWebsiteLeadNotificationsRefresh={refreshWebsiteLeadNotifications} />;
+        case 'website-configuracion': return <Website {...commonProps} initialPath="configuracion" initialLeadsFilter={websiteLeadsInitialFilter} onChangePath={handleWebsitePathChange} onWebsiteLeadNotificationsRefresh={refreshWebsiteLeadNotifications} />;
+        case 'website-enlaces': return <Website {...commonProps} initialPath="enlaces" initialLeadsFilter={websiteLeadsInitialFilter} onChangePath={handleWebsitePathChange} onWebsiteLeadNotificationsRefresh={refreshWebsiteLeadNotifications} />;
+        case 'website-secciones': return <Website {...commonProps} initialPath="secciones" initialLeadsFilter={websiteLeadsInitialFilter} onChangePath={handleWebsitePathChange} onWebsiteLeadNotificationsRefresh={refreshWebsiteLeadNotifications} />;
+        case 'website-footer': return <Website {...commonProps} initialPath="footer" initialLeadsFilter={websiteLeadsInitialFilter} onChangePath={handleWebsitePathChange} onWebsiteLeadNotificationsRefresh={refreshWebsiteLeadNotifications} />;
+        case 'website-hero': return <Website {...commonProps} initialPath="hero" initialLeadsFilter={websiteLeadsInitialFilter} onChangePath={handleWebsitePathChange} onWebsiteLeadNotificationsRefresh={refreshWebsiteLeadNotifications} />;
+        case 'website-identidad': return <Website {...commonProps} initialPath="identidad" initialLeadsFilter={websiteLeadsInitialFilter} onChangePath={handleWebsitePathChange} onWebsiteLeadNotificationsRefresh={refreshWebsiteLeadNotifications} />;
+        case 'website-solicitudes': return <Website {...commonProps} initialPath="solicitudes" initialLeadsFilter={websiteLeadsInitialFilter} onChangePath={handleWebsitePathChange} onWebsiteLeadNotificationsRefresh={refreshWebsiteLeadNotifications} />;
         case 'documents': return <Documents {...commonProps} />;
         case 'taxes': return <Taxes {...commonProps} />;
         case 'reports': return <Reports {...commonProps} />;
@@ -1118,19 +1169,71 @@ export default function App() {
         }
         case 'notifications': return (
           <div className="space-y-6 animate-fade-in text-slate-800 dark:text-slate-100">
+            <div className={`p-5 rounded-2xl border shadow-sm ${
+              newWebsiteLeadsCount > 0
+                ? 'bg-[#FFF7D6] dark:bg-amber-950/20 border-amber-300 dark:border-amber-900'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+            }`}>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <span className={`p-2 rounded-xl shrink-0 ${newWebsiteLeadsCount > 0 ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+                    <Bell className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h3 className="font-extrabold text-slate-850 dark:text-slate-100">Solicitudes web pendientes</h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                      {newWebsiteLeadsCount > 0 ? `Tienes ${newWebsiteLeadsCount} solicitudes web pendientes de revisar.` : 'No hay solicitudes web nuevas pendientes.'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => goToWebsiteLeads('nuevo')}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  Ver solicitudes
+                </button>
+              </div>
+
+              {recentNewWebsiteLeads.length > 0 && (
+                <div className="mt-4 divide-y divide-amber-200/70 dark:divide-amber-900/40">
+                  {recentNewWebsiteLeads.slice(0, 8).map((lead) => (
+                    <div key={lead.id} className="py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-extrabold text-slate-850 dark:text-slate-100">{lead.name || 'Sin nombre'}</span>
+                          <span className="text-slate-500 dark:text-slate-400">{lead.email || 'Sin email'}</span>
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400">
+                          <span className="px-2 py-0.5 bg-white/70 dark:bg-slate-900/50 border border-amber-200 dark:border-amber-900 rounded-md font-bold text-amber-750 dark:text-amber-400">
+                            {lead.service_of_interest || 'Consulta General'}
+                          </span>
+                          <span>{lead.created_at ? new Date(lead.created_at).toLocaleString('es-CL') : 'S/F'}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => goToWebsiteLeads('nuevo')}
+                        className="px-3 py-1.5 border border-amber-300 dark:border-amber-800 bg-white/80 dark:bg-slate-900 text-amber-800 dark:text-amber-300 rounded-lg text-xs font-bold hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
+                      >
+                        Ver solicitud
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
               <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
                 <Bell className="w-5 h-5 text-brand-500" />
                 Notificaciones y Alertas de Control Interno
               </h2>
               <div className="divide-y divide-slate-150 dark:divide-slate-800 text-sm">
-                {notifications.length === 0 ? (
+                {notificationItems.length === 0 ? (
                   <div className="p-12 text-center text-slate-400 font-semibold flex flex-col items-center gap-2">
                     <CheckCircle className="w-12 h-12 text-emerald-500 shrink-0" />
                     <span>¡Al día! No se registran alertas de plazos o cobros pendientes hoy.</span>
                   </div>
                 ) : (
-                  notifications.map((notif) => (
+                  notificationItems.map((notif) => (
                     <div key={notif.id} className="py-4 flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3">
                         <span className={`p-2 rounded-lg shrink-0 mt-0.5 ${
@@ -1148,7 +1251,7 @@ export default function App() {
                         </div>
                       </div>
                       <button
-                        onClick={() => setActiveTab(notif.tab)}
+                        onClick={() => notif.type === 'solicitud_web' ? goToWebsiteLeads('nuevo') : setActiveTab(notif.tab)}
                         className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-707 dark:text-slate-200 cursor-pointer shadow-xs"
                       >
                         {notif.type === 'solicitud_web' ? 'Ver solicitud' : 'Ir al Módulo'}
@@ -1275,6 +1378,11 @@ export default function App() {
                   >
                     {group.icon}
                     <span className="font-bold">{group.label}</span>
+                    {group.id === 'notifications' && newLeadsCount > 0 && (
+                      <span className="ml-auto px-1.5 py-0.5 text-[9px] font-extrabold bg-amber-500 text-white rounded-full leading-none shrink-0">
+                        {newLeadsCount}
+                      </span>
+                    )}
                   </button>
                 );
               }
@@ -1466,9 +1574,9 @@ export default function App() {
                 }`}
               >
                 <Bell className="w-4.5 h-4.5" />
-                {notifications.length > 0 && (
+                {notificationItems.length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-black rounded-full h-4 w-4 flex items-center justify-center border-2 border-white dark:border-slate-900 animate-pulse">
-                    {notifications.length}
+                    {notificationItems.length}
                   </span>
                 )}
               </button>
@@ -1482,22 +1590,22 @@ export default function App() {
                       Alertas de Control Interno
                     </span>
                     <span className="text-[10px] font-bold bg-rose-50 text-rose-600 dark:bg-rose-955 dark:text-rose-400 px-2 py-0.5 rounded-full">
-                      {notifications.length} alertas
+                      {notificationItems.length} alertas
                     </span>
                   </div>
                   
                   <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-850">
-                    {notifications.length === 0 ? (
+                    {notificationItems.length === 0 ? (
                       <div className="p-6 text-center text-slate-400 text-xs font-semibold flex flex-col items-center gap-2">
                         <CheckCircle className="w-8 h-8 text-emerald-500 shrink-0" />
                         <span>¡Al día! No se registran alertas de plazos o cobros pendientes hoy.</span>
                       </div>
                     ) : (
-                      notifications.map((notif) => (
+                      notificationItems.map((notif) => (
                         <button
                           key={notif.id}
                           onClick={() => {
-                            setActiveTab(notif.tab);
+                            notif.type === 'solicitud_web' ? goToWebsiteLeads('nuevo') : setActiveTab(notif.tab);
                             setIsNotifOpen(false);
                           }}
                           className="w-full text-left p-3.5 hover:bg-slate-50 dark:hover:bg-slate-955 flex items-start gap-3 transition-all text-xs cursor-pointer"
@@ -1561,13 +1669,26 @@ export default function App() {
 
       {/* Realtime Update Toast Notification Indicator */}
       {realtimeToast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3.5 px-4.5 py-3 rounded-2xl bg-slate-900/95 text-white dark:bg-slate-100/95 dark:text-slate-950 border border-slate-800 dark:border-slate-200 shadow-xl backdrop-blur-md transition-all duration-300 select-none">
+        <div className={`${realtimeToast.table === 'website_leads' ? 'fixed top-6 right-6' : 'fixed bottom-6 right-6'} z-50 flex items-center gap-3.5 px-4.5 py-3 rounded-2xl bg-slate-900/95 text-white dark:bg-slate-100/95 dark:text-slate-950 border border-slate-800 dark:border-slate-200 shadow-xl backdrop-blur-md transition-all duration-300 select-none`}>
           <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0 absolute left-4.5 top-[18px]"></div>
           <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
           <div className="flex flex-col gap-0.5 pr-2">
-            <span className="text-xs font-bold font-sans">Datos actualizados</span>
+            <span className="text-xs font-bold font-sans">
+              {realtimeToast.table === 'website_leads' ? 'Nueva solicitud web recibida' : 'Datos actualizados'}
+            </span>
             <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium leading-none">{realtimeToast.message}</span>
           </div>
+          {realtimeToast.table === 'website_leads' && (
+            <button
+              onClick={() => {
+                goToWebsiteLeads('nuevo');
+                setRealtimeToast(null);
+              }}
+              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+            >
+              Ver
+            </button>
+          )}
           <button 
             onClick={() => setRealtimeToast(null)}
             className="text-slate-400 hover:text-white dark:text-slate-500 dark:hover:text-slate-900 transition-colors pl-1 cursor-pointer"

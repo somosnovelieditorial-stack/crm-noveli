@@ -2403,14 +2403,13 @@ export const fetchNewWebsiteLeadsCount = async (organizationId) => {
       .from('website_leads')
       .select('*')
       .eq('organization_id', organizationId)
-      .eq('status', 'nuevo');
+      .in('status', ['nuevo', 'nueva']);
       
     if (error) throw error;
     
-    // Exclude is_test = true
     const realLeads = (data || []).filter(lead => {
-      if (lead.is_test === true || lead.is_test === 'true' || lead.is_test === 1) return false;
-      return true;
+      const isTest = lead.is_test === true || lead.is_test === 'true' || lead.is_test === 1 || lead.is_test === '1';
+      return lead.active !== false && !isTest;
     });
     return realLeads.length;
   } catch (err) {
@@ -2428,4 +2427,3 @@ export const fetchNewWebsiteLeadsCount = async (organizationId) => {
     return 0;
   }
 };
-

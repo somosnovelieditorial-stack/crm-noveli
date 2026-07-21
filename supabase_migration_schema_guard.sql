@@ -86,6 +86,10 @@ ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS test_run_id TEXT;
 -- 16. Alterations for table: website_settings
 ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE;
 ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS test_run_id TEXT;
+ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS logo_header_height INTEGER DEFAULT 42;
+ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS logo_footer_height INTEGER DEFAULT 46;
+ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS logo_menu_height INTEGER DEFAULT 42;
+ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS logo_mobile_height INTEGER DEFAULT 32;
 
 -- 17. Alterations for table: website_services
 ALTER TABLE website_services ADD COLUMN IF NOT EXISTS visible_on_website BOOLEAN DEFAULT TRUE;

@@ -7,6 +7,7 @@ import {
   Upload, Copy, Save, FileText, Settings, AlignLeft, Info, UserCheck, Mail, Phone, Calendar, X
 } from 'lucide-react';
 import { formatCurrency } from '../utils';
+import useWebsiteLeadNotifications, { isNewWebsiteLead, normalizeWebsiteLeadStatus } from '../hooks/useWebsiteLeadNotifications';
 
 const InstagramIcon = ({ className }) => (
   <svg 
@@ -36,7 +37,18 @@ const DEFAULT_SITE_SETTINGS = {
   hero_subtitle: 'Tu historia merece ser contada de la manera más hermosa.',
   logo_url: '',
   favicon_url: '',
-  active: true
+  active: true,
+  logo_header_height: 42,
+  logo_footer_height: 46,
+  logo_menu_height: 42,
+  logo_mobile_height: 32
+};
+
+const DEFAULT_LOGO_HEIGHTS = {
+  logo_header_height: 42,
+  logo_footer_height: 46,
+  logo_menu_height: 42,
+  logo_mobile_height: 32
 };
 
 const DEFAULT_WEB_SERVICES = [
@@ -107,7 +119,7 @@ const DEFAULT_HERO_QUICK_SERVICES = [
   { id: 'hqs-4', label: 'Publicación', icon_name: 'upload', link_url: '#servicios', display_order: 4, active: true }
 ];
 
-export default function Website({ isReadOnly, initialPath = 'dashboard', onChangePath, realtimeTrigger }) {
+export default function Website({ isReadOnly, initialPath = 'dashboard', initialLeadsFilter = 'todos', onChangePath, realtimeTrigger, onWebsiteLeadNotificationsRefresh }) {
   const [currentPath, setCurrentPath] = useState(initialPath);
   const [loading, setLoading] = useState(false);
   const [usingMockDb, setUsingMockDb] = useState(false);
@@ -221,6 +233,10 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   const [identityLogoDarkUrl, setIdentityLogoDarkUrl] = useState('');
   const [identityLogoLightUrl, setIdentityLogoLightUrl] = useState('');
   const [identityFaviconUrl, setIdentityFaviconUrl] = useState('');
+  const [identityLogoHeaderHeight, setIdentityLogoHeaderHeight] = useState(DEFAULT_LOGO_HEIGHTS.logo_header_height);
+  const [identityLogoFooterHeight, setIdentityLogoFooterHeight] = useState(DEFAULT_LOGO_HEIGHTS.logo_footer_height);
+  const [identityLogoMenuHeight, setIdentityLogoMenuHeight] = useState(DEFAULT_LOGO_HEIGHTS.logo_menu_height);
+  const [identityLogoMobileHeight, setIdentityLogoMobileHeight] = useState(DEFAULT_LOGO_HEIGHTS.logo_mobile_height);
   const [identityActive, setIdentityActive] = useState(true);
   const [identityConfigId, setIdentityConfigId] = useState(null);
 
@@ -267,6 +283,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   }, [initialPath]);
 
   useEffect(() => {
+    if (initialPath === 'solicitudes' && initialLeadsFilter) {
+      setLeadsFilter(initialLeadsFilter);
+    }
+  }, [initialPath, initialLeadsFilter]);
+
+  useEffect(() => {
     fetchSettings();
     fetchServices();
     fetchCategories();
@@ -308,7 +330,13 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
     return localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
   };
 
+  const normalizeLogoHeight = (value, fallback) => {
+    const height = Number(value);
+    return Number.isFinite(height) && height > 0 ? height : fallback;
+  };
+
   const organizationId = getOrgId();
+  const { newWebsiteLeadsCount, refreshWebsiteLeadNotifications } = useWebsiteLeadNotifications(organizationId, { realtime: false });
 
   const fetchLeads = async () => {
     try {
@@ -322,6 +350,10 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
       if (error) throw error;
 
       setLeads(Array.isArray(data) ? data : []);
+      refreshWebsiteLeadNotifications();
+      if (onWebsiteLeadNotificationsRefresh) {
+        onWebsiteLeadNotificationsRefresh();
+      }
     } catch (error) {
       console.error('Error cargando solicitudes web:', error);
       setError(error.message || 'Error cargando solicitudes web');
@@ -1095,6 +1127,10 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         setIdentityLogoDarkUrl(row.logo_dark_url || '');
         setIdentityLogoLightUrl(row.logo_light_url || '');
         setIdentityFaviconUrl(row.favicon_url || '');
+        setIdentityLogoHeaderHeight(normalizeLogoHeight(row.logo_header_height, DEFAULT_LOGO_HEIGHTS.logo_header_height));
+        setIdentityLogoFooterHeight(normalizeLogoHeight(row.logo_footer_height, DEFAULT_LOGO_HEIGHTS.logo_footer_height));
+        setIdentityLogoMenuHeight(normalizeLogoHeight(row.logo_menu_height, DEFAULT_LOGO_HEIGHTS.logo_menu_height));
+        setIdentityLogoMobileHeight(normalizeLogoHeight(row.logo_mobile_height, DEFAULT_LOGO_HEIGHTS.logo_mobile_height));
         setIdentityActive(row.active !== false);
       } else {
         await seedDefaultSettings();
@@ -1130,11 +1166,19 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         setIdentityLogoDarkUrl(row.logo_dark_url || '');
         setIdentityLogoLightUrl(row.logo_light_url || '');
         setIdentityFaviconUrl(row.favicon_url || '');
+        setIdentityLogoHeaderHeight(normalizeLogoHeight(row.logo_header_height, DEFAULT_LOGO_HEIGHTS.logo_header_height));
+        setIdentityLogoFooterHeight(normalizeLogoHeight(row.logo_footer_height, DEFAULT_LOGO_HEIGHTS.logo_footer_height));
+        setIdentityLogoMenuHeight(normalizeLogoHeight(row.logo_menu_height, DEFAULT_LOGO_HEIGHTS.logo_menu_height));
+        setIdentityLogoMobileHeight(normalizeLogoHeight(row.logo_mobile_height, DEFAULT_LOGO_HEIGHTS.logo_mobile_height));
         setIdentityActive(row.active !== false);
       } catch (_) {}
     } else {
       setIdentityBrandName('NOVELI');
       setIdentityBrandSubtitle('— EDITORIAL');
+      setIdentityLogoHeaderHeight(DEFAULT_LOGO_HEIGHTS.logo_header_height);
+      setIdentityLogoFooterHeight(DEFAULT_LOGO_HEIGHTS.logo_footer_height);
+      setIdentityLogoMenuHeight(DEFAULT_LOGO_HEIGHTS.logo_menu_height);
+      setIdentityLogoMobileHeight(DEFAULT_LOGO_HEIGHTS.logo_mobile_height);
     }
   };
 
@@ -1151,6 +1195,10 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
         logo_dark_url: identityLogoDarkUrl || null,
         logo_light_url: identityLogoLightUrl || null,
         favicon_url: identityFaviconUrl || null,
+        logo_header_height: normalizeLogoHeight(identityLogoHeaderHeight, DEFAULT_LOGO_HEIGHTS.logo_header_height),
+        logo_footer_height: normalizeLogoHeight(identityLogoFooterHeight, DEFAULT_LOGO_HEIGHTS.logo_footer_height),
+        logo_menu_height: normalizeLogoHeight(identityLogoMenuHeight, DEFAULT_LOGO_HEIGHTS.logo_menu_height),
+        logo_mobile_height: normalizeLogoHeight(identityLogoMobileHeight, DEFAULT_LOGO_HEIGHTS.logo_mobile_height),
         active: identityActive,
         updated_at: new Date().toISOString()
       };
@@ -2557,14 +2605,16 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
   };
 
   const safeLeads = Array.isArray(leads) ? leads : [];
+  const newLeadsCount = newWebsiteLeadsCount || safeLeads.filter(isNewWebsiteLead).length;
+  const isStatus = (lead, statuses) => statuses.includes(normalizeWebsiteLeadStatus(lead?.status));
   const filteredLeads = safeLeads.filter(lead => {
     if (leadsFilter === 'todos') return true;
-    if (leadsFilter === 'nuevo') return lead.status === 'nuevo';
-    if (leadsFilter === 'revisado') return lead.status === 'revisado';
-    if (leadsFilter === 'contactado') return lead.status === 'contactado';
-    if (leadsFilter === 'propuesta') return lead.status === 'propuesta creada';
-    if (leadsFilter === 'prospecto') return lead.status === 'convertido a prospecto';
-    if (leadsFilter === 'descartado') return lead.status === 'descartado';
+    if (leadsFilter === 'nuevo') return isNewWebsiteLead(lead);
+    if (leadsFilter === 'revisado') return isStatus(lead, ['revisado']);
+    if (leadsFilter === 'contactado') return isStatus(lead, ['contactado']);
+    if (leadsFilter === 'propuesta') return isStatus(lead, ['propuesta creada', 'propuesta_creada']);
+    if (leadsFilter === 'prospecto') return isStatus(lead, ['convertido a prospecto', 'convertido']);
+    if (leadsFilter === 'descartado') return isStatus(lead, ['descartado', 'descartar']);
     return true;
   });
 
@@ -2757,7 +2807,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   Revisa y gestiona las solicitudes y cotizaciones enviadas por los autores desde el formulario de contacto web.
                 </p>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
-                  {safeLeads.length} solicitudes registradas ({safeLeads.filter(l => l.status === 'nuevo').length} nuevas)
+                  {safeLeads.length} solicitudes registradas ({newLeadsCount} nuevas)
                 </div>
               </div>
               <button
@@ -3907,12 +3957,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
             <div className="flex flex-wrap gap-2 pb-2 border-b border-slate-100 dark:border-slate-850">
               {[
                 { id: 'todos', label: 'Todos', count: safeLeads.length },
-                { id: 'nuevo', label: 'Nuevos', count: safeLeads.filter(l => l.status === 'nuevo').length, color: 'bg-blue-500' },
-                { id: 'revisado', label: 'Revisados', count: safeLeads.filter(l => l.status === 'revisado').length, color: 'bg-amber-500' },
-                { id: 'contactado', label: 'Contactados', count: safeLeads.filter(l => l.status === 'contactado').length, color: 'bg-purple-500' },
-                { id: 'propuesta', label: 'Propuesta Creada', count: safeLeads.filter(l => l.status === 'propuesta creada').length, color: 'bg-indigo-500' },
-                { id: 'prospecto', label: 'Convertidos', count: safeLeads.filter(l => l.status === 'convertido a prospecto').length, color: 'bg-emerald-500' },
-                { id: 'descartado', label: 'Descartados', count: safeLeads.filter(l => l.status === 'descartado').length, color: 'bg-slate-500' }
+                { id: 'nuevo', label: 'Nuevos', count: newLeadsCount, color: 'bg-blue-500' },
+                { id: 'revisado', label: 'Revisados', count: safeLeads.filter(l => isStatus(l, ['revisado'])).length, color: 'bg-amber-500' },
+                { id: 'contactado', label: 'Contactados', count: safeLeads.filter(l => isStatus(l, ['contactado'])).length, color: 'bg-purple-500' },
+                { id: 'propuesta', label: 'Propuesta Creada', count: safeLeads.filter(l => isStatus(l, ['propuesta creada', 'propuesta_creada'])).length, color: 'bg-indigo-500' },
+                { id: 'prospecto', label: 'Convertidos', count: safeLeads.filter(l => isStatus(l, ['convertido a prospecto', 'convertido'])).length, color: 'bg-emerald-500' },
+                { id: 'descartado', label: 'Descartados', count: safeLeads.filter(l => isStatus(l, ['descartado', 'descartar'])).length, color: 'bg-slate-500' }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -3963,6 +4013,8 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                       {filteredLeads.map((lead) => {
+                        const isNewLead = isNewWebsiteLead(lead);
+                        const leadStatus = normalizeWebsiteLeadStatus(lead.status);
                         const dateStr = lead.created_at
                           ? new Date(lead.created_at).toLocaleDateString('es-CL', {
                               day: '2-digit',
@@ -3974,9 +4026,26 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                           : 'S/F';
 
                         return (
-                          <tr key={lead.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-all duration-200">
+                          <tr
+                            key={lead.id}
+                            className={`transition-all duration-200 ${
+                              isNewLead
+                                ? 'bg-[#FFF7D6] dark:bg-amber-950/20 border-l-4 border-l-[#C7943A] hover:bg-amber-50 dark:hover:bg-amber-950/30 shadow-[inset_0_0_0_1px_rgba(199,148,58,0.12)]'
+                                : 'hover:bg-slate-50/50 dark:hover:bg-slate-950/20 border-l-4 border-l-transparent'
+                            }`}
+                          >
                             <td className="py-3.5 text-slate-500 font-mono text-[10px] whitespace-nowrap">{dateStr}</td>
-                            <td className="py-3.5 font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">{lead.name}</td>
+                            <td className={`py-3.5 text-slate-800 dark:text-slate-100 whitespace-nowrap ${isNewLead ? 'font-extrabold' : 'font-bold'}`}>
+                              <div className="flex items-center gap-2">
+                                {isNewLead && (
+                                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#C7943A]"></span>
+                                  </span>
+                                )}
+                                <span>{lead.name}</span>
+                              </div>
+                            </td>
                             <td className="py-3.5 space-y-1">
                               <div className="flex items-center gap-1 text-slate-600 dark:text-slate-350">
                                 <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -3996,7 +4065,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                               )}
                             </td>
                             <td className="py-3.5">
-                              <span className="px-2.5 py-1 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900 rounded-lg font-bold text-[10px] uppercase tracking-wider">
+                              <span className={`px-2.5 py-1 border rounded-lg text-[10px] uppercase tracking-wider ${isNewLead ? 'bg-white text-amber-850 border-[#C7943A]/50 font-extrabold shadow-xs' : 'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-100 dark:border-amber-900 font-bold'}`}>
                                 {lead.service_of_interest || 'General'}
                               </span>
                             </td>
@@ -4005,19 +4074,19 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                             </td>
                             <td className="py-3.5">
                               <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider whitespace-nowrap ${
-                                lead.status === 'nuevo'
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-955/20 dark:text-blue-400 dark:border-blue-900/50'
-                                  : lead.status === 'revisado'
+                                isNewLead
+                                  ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
+                                  : leadStatus === 'revisado'
                                   ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-955/20 dark:text-amber-400 dark:border-amber-900/50'
-                                  : lead.status === 'contactado'
+                                  : leadStatus === 'contactado'
                                   ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-955/20 dark:text-purple-400 dark:border-purple-900/50'
-                                  : lead.status === 'propuesta creada'
+                                  : ['propuesta creada', 'propuesta_creada'].includes(leadStatus)
                                   ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-955/20 dark:text-indigo-400 dark:border-indigo-900/50'
-                                  : lead.status === 'convertido a prospecto'
+                                  : ['convertido a prospecto', 'convertido'].includes(leadStatus)
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-955/20 dark:text-emerald-450 dark:border-emerald-900/50'
                                   : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                               }`}>
-                                {lead.status || 'nuevo'}
+                                {isNewLead ? 'NUEVO' : (lead.status || 'nuevo')}
                               </span>
                             </td>
                             <td className="py-3.5 text-right">
@@ -4033,7 +4102,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                                   <Eye className="w-4 h-4" />
                                 </button>
                                 
-                                {lead.status === 'nuevo' && (
+                                {isNewLead && (
                                   <button
                                     onClick={() => handleUpdateStatus(lead.id, 'revisado')}
                                     className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-805 rounded-lg text-slate-400 hover:text-amber-600 cursor-pointer transition-colors"
@@ -4043,7 +4112,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                                   </button>
                                 )}
 
-                                {(lead.status === 'nuevo' || lead.status === 'revisado') && (
+                                {(isNewLead || leadStatus === 'revisado') && (
                                   <button
                                     onClick={() => handleUpdateStatus(lead.id, 'contactado')}
                                     className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-805 rounded-lg text-slate-400 hover:text-purple-600 cursor-pointer transition-colors"
@@ -4053,7 +4122,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                                   </button>
                                 )}
 
-                                {!lead.converted_to_proposal && lead.status !== 'descartado' && (
+                                {!lead.converted_to_proposal && !['descartado', 'descartar'].includes(leadStatus) && (
                                   <button
                                     onClick={() => handleCreateQuotation(lead)}
                                     className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-805 rounded-lg text-slate-400 hover:text-indigo-650 cursor-pointer transition-colors"
@@ -4063,7 +4132,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                                   </button>
                                 )}
 
-                                {!lead.converted_to_prospect && lead.status !== 'descartado' && (
+                                {!lead.converted_to_prospect && !['descartado', 'descartar'].includes(leadStatus) && (
                                   <button
                                     onClick={() => handleConvertToProspect(lead)}
                                     className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-805 rounded-lg text-slate-400 hover:text-emerald-650 cursor-pointer transition-colors"
@@ -4073,7 +4142,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                                   </button>
                                 )}
 
-                                {lead.status !== 'descartado' && lead.status !== 'convertido a prospecto' && (
+                                {!['descartado', 'descartar', 'convertido a prospecto', 'convertido'].includes(leadStatus) && (
                                   <button
                                     onClick={() => {
                                       if (window.confirm('¿Confirmas descartar esta solicitud?')) {
@@ -4111,19 +4180,19 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                     ID: {selectedLead.id.slice(0, 8)}...
                   </span>
                   <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border uppercase tracking-wider ${
-                    selectedLead.status === 'nuevo'
-                      ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-955/20 dark:text-blue-400 dark:border-blue-900/50'
-                      : selectedLead.status === 'revisado'
+                    isNewWebsiteLead(selectedLead)
+                      ? 'bg-amber-500 text-white border-amber-600'
+                      : normalizeWebsiteLeadStatus(selectedLead.status) === 'revisado'
                       ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-955/20 dark:text-amber-400 dark:border-amber-900/50'
-                      : selectedLead.status === 'contactado'
+                      : normalizeWebsiteLeadStatus(selectedLead.status) === 'contactado'
                       ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-955/20 dark:text-purple-400 dark:border-purple-900/50'
-                      : selectedLead.status === 'propuesta creada'
+                      : ['propuesta creada', 'propuesta_creada'].includes(normalizeWebsiteLeadStatus(selectedLead.status))
                       ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-955/20 dark:text-indigo-400 dark:border-indigo-900/50'
-                      : selectedLead.status === 'convertido a prospecto'
+                      : ['convertido a prospecto', 'convertido'].includes(normalizeWebsiteLeadStatus(selectedLead.status))
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-955/20 dark:text-emerald-450 dark:border-emerald-900/50'
                       : 'bg-slate-105 text-slate-655 border-slate-205 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                   }`}>
-                    {selectedLead.status}
+                    {isNewWebsiteLead(selectedLead) ? 'NUEVO' : selectedLead.status}
                   </span>
                 </div>
                 <h3 className="text-xl font-bold text-slate-855 dark:text-slate-150 font-serif">{selectedLead.name}</h3>
@@ -4259,7 +4328,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
             {/* Actions Footer */}
             <div className="p-5 border-t border-slate-150 dark:border-slate-805 bg-slate-50 dark:bg-slate-950/25 flex flex-wrap gap-2 justify-between shrink-0">
               <div className="flex gap-2">
-                {selectedLead.status !== 'descartado' && selectedLead.status !== 'convertido a prospecto' && (
+                {!['descartado', 'descartar', 'convertido a prospecto', 'convertido'].includes(normalizeWebsiteLeadStatus(selectedLead.status)) && (
                   <button
                     onClick={() => {
                       if(window.confirm('¿Confirmas descartar esta solicitud?')) {
@@ -4274,7 +4343,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
               </div>
               
               <div className="flex gap-2">
-                {selectedLead.status === 'nuevo' && (
+                {isNewWebsiteLead(selectedLead) && (
                   <button
                     onClick={() => handleUpdateStatus(selectedLead.id, 'revisado')}
                     className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-955/20 dark:text-amber-400 dark:hover:bg-amber-950/40 rounded-xl font-bold transition-all border border-transparent cursor-pointer"
@@ -4283,7 +4352,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   </button>
                 )}
 
-                {(selectedLead.status === 'nuevo' || selectedLead.status === 'revisado') && (
+                {(isNewWebsiteLead(selectedLead) || normalizeWebsiteLeadStatus(selectedLead.status) === 'revisado') && (
                   <button
                     onClick={() => handleUpdateStatus(selectedLead.id, 'contactado')}
                     className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-955/20 dark:text-purple-400 dark:hover:bg-purple-950/40 rounded-xl font-bold transition-all border border-transparent cursor-pointer"
@@ -4292,7 +4361,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   </button>
                 )}
 
-                {!selectedLead.converted_to_proposal && selectedLead.status !== 'descartado' && (
+                {!selectedLead.converted_to_proposal && !['descartado', 'descartar'].includes(normalizeWebsiteLeadStatus(selectedLead.status)) && (
                   <button
                     onClick={() => handleCreateQuotation(selectedLead)}
                     className="px-3.5 py-2 bg-indigo-500 hover:bg-indigo-650 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm hover:shadow transition-all border border-transparent cursor-pointer"
@@ -4302,7 +4371,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                   </button>
                 )}
 
-                {!selectedLead.converted_to_prospect && selectedLead.status !== 'descartado' && (
+                {!selectedLead.converted_to_prospect && !['descartado', 'descartar'].includes(normalizeWebsiteLeadStatus(selectedLead.status)) && (
                   <button
                     onClick={() => handleConvertToProspect(selectedLead)}
                     className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-650 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm hover:shadow transition-all border border-transparent cursor-pointer"
@@ -5249,6 +5318,59 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', onChang
                       <img src={identityFaviconUrl.startsWith('mock://') ? 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=32&auto=format&fit=crop&q=60' : identityFaviconUrl} className="w-full h-full object-contain" alt="Preview Favicon" />
                     </div>
                   )}
+                </div>
+
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 pt-2 pb-2 border-b border-slate-50 dark:border-slate-805">Alturas de Logo</h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Alto logo header (logo_header_height)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      placeholder="42"
+                      value={identityLogoHeaderHeight}
+                      onChange={e => setIdentityLogoHeaderHeight(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Alto logo footer (logo_footer_height)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      placeholder="46"
+                      value={identityLogoFooterHeight}
+                      onChange={e => setIdentityLogoFooterHeight(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Alto logo menu lateral (logo_menu_height)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      placeholder="42"
+                      value={identityLogoMenuHeight}
+                      onChange={e => setIdentityLogoMenuHeight(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-400 font-bold block">Alto logo movil (logo_mobile_height)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      placeholder="32"
+                      value={identityLogoMobileHeight}
+                      onChange={e => setIdentityLogoMobileHeight(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center space-x-1.5 font-bold cursor-pointer select-none py-1">

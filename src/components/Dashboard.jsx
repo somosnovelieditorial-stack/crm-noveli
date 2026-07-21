@@ -3,10 +3,11 @@ import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit, convertToClp, filterByPeriod } from '../utils';
 import PeriodFilter from './PeriodFilter';
 import DashboardDetailDrawer from './DashboardDetailDrawer';
+import useWebsiteLeadNotifications, { isNewWebsiteLead } from '../hooks/useWebsiteLeadNotifications';
 import { 
   TrendingUp, TrendingDown, DollarSign, Percent, X,
   Users, UserCheck, BookOpen, AlertCircle, Calendar,
-  Clock, CheckCircle, Award, Landmark, PiggyBank, FileText, ArrowUpRight, ShieldCheck, ChevronRight
+  Clock, CheckCircle, Award, Landmark, PiggyBank, FileText, ArrowUpRight, ShieldCheck, ChevronRight, Bell
 } from 'lucide-react';
 
 const isTestData = (item) => {
@@ -36,6 +37,10 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
   const [activeTab, setActiveTab] = useState('finanzas'); // 'finanzas' | 'operativa'
   const [selectedDetail, setSelectedDetail] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const {
+    newWebsiteLeadsCount,
+    recentNewWebsiteLeads
+  } = useWebsiteLeadNotifications(organizationId, { realtime: false });
 
   const openDetail = (detail) => {
     setSelectedDetail(detail || null);
@@ -646,7 +651,7 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
 
       // 12. Solicitudes Web Nuevas
       const newLeadsList = (websiteLeads || [])
-        .filter(l => l.status === 'nuevo' && l.is_test !== true && l.is_test !== 'true' && l.is_test !== 1 && l.is_test !== '1')
+        .filter(isNewWebsiteLead)
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       const newWebLeadsCount = newLeadsList.length;
       const latestLead = newLeadsList.length > 0 ? newLeadsList[0] : null;
@@ -1594,6 +1599,46 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
       </div>
 
       {/* Selector de Pestañas y Filtro de Período en la misma fila */}
+      {newWebsiteLeadsCount > 0 && (
+        <div className="bg-[#FFF7D6] dark:bg-amber-950/20 border border-amber-300 dark:border-amber-900 border-l-4 border-l-[#C7943A] rounded-2xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="relative p-2.5 bg-amber-500 text-white rounded-xl shrink-0">
+              <Bell className="w-5 h-5" />
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+              </span>
+            </span>
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 dark:text-amber-300">Solicitudes web nuevas</p>
+              <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-0.5">{newWebsiteLeadsCount}</h2>
+              <p className="text-sm text-slate-700 dark:text-slate-300 font-semibold">
+                Tienes {newWebsiteLeadsCount} solicitudes web pendientes de revisar.
+              </p>
+              {recentNewWebsiteLeads[0] && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Ultima: <span className="font-bold">{recentNewWebsiteLeads[0].name || 'Sin nombre'}</span> - {recentNewWebsiteLeads[0].service_of_interest || 'Consulta General'}
+                </p>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              if (onChangeTab) {
+                onChangeTab('website-solicitudes');
+              } else {
+                window.history.pushState(null, '', '/sitio-web/solicitudes');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }
+            }}
+            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5 border border-transparent"
+          >
+            <span>Ver solicitudes</span>
+            <ArrowUpRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         {/* Pestañas Internas */}
         <div className="flex space-x-1 p-1 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 rounded-2xl w-fit">
