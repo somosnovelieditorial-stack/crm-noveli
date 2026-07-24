@@ -4,6 +4,7 @@ import { formatCurrency, calculateVatSplit, convertToClp, filterByPeriod } from 
 import PeriodFilter from './PeriodFilter';
 import DashboardDetailDrawer from './DashboardDetailDrawer';
 import useWebsiteLeadNotifications, { isNewWebsiteLead } from '../hooks/useWebsiteLeadNotifications';
+import { getLeadDisplayMessage, getLeadDisplayService } from '../utils/leadManuscriptInfo';
 import { 
   TrendingUp, TrendingDown, DollarSign, Percent, X,
   Users, UserCheck, BookOpen, AlertCircle, Calendar,
@@ -1617,7 +1618,7 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
               </p>
               {recentNewWebsiteLeads[0] && (
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Ultima: <span className="font-bold">{recentNewWebsiteLeads[0].name || 'Sin nombre'}</span> - {recentNewWebsiteLeads[0].service_of_interest || 'Consulta General'}
+                  Ultima: <span className="font-bold">{recentNewWebsiteLeads[0].name || 'Sin nombre'}</span> - {getLeadDisplayService(recentNewWebsiteLeads[0])}
                 </p>
               )}
             </div>
@@ -2182,11 +2183,11 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
                     <div className="space-y-1">
                       <div className="flex items-center gap-1.5">
                         <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 rounded text-[9px] font-bold uppercase tracking-wider">
-                          {stats.latestWebLead.service_of_interest || 'Consulta General'}
+                          {getLeadDisplayService(stats.latestWebLead)}
                         </span>
                       </div>
                       <p className="text-slate-650 dark:text-slate-350 italic font-serif leading-relaxed mt-1">
-                        "{stats.latestWebLead.message}"
+                        "{getLeadDisplayMessage(stats.latestWebLead)}"
                       </p>
                     </div>
                   </div>

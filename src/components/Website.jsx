@@ -8,6 +8,12 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../utils';
 import useWebsiteLeadNotifications, { isNewWebsiteLead, normalizeWebsiteLeadStatus } from '../hooks/useWebsiteLeadNotifications';
+import {
+  formatLeadConversionNotes,
+  getLeadDisplayMessage,
+  getLeadDisplayService,
+  parseLeadManuscriptInfo
+} from '../utils/leadManuscriptInfo';
 
 const InstagramIcon = ({ className }) => (
   <svg 
@@ -349,7 +355,15 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
 
       if (error) throw error;
 
-      setLeads(Array.isArray(data) ? data : []);
+      const loadedLeads = Array.isArray(data) ? data : [];
+      if (import.meta.env.DEV) {
+        loadedLeads.forEach((lead) => {
+          const parsed = parseLeadManuscriptInfo(lead);
+          console.log('Lead raw:', lead);
+          console.log('Lead parsed:', parsed);
+        });
+      }
+      setLeads(loadedLeads);
       refreshWebsiteLeadNotifications();
       if (onWebsiteLeadNotificationsRefresh) {
         onWebsiteLeadNotificationsRefresh();
@@ -2445,6 +2459,9 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
       const orgId = getOrgId();
       const randNum = Math.floor(100000 + Math.random() * 900000);
       const quoteNumber = `COT-${randNum}`;
+      const parsed = parseLeadManuscriptInfo(lead);
+      const displayService = getLeadDisplayService(lead, parsed);
+      const conversionNotes = formatLeadConversionNotes(lead, parsed);
       
       const newQuote = {
         organization_id: orgId,
@@ -2453,8 +2470,9 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         author_phone: lead.phone,
         author_instagram: lead.instagram,
         origin: 'web',
-        object: lead.service_of_interest || 'Servicio de Interés Web',
-        other_notes: `[Solicitud Web] Mensaje original: ${lead.message || ''}`,
+        object: displayService,
+        manuscript_pages: Number(String(parsed.pagesApprox || '').replace(/[^0-9]/g, '')) || 0,
+        other_notes: conversionNotes,
         quote_number: quoteNumber,
         issue_date: new Date().toISOString().split('T')[0],
         valid_until: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -2536,6 +2554,9 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
     setLoading(true);
     try {
       const orgId = getOrgId();
+      const parsed = parseLeadManuscriptInfo(lead);
+      const displayService = getLeadDisplayService(lead, parsed);
+      const conversionNotes = formatLeadConversionNotes(lead, parsed);
       const newProspect = {
         organization_id: orgId,
         name: lead.name,
@@ -2543,8 +2564,8 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         phone: lead.phone,
         instagram: lead.instagram,
         origin: 'web',
-        interest_service: lead.service_of_interest,
-        notes: `[Convertido desde Solicitud Web] Mensaje original: ${lead.message || ''}`,
+        interest_service: displayService,
+        notes: `[Convertido desde Solicitud Web]\n${conversionNotes}`,
         probability: 'media',
         currency: 'CLP',
         client_type: 'Nacional',
@@ -2617,6 +2638,9 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
     if (leadsFilter === 'descartado') return isStatus(lead, ['descartado', 'descartar']);
     return true;
   });
+  const selectedLeadParsed = selectedLead ? parseLeadManuscriptInfo(selectedLead) : null;
+  const selectedLeadDisplayService = selectedLead ? getLeadDisplayService(selectedLead, selectedLeadParsed) : '';
+  const selectedLeadDisplayMessage = selectedLead ? getLeadDisplayMessage(selectedLead, selectedLeadParsed) : '';
 
   return (
     <div className="space-y-6 animate-fade-in pb-12 text-slate-800 dark:text-slate-100">
@@ -4015,6 +4039,9 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                       {filteredLeads.map((lead) => {
                         const isNewLead = isNewWebsiteLead(lead);
                         const leadStatus = normalizeWebsiteLeadStatus(lead.status);
+                        const parsed = parseLeadManuscriptInfo(lead);
+                        const displayService = getLeadDisplayService(lead, parsed);
+                        const displayMessage = getLeadDisplayMessage(lead, parsed);
                         const dateStr = lead.created_at
                           ? new Date(lead.created_at).toLocaleDateString('es-CL', {
                               day: '2-digit',
@@ -4066,11 +4093,11 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                             </td>
                             <td className="py-3.5">
                               <span className={`px-2.5 py-1 border rounded-lg text-[10px] uppercase tracking-wider ${isNewLead ? 'bg-white text-amber-850 border-[#C7943A]/50 font-extrabold shadow-xs' : 'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-100 dark:border-amber-900 font-bold'}`}>
-                                {lead.service_of_interest || 'General'}
+                                {displayService}
                               </span>
                             </td>
-                            <td className="py-3.5 text-slate-500 font-sans max-w-[200px] truncate" title={lead.message}>
-                              {lead.message}
+                            <td className="py-3.5 text-slate-500 font-sans max-w-[200px] truncate" title={displayMessage}>
+                              {displayMessage}
                             </td>
                             <td className="py-3.5">
                               <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider whitespace-nowrap ${
@@ -4220,7 +4247,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                   <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Servicio de Interés</span>
                   <div className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-400">
                     <Globe className="w-4 h-4 text-amber-500/70" />
-                    <span>{selectedLead.service_of_interest || 'Consulta General'}</span>
+                    <span>{selectedLeadDisplayService}</span>
                   </div>
                 </div>
               </div>
@@ -4295,11 +4322,53 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                 </div>
               </div>
 
-              {/* Message */}
+              {/* Manuscript Information */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl space-y-3">
+                <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Informacion del Manuscrito</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="border border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900/50 p-2.5 rounded-xl">
+                    <span className="text-[9px] text-slate-455 block">Paginas aproximadas</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-150">{selectedLeadParsed?.pagesApprox || 'No informado'}</span>
+                  </div>
+                  <div className="border border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900/50 p-2.5 rounded-xl">
+                    <span className="text-[9px] text-slate-455 block">Palabras aproximadas</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-150">{selectedLeadParsed?.wordsApprox || 'No informado'}</span>
+                  </div>
+                  <div className="border border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900/50 p-2.5 rounded-xl">
+                    <span className="text-[9px] text-slate-455 block">Estado del manuscrito</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-150">{selectedLeadParsed?.manuscriptStatus || 'No informado'}</span>
+                  </div>
+                  <div className="border border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900/50 p-2.5 rounded-xl">
+                    <span className="text-[9px] text-slate-455 block">Servicio ID</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-150">{selectedLeadParsed?.serviceId || 'No informado'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Author Description */}
               <div className="space-y-1.5">
-                <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Mensaje Enviado</span>
+                <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Descripcion del Autor</span>
                 <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap font-sans text-xs italic">
-                  "{selectedLead.message}"
+                  "{selectedLeadDisplayMessage}"
+                </div>
+              </div>
+
+              {/* Terms */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl space-y-3">
+                <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Terminos</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="border border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900/50 p-2.5 rounded-xl">
+                    <span className="text-[9px] text-slate-455 block">Acepta terminos</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-150">
+                      {selectedLeadParsed?.acceptedTermsText || (selectedLead.accepted_terms ? 'Si' : 'No')}
+                    </span>
+                  </div>
+                  <div className="border border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900/50 p-2.5 rounded-xl">
+                    <span className="text-[9px] text-slate-455 block">Fecha aceptacion</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-150">
+                      {selectedLeadParsed?.acceptedTermsAtText || (selectedLead.accepted_terms_at ? new Date(selectedLead.accepted_terms_at).toLocaleString('es-CL') : 'No informado')}
+                    </span>
+                  </div>
                 </div>
               </div>
 

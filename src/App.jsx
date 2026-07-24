@@ -30,6 +30,7 @@ import Website from './components/Website';
 import CRMAudit from './components/CRMAudit';
 import UsersPermissions from './components/UsersPermissions';
 import useWebsiteLeadNotifications, { isNewWebsiteLead } from './hooks/useWebsiteLeadNotifications';
+import { getLeadDisplayService } from './utils/leadManuscriptInfo';
 
 // Permission Helper
 import { hasPermission, formatCurrency, canAccessModule, canPerformAction } from './utils';
@@ -517,7 +518,7 @@ export default function App() {
       id: `notif-web-lead-${lead.id}`,
       type: 'solicitud_web',
       title: 'Nueva solicitud web',
-      desc: `${lead.name || 'Sin nombre'} • ${lead.service_of_interest || 'General'} • ${lead.created_at ? new Date(lead.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'S/F'}`,
+      desc: `${lead.name || 'Sin nombre'} • ${getLeadDisplayService(lead)} • ${lead.created_at ? new Date(lead.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'S/F'}`,
       tab: 'website-solicitudes',
       severity: 'high',
       lead
@@ -1022,7 +1023,7 @@ export default function App() {
             id: `notif-web-lead-${lead.id}`,
             type: 'solicitud_web',
             title: 'Nueva solicitud web',
-            desc: `${lead.name} • ${lead.service_of_interest || 'General'} • ${lead.created_at ? new Date(lead.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'S/F'}`,
+            desc: `${lead.name} • ${getLeadDisplayService(lead)} • ${lead.created_at ? new Date(lead.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'S/F'}`,
             tab: 'website-solicitudes',
             severity: 'high'
           });
@@ -1205,7 +1206,7 @@ export default function App() {
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400">
                           <span className="px-2 py-0.5 bg-white/70 dark:bg-slate-900/50 border border-amber-200 dark:border-amber-900 rounded-md font-bold text-amber-750 dark:text-amber-400">
-                            {lead.service_of_interest || 'Consulta General'}
+                            {getLeadDisplayService(lead)}
                           </span>
                           <span>{lead.created_at ? new Date(lead.created_at).toLocaleString('es-CL') : 'S/F'}</span>
                         </div>
