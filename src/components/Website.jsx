@@ -2641,6 +2641,23 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
   const selectedLeadParsed = selectedLead ? parseLeadManuscriptInfo(selectedLead) : null;
   const selectedLeadDisplayService = selectedLead ? getLeadDisplayService(selectedLead, selectedLeadParsed) : '';
   const selectedLeadDisplayMessage = selectedLead ? getLeadDisplayMessage(selectedLead, selectedLeadParsed) : '';
+  const getLeadStatusLabel = (lead) => {
+    if (isNewWebsiteLead(lead)) return 'NUEVO';
+    const status = normalizeWebsiteLeadStatus(lead?.status);
+    if (['propuesta creada', 'propuesta_creada'].includes(status)) return 'PROPUESTA';
+    if (['convertido a prospecto', 'convertido'].includes(status)) return 'CONVERTIDO';
+    return (lead?.status || 'nuevo').toUpperCase();
+  };
+  const getLeadStatusClass = (lead) => {
+    const status = normalizeWebsiteLeadStatus(lead?.status);
+    if (isNewWebsiteLead(lead)) return 'bg-amber-500 text-white border-amber-600 shadow-sm';
+    if (status === 'revisado') return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-955/20 dark:text-amber-400 dark:border-amber-900/50';
+    if (status === 'contactado') return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-955/20 dark:text-purple-400 dark:border-purple-900/50';
+    if (['propuesta creada', 'propuesta_creada'].includes(status)) return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-955/20 dark:text-indigo-400 dark:border-indigo-900/50';
+    if (['convertido a prospecto', 'convertido'].includes(status)) return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-955/20 dark:text-emerald-450 dark:border-emerald-900/50';
+    if (['descartado', 'descartar'].includes(status)) return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-955/20 dark:text-rose-400 dark:border-rose-900/50';
+    return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
+  };
 
   return (
     <div className="space-y-6 animate-fade-in pb-12 text-slate-800 dark:text-slate-100">
@@ -3964,21 +3981,21 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
 
       {/* ------------------ SUB-VIEW: SOLICITUDES ------------------ */}
       {currentPath === 'solicitudes' && (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
-              <div className="flex items-center space-x-3">
-                <button onClick={() => navigateTo('dashboard')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-855 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer">
-                  <ArrowLeft className="w-4 h-4" />
+        <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 sm:pb-4">
+              <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+                <button onClick={() => navigateTo('dashboard')} className="p-1.5 sm:p-2 hover:bg-slate-100 dark:hover:bg-slate-855 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer shrink-0">
+                  <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif">Solicitudes Web (Leads)</h2>
-                  <p className="text-xs text-slate-400 mt-0.5 font-sans">Gestiona los contactos de autores y cotizaciones recibidas desde el portal público.</p>
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-2xl font-bold text-slate-855 dark:text-slate-100 font-serif leading-tight">Solicitudes Web (Leads)</h2>
+                  <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 font-sans leading-snug">Gestiona contactos y cotizaciones recibidas desde el portal publico.</p>
                 </div>
               </div>
             </div>
 
             {/* Filter Tabs */}
-            <div className="flex flex-wrap gap-2 pb-2 border-b border-slate-100 dark:border-slate-850">
+            <div className="flex md:flex-wrap gap-2 pb-2 border-b border-slate-100 dark:border-slate-850 overflow-x-auto no-scrollbar -mx-1 px-1">
               {[
                 { id: 'todos', label: 'Todos', count: safeLeads.length },
                 { id: 'nuevo', label: 'Nuevos', count: newLeadsCount, color: 'bg-blue-500' },
@@ -3991,7 +4008,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                 <button
                   key={tab.id}
                   onClick={() => setLeadsFilter(tab.id)}
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-all border ${
+                  className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold cursor-pointer transition-all border shrink-0 min-h-[34px] ${
                     leadsFilter === tab.id
                       ? 'bg-amber-500 text-white border-transparent shadow-md'
                       : 'bg-white dark:bg-slate-900 border-slate-205 dark:border-slate-805 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850'
@@ -4010,7 +4027,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
             </div>
 
             {/* Leads Table Container */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs">
+            <div className="desktop-table hidden lg:block bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-6 shadow-2xs">
               <div className="overflow-x-auto text-xs">
                 {safeLeads.length === 0 ? (
                   <div className="py-12 text-center text-slate-400 font-semibold flex flex-col items-center justify-center gap-3">
@@ -4192,17 +4209,179 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                 )}
               </div>
             </div>
+
+            <div className="mobile-lead-cards grid lg:hidden gap-3">
+              {safeLeads.length === 0 ? (
+                <div className="py-10 text-center text-slate-400 font-semibold flex flex-col items-center justify-center gap-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-[18px] shadow-2xs">
+                  <Globe className="w-10 h-10 text-slate-300 dark:text-slate-700 animate-pulse" />
+                  <p>No hay solicitudes web registradas.</p>
+                </div>
+              ) : filteredLeads.length === 0 ? (
+                <div className="py-10 text-center text-slate-400 font-semibold flex flex-col items-center justify-center gap-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-[18px] shadow-2xs">
+                  <Globe className="w-10 h-10 text-slate-300 dark:text-slate-700 animate-pulse" />
+                  <p>No se encontraron solicitudes con este filtro.</p>
+                </div>
+              ) : (
+                filteredLeads.map((lead) => {
+                  const isNewLead = isNewWebsiteLead(lead);
+                  const leadStatus = normalizeWebsiteLeadStatus(lead.status);
+                  const parsed = parseLeadManuscriptInfo(lead);
+                  const displayService = getLeadDisplayService(lead, parsed);
+                  const displayMessage = getLeadDisplayMessage(lead, parsed);
+                  const dateStr = lead.created_at
+                    ? new Date(lead.created_at).toLocaleDateString('es-CL', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })
+                    : 'S/F';
+
+                  return (
+                    <article
+                      key={lead.id}
+                      className={`rounded-[18px] border shadow-sm p-4 space-y-3 min-w-0 ${
+                        isNewLead
+                          ? 'bg-[#FFF9E8] dark:bg-amber-950/20 border-[#E5D3A1] border-l-4 border-l-[#C7943A]'
+                          : 'bg-white dark:bg-slate-900 border-slate-150 dark:border-slate-800/80'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {isNewLead && (
+                              <span className="relative flex h-2.5 w-2.5 shrink-0" aria-label="Solicitud nueva">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#C7943A]"></span>
+                              </span>
+                            )}
+                            <h3 className={`text-sm text-slate-900 dark:text-slate-100 leading-tight truncate ${isNewLead ? 'font-extrabold' : 'font-bold'}`}>
+                              {lead.name || 'Sin nombre'}
+                            </h3>
+                          </div>
+                          <p className="mt-1 text-[10px] font-mono text-slate-500 dark:text-slate-400">{dateStr}</p>
+                        </div>
+                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold border uppercase tracking-wider whitespace-nowrap ${getLeadStatusClass(lead)}`}>
+                          {getLeadStatusLabel(lead)}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <span className="px-2.5 py-1 border rounded-lg text-[10px] uppercase tracking-wider bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-100 dark:border-amber-900 font-bold">
+                          {displayService}
+                        </span>
+                      </div>
+
+                      <div className="space-y-2 text-xs text-slate-650 dark:text-slate-300 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                          <span className="truncate min-w-0" title={lead.email}>{lead.email || 'Sin email'}</span>
+                        </div>
+                        {lead.instagram && (
+                          <div className="flex items-center gap-2 min-w-0">
+                            <InstagramIcon className="w-4 h-4 text-pink-500/80 shrink-0" />
+                            <span className="truncate min-w-0">@{lead.instagram}</span>
+                          </div>
+                        )}
+                        {lead.phone && (
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Phone className="w-4 h-4 text-green-500 shrink-0" />
+                            <span className="truncate min-w-0">{lead.phone}</span>
+                          </div>
+                        )}
+                        <p className="text-slate-600 dark:text-slate-350 leading-relaxed max-h-12 overflow-hidden">
+                          {displayMessage}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          onClick={() => {
+                            setSelectedLead(lead);
+                            setIsDetailModalOpen(true);
+                          }}
+                          className="min-h-[40px] px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/30 text-slate-700 dark:text-slate-300 font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer"
+                          title="Ver detalle"
+                        >
+                          <Eye className="w-4 h-4" />
+                          <span>Detalle</span>
+                        </button>
+
+                        {isNewLead && (
+                          <button
+                            onClick={() => handleUpdateStatus(lead.id, 'revisado')}
+                            className="min-h-[40px] px-2.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-955/20 dark:text-amber-400 font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer"
+                            title="Marcar como revisado"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>Revisado</span>
+                          </button>
+                        )}
+
+                        {(isNewLead || leadStatus === 'revisado') && (
+                          <button
+                            onClick={() => handleUpdateStatus(lead.id, 'contactado')}
+                            className="min-h-[40px] px-2.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-955/20 dark:text-purple-400 font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer"
+                            title="Marcar como contactado"
+                          >
+                            <Mail className="w-4 h-4" />
+                            <span>Contactado</span>
+                          </button>
+                        )}
+
+                        {!lead.converted_to_proposal && !['descartado', 'descartar'].includes(leadStatus) && (
+                          <button
+                            onClick={() => handleCreateQuotation(lead)}
+                            className="min-h-[40px] px-2.5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-650 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer"
+                            title="Crear propuesta comercial"
+                          >
+                            <FileText className="w-4 h-4" />
+                            <span>Propuesta</span>
+                          </button>
+                        )}
+
+                        {!lead.converted_to_prospect && !['descartado', 'descartar'].includes(leadStatus) && (
+                          <button
+                            onClick={() => handleConvertToProspect(lead)}
+                            className="min-h-[40px] px-2.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-650 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer"
+                            title="Convertir a prospecto"
+                          >
+                            <UserCheck className="w-4 h-4" />
+                            <span>Prospecto</span>
+                          </button>
+                        )}
+
+                        {!['descartado', 'descartar', 'convertido a prospecto', 'convertido'].includes(leadStatus) && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm('¿Confirmas descartar esta solicitud?')) {
+                                handleUpdateStatus(lead.id, 'descartado');
+                              }
+                            }}
+                            className="min-h-[40px] px-2.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-955/20 dark:text-rose-400 font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer"
+                            title="Descartar solicitud"
+                          >
+                            <X className="w-4 h-4" />
+                            <span>Descartar</span>
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
           </div>
         )}
 
       {/* ------------------ MODAL: DETALLE DE SOLICITUD ------------------ */}
       {isDetailModalOpen && selectedLead && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-250 dark:border-slate-800 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-scale-up font-sans text-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-250 dark:border-slate-800 shadow-2xl max-w-2xl w-[94vw] sm:w-full max-h-[90vh] flex flex-col overflow-hidden animate-scale-up font-sans text-xs">
             {/* Header */}
-            <div className="p-6 border-b border-slate-150 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950/20 shrink-0">
-              <div className="space-y-1">
-                <div className="flex items-center space-x-2">
+            <div className="p-4 sm:p-6 border-b border-slate-150 dark:border-slate-800 flex justify-between items-start gap-3 bg-slate-50 dark:bg-slate-950/20 shrink-0">
+              <div className="space-y-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded text-[9px] font-extrabold uppercase font-mono tracking-wider">
                     ID: {selectedLead.id.slice(0, 8)}...
                   </span>
@@ -4222,32 +4401,33 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                     {isNewWebsiteLead(selectedLead) ? 'NUEVO' : selectedLead.status}
                   </span>
                 </div>
-                <h3 className="text-xl font-bold text-slate-855 dark:text-slate-150 font-serif">{selectedLead.name}</h3>
+                <h3 className="text-lg sm:text-xl font-bold text-slate-855 dark:text-slate-150 font-serif leading-tight break-words">{selectedLead.name}</h3>
               </div>
               <button 
                 onClick={() => setIsDetailModalOpen(false)}
-                className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white rounded-xl text-slate-500 dark:text-slate-400 cursor-pointer transition-all border border-transparent"
+                className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white rounded-xl text-slate-500 dark:text-slate-400 cursor-pointer transition-all border border-transparent shrink-0"
+                title="Cerrar"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Scrollable Body */}
-            <div className="p-6 overflow-y-auto space-y-5 flex-1 scrollbar-thin">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-5 flex-1 scrollbar-thin">
               {/* Date & Interest Service */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl space-y-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl space-y-1 min-w-0">
                   <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Fecha de Recepción</span>
                   <div className="flex items-center gap-2 font-mono text-slate-700 dark:text-slate-200 font-bold">
                     <Calendar className="w-4 h-4 text-slate-400" />
-                    <span>{new Date(selectedLead.created_at).toLocaleString('es-CL')}</span>
+                    <span className="break-words">{new Date(selectedLead.created_at).toLocaleString('es-CL')}</span>
                   </div>
                 </div>
-                <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl space-y-1">
+                <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl space-y-1 min-w-0">
                   <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Servicio de Interés</span>
                   <div className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-400">
                     <Globe className="w-4 h-4 text-amber-500/70" />
-                    <span>{selectedLeadDisplayService}</span>
+                    <span className="break-words">{selectedLeadDisplayService}</span>
                   </div>
                 </div>
               </div>
@@ -4256,7 +4436,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
               <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl space-y-3">
                 <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Información de Contacto</span>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Email */}
                   <div className="flex items-center gap-2 border border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900/50 p-2.5 rounded-xl">
                     <Mail className="w-4 h-4 text-blue-500 shrink-0" />
@@ -4282,7 +4462,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                     <div className="truncate flex-1">
                       <span className="text-[9px] text-slate-455 block">Teléfono</span>
                       {selectedLead.phone ? (
-                        <a href={`tel:${selectedLead.phone}`} className="font-bold text-slate-800 dark:text-slate-150 hover:underline block">{selectedLead.phone}</a>
+                        <a href={`tel:${selectedLead.phone}`} className="font-bold text-slate-800 dark:text-slate-150 hover:underline block truncate">{selectedLead.phone}</a>
                       ) : (
                         <span className="font-bold text-slate-400 block">No provisto</span>
                       )}
@@ -4325,7 +4505,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
               {/* Manuscript Information */}
               <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl space-y-3">
                 <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Informacion del Manuscrito</span>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="border border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900/50 p-2.5 rounded-xl">
                     <span className="text-[9px] text-slate-455 block">Paginas aproximadas</span>
                     <span className="font-bold text-slate-800 dark:text-slate-150">{selectedLeadParsed?.pagesApprox || 'No informado'}</span>
@@ -4356,7 +4536,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
               {/* Terms */}
               <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-2xl space-y-3">
                 <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Terminos</span>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="border border-slate-100 dark:border-slate-850 bg-white dark:bg-slate-900/50 p-2.5 rounded-xl">
                     <span className="text-[9px] text-slate-455 block">Acepta terminos</span>
                     <span className="font-bold text-slate-800 dark:text-slate-150">
@@ -4395,8 +4575,8 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
             </div>
 
             {/* Actions Footer */}
-            <div className="p-5 border-t border-slate-150 dark:border-slate-805 bg-slate-50 dark:bg-slate-950/25 flex flex-wrap gap-2 justify-between shrink-0">
-              <div className="flex gap-2">
+            <div className="p-4 sm:p-5 border-t border-slate-150 dark:border-slate-805 bg-slate-50 dark:bg-slate-950/25 flex flex-col sm:flex-row gap-3 sm:gap-2 sm:justify-between shrink-0">
+              <div className="grid grid-cols-1 sm:flex gap-2">
                 {!['descartado', 'descartar', 'convertido a prospecto', 'convertido'].includes(normalizeWebsiteLeadStatus(selectedLead.status)) && (
                   <button
                     onClick={() => {
@@ -4404,18 +4584,18 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                         handleUpdateStatus(selectedLead.id, 'descartado');
                       }
                     }}
-                    className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-955/20 dark:text-rose-400 dark:hover:bg-rose-950/40 rounded-xl font-bold transition-all border border-transparent cursor-pointer"
+                    className="min-h-[40px] px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-955/20 dark:text-rose-400 dark:hover:bg-rose-950/40 rounded-xl font-bold transition-all border border-transparent cursor-pointer"
                   >
                     Descartar
                   </button>
                 )}
               </div>
               
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 sm:flex gap-2">
                 {isNewWebsiteLead(selectedLead) && (
                   <button
                     onClick={() => handleUpdateStatus(selectedLead.id, 'revisado')}
-                    className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-955/20 dark:text-amber-400 dark:hover:bg-amber-950/40 rounded-xl font-bold transition-all border border-transparent cursor-pointer"
+                    className="min-h-[40px] px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-955/20 dark:text-amber-400 dark:hover:bg-amber-950/40 rounded-xl font-bold transition-all border border-transparent cursor-pointer"
                   >
                     Marcar Revisado
                   </button>
@@ -4424,7 +4604,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                 {(isNewWebsiteLead(selectedLead) || normalizeWebsiteLeadStatus(selectedLead.status) === 'revisado') && (
                   <button
                     onClick={() => handleUpdateStatus(selectedLead.id, 'contactado')}
-                    className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-955/20 dark:text-purple-400 dark:hover:bg-purple-950/40 rounded-xl font-bold transition-all border border-transparent cursor-pointer"
+                    className="min-h-[40px] px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-955/20 dark:text-purple-400 dark:hover:bg-purple-950/40 rounded-xl font-bold transition-all border border-transparent cursor-pointer"
                   >
                     Marcar Contactado
                   </button>
@@ -4433,7 +4613,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                 {!selectedLead.converted_to_proposal && !['descartado', 'descartar'].includes(normalizeWebsiteLeadStatus(selectedLead.status)) && (
                   <button
                     onClick={() => handleCreateQuotation(selectedLead)}
-                    className="px-3.5 py-2 bg-indigo-500 hover:bg-indigo-650 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm hover:shadow transition-all border border-transparent cursor-pointer"
+                    className="min-h-[40px] px-3.5 py-2 bg-indigo-500 hover:bg-indigo-650 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-sm hover:shadow transition-all border border-transparent cursor-pointer"
                   >
                     <FileText className="w-4 h-4" />
                     <span>Crear Propuesta</span>
@@ -4443,7 +4623,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                 {!selectedLead.converted_to_prospect && !['descartado', 'descartar'].includes(normalizeWebsiteLeadStatus(selectedLead.status)) && (
                   <button
                     onClick={() => handleConvertToProspect(selectedLead)}
-                    className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-650 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm hover:shadow transition-all border border-transparent cursor-pointer"
+                    className="min-h-[40px] px-3.5 py-2 bg-emerald-500 hover:bg-emerald-650 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-sm hover:shadow transition-all border border-transparent cursor-pointer"
                   >
                     <UserCheck className="w-4 h-4" />
                     <span>Convertir a Prospecto</span>
@@ -4452,7 +4632,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
 
                 <button
                   onClick={() => setIsDetailModalOpen(false)}
-                  className="px-4 py-2 border border-slate-250 dark:border-slate-700 rounded-xl font-bold hover:bg-slate-100 dark:hover:bg-slate-850 text-slate-700 dark:text-slate-350 cursor-pointer"
+                  className="min-h-[40px] px-4 py-2 border border-slate-250 dark:border-slate-700 rounded-xl font-bold hover:bg-slate-100 dark:hover:bg-slate-850 text-slate-700 dark:text-slate-350 cursor-pointer"
                 >
                   Cerrar
                 </button>
