@@ -2,13 +2,44 @@ import { useEffect, useState } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, formatDate, calculateVatSplit, filterByPeriod, exportToCSV } from '../utils';
 import PeriodFilter from './PeriodFilter';
-import { deductExpenseFromFund } from '../financeHelper';
+import { deductExpenseFromFund, recordError } from '../financeHelper';
 import ExportDropdown from './ExportDropdown';
 import { 
   Plus, Search, Edit2, Trash2, X, DollarSign, 
   Briefcase, Calendar, ShieldCheck, ShieldAlert, FileText, Download,
   UploadCloud, FileSpreadsheet, Image, File, Eye, Trash
 } from 'lucide-react';
+
+const normalizeUuid = (value) => {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  if (trimmed === 'null' || trimmed === 'undefined') return null;
+  return trimmed;
+};
+
+const optionalExpenseUuidFields = [
+  'provider_id',
+  'client_id',
+  'service_id',
+  'project_id',
+  'contracted_service_id',
+  'income_id',
+  'fund_id',
+  'category_id'
+];
+
+const normalizeExpenseUuidFields = (payload) => {
+  const normalizedPayload = { ...payload };
+
+  optionalExpenseUuidFields.forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(normalizedPayload, field)) {
+      normalizedPayload[field] = normalizeUuid(normalizedPayload[field]);
+    }
+  });
+
+  return normalizedPayload;
+};
 
 export default function Expenses({ realtimeTrigger }) {
   const [expenses, setExpenses] = useState([]);
@@ -133,7 +164,11 @@ export default function Expenses({ realtimeTrigger }) {
       tax_payment: false,
       affects_cashflow: true,
       tax_type: '',
-      source: 'Manual'
+      source: 'Manual',
+      client_id: '',
+      service_id: '',
+      money_source: 'caja_general',
+      fund_type: ''
     });
     setFormError('');
     setIsModalOpen(true);
@@ -159,7 +194,11 @@ export default function Expenses({ realtimeTrigger }) {
       tax_payment: expense.tax_payment !== undefined ? expense.tax_payment : (expense.category === 'impuestos'),
       affects_cashflow: expense.affects_cashflow !== undefined ? expense.affects_cashflow : true,
       tax_type: expense.tax_type || '',
-      source: expense.source || 'Manual'
+      source: expense.source || 'Manual',
+      client_id: expense.client_id || '',
+      service_id: expense.service_id || '',
+      money_source: expense.money_source || 'caja_general',
+      fund_type: expense.fund_type || ''
     });
     setFormError('');
     setIsModalOpen(true);
@@ -419,14 +458,13 @@ export default function Expenses({ realtimeTrigger }) {
 
     try {
       const orgId = await getValidOrgId();
-      const payload = {
+      const payload = normalizeExpenseUuidFields({
         ...formData,
         organization_id: orgId,
-        provider_id: formData.provider_id || null,
         exchange_rate: Number(formData.exchange_rate) || 1,
         value_converted: Number(formData.amount) * (Number(formData.exchange_rate) || 1),
         rate_date: formData.date
-      };
+      });
 
       let expenseId = '';
       if (selectedExpense) {
@@ -452,15 +490,15 @@ export default function Expenses({ realtimeTrigger }) {
 
         // Deduct from client fund if money_source is a client fund
         const clientFundSources = ['publicidad', 'impresion', 'diseno', 'correccion', 'reserva_cliente'];
-        if (formData.client_id && clientFundSources.includes(formData.money_source)) {
+        if (payload.client_id && clientFundSources.includes(formData.money_source)) {
           await deductExpenseFromFund({
-            client_id: formData.client_id,
+            client_id: payload.client_id,
             fund_type: formData.money_source,
             amount: Number(formData.amount),
             concept: `Gasto: ${formData.concept || 'Gasto descontado del fondo'}`,
             notes: formData.notes,
             expense_id: expenseId,
-            service_id: formData.service_id || null
+            service_id: payload.service_id
           });
         }
 
@@ -473,6 +511,7 @@ export default function Expenses({ realtimeTrigger }) {
       setIsModalOpen(false);
     } catch (err) {
       console.error('Error saving expense:', err);
+      await recordError(err.message || 'Error al guardar gasto', err.stack || '', 'expenses');
       setFormError(err.message || 'Error al guardar el gasto.');
     } finally {
       setIsSubmitting(false);
