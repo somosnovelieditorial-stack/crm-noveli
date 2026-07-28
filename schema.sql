@@ -1076,6 +1076,7 @@ CREATE TABLE IF NOT EXISTS website_settings (
     logo_footer_height INTEGER DEFAULT 46,
     logo_menu_height INTEGER DEFAULT 42,
     logo_mobile_height INTEGER DEFAULT 32,
+    show_service_prices BOOLEAN DEFAULT TRUE,
     active BOOLEAN DEFAULT TRUE,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL

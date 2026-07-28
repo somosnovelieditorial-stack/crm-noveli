@@ -44,6 +44,7 @@ const DEFAULT_SITE_SETTINGS = {
   logo_url: '',
   favicon_url: '',
   active: true,
+  show_service_prices: true,
   logo_header_height: 42,
   logo_footer_height: 46,
   logo_menu_height: 42,
@@ -153,6 +154,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
   const [logoUrl, setLogoUrl] = useState(DEFAULT_SITE_SETTINGS.logo_url);
   const [faviconUrl, setFaviconUrl] = useState(DEFAULT_SITE_SETTINGS.favicon_url);
   const [configActive, setConfigActive] = useState(DEFAULT_SITE_SETTINGS.active);
+  const [showServicePrices, setShowServicePrices] = useState(DEFAULT_SITE_SETTINGS.show_service_prices);
 
   // 2. Servicios Form states
   const [editingService, setEditingService] = useState(null);
@@ -1132,6 +1134,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         setLogoUrl(row.logo_url || '');
         setFaviconUrl(row.favicon_url || '');
         setConfigActive(row.active !== false);
+        setShowServicePrices(row.show_service_prices !== false);
 
         // brand identity visual states
         setIdentityConfigId(row.id);
@@ -1171,6 +1174,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         setLogoUrl(row.logo_url);
         setFaviconUrl(row.favicon_url);
         setConfigActive(row.active);
+        setShowServicePrices(row.show_service_prices !== false);
 
         // brand identity visual states
         setIdentityConfigId(row.id || 'mock-identity-id');
@@ -1354,6 +1358,29 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
     } catch (_) {}
   };
 
+  const resolveWebsiteSettingsId = async () => {
+    if (configId) return configId;
+
+    const { data: activeRows, error: activeErr } = await supabase
+      .from('website_settings')
+      .select('id')
+      .eq('organization_id', getOrgId())
+      .eq('active', true)
+      .limit(1);
+
+    if (activeErr) throw activeErr;
+    if (activeRows && activeRows.length > 0) return activeRows[0].id;
+
+    const { data: anyRows, error: anyErr } = await supabase
+      .from('website_settings')
+      .select('id')
+      .eq('organization_id', getOrgId())
+      .limit(1);
+
+    if (anyErr) throw anyErr;
+    return anyRows && anyRows.length > 0 ? anyRows[0].id : null;
+  };
+
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     if (isReadOnly) return;
@@ -1371,26 +1398,34 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         logo_url: logoUrl,
         favicon_url: faviconUrl,
         active: configActive,
-        organization_id: getOrgId()
+        show_service_prices: showServicePrices,
+        organization_id: getOrgId(),
+        updated_at: new Date().toISOString()
       };
 
       if (isMock || usingMockDb || !supabase) {
-        localStorage.setItem('somos_noveli_website_settings_cms', JSON.stringify(payload));
+        localStorage.setItem('somos_noveli_website_settings_cms', JSON.stringify({ id: configId || 'mock-id', ...payload }));
         alert("Configuración de sitio guardada en memoria local.");
       } else {
-        if (configId) {
+        const settingsId = await resolveWebsiteSettingsId();
+        if (settingsId) {
           const { error } = await supabase
             .from('website_settings')
             .update(payload)
-            .eq('id', configId);
+            .eq('id', settingsId);
           if (error) throw error;
+          setConfigId(settingsId);
+          setIdentityConfigId(settingsId);
         } else {
           const { data, error } = await supabase
             .from('website_settings')
             .insert([payload])
             .select();
           if (error) throw error;
-          if (data && data.length > 0) setConfigId(data[0].id);
+          if (data && data.length > 0) {
+            setConfigId(data[0].id);
+            setIdentityConfigId(data[0].id);
+          }
         }
         alert("Configuración web guardada correctamente en Supabase.");
       }
@@ -3008,6 +3043,36 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                 <div className="flex items-center space-x-2 py-1">
                   <input type="checkbox" id="configActive" checked={configActive} onChange={e => setConfigActive(e.target.checked)} className="rounded text-amber-500 h-4 w-4" />
                   <label htmlFor="configActive" className="text-slate-655 dark:text-slate-350 font-bold cursor-pointer select-none">Sitio Web Activo y Verificable</label>
+                </div>
+
+                <div className="flex items-start justify-between gap-4 rounded-2xl border border-amber-100 dark:border-amber-900/40 bg-amber-50/45 dark:bg-amber-950/10 p-4">
+                  <div className="space-y-1">
+                    <label htmlFor="showServicePrices" className="text-slate-755 dark:text-slate-150 font-extrabold cursor-pointer select-none block">
+                      Mostrar precios de servicios en la web
+                    </label>
+                    <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                      Si está desactivado, la web ocultará todos los valores "desde", IVA, base hasta 100 páginas y bloques informativos asociados al precio.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    id="showServicePrices"
+                    role="switch"
+                    aria-checked={showServicePrices}
+                    onClick={() => setShowServicePrices(prev => !prev)}
+                    disabled={isReadOnly}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors cursor-pointer disabled:opacity-50 ${
+                      showServicePrices
+                        ? 'bg-amber-500 border-amber-500'
+                        : 'bg-slate-250 dark:bg-slate-800 border-slate-300 dark:border-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                        showServicePrices ? 'translate-x-5' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
                 </div>
 
                 <button type="submit" disabled={isReadOnly} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center gap-1.5 border border-transparent shadow-md">

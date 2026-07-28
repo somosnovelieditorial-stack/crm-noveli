@@ -426,6 +426,7 @@ export const databaseContract = {
     logo_footer_height: 'INTEGER',
     logo_menu_height: 'INTEGER',
     logo_mobile_height: 'INTEGER',
+    show_service_prices: 'BOOLEAN',
     active: 'BOOLEAN',
     created_at: 'TIMESTAMP WITH TIME ZONE',
     updated_at: 'TIMESTAMP WITH TIME ZONE',

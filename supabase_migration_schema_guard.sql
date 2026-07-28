@@ -90,6 +90,7 @@ ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS logo_header_height INTEGER
 ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS logo_footer_height INTEGER DEFAULT 46;
 ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS logo_menu_height INTEGER DEFAULT 42;
 ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS logo_mobile_height INTEGER DEFAULT 32;
+ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS show_service_prices BOOLEAN DEFAULT TRUE;
 
 -- 17. Alterations for table: website_services
 ALTER TABLE website_services ADD COLUMN IF NOT EXISTS visible_on_website BOOLEAN DEFAULT TRUE;
