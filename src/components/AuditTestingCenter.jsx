@@ -1,3 +1,4 @@
+import { isAdminRole } from '../utils/roles';
 import { useState, useEffect } from 'react';
 import { supabase, isMock } from '../supabaseClient';
 import { calculateProposalTotals } from '../utils/proposalCalculations';
@@ -841,15 +842,13 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
           if (admErr) throw admErr;
 
           const admins = (members || []).filter(m => {
-            const r = String(m.role || '').toLowerCase();
-            const hasAllPerm = m.permissions && (m.permissions.all === true || m.permissions.all === 'true');
-            return r === 'admin' || r === 'administrador' || hasAllPerm;
+            return isAdminRole(m.role);
           });
 
           if (admins.length === 0) {
             result.status = 'Error';
             result.message = 'No hay administradores activos en la organización.';
-            result.recommendation = 'Asegúrese de registrar al menos un miembro con rol "administrador" y active = true.';
+            result.recommendation = 'Asegúrese de registrar al menos un miembro con rol "admin" y active = true.';
           } else {
             result.status = 'OK';
             const adminList = admins.map(a => {
@@ -1106,7 +1105,7 @@ export default function AuditTestingCenter({ organizationId, userRole }) {
               <div className="flex justify-between border-b border-slate-50 dark:border-slate-800/40 pb-1.5">
                 <span className="text-slate-400 font-semibold">Permisos Detectados:</span>
                 <span className="font-bold text-slate-750 dark:text-slate-200">
-                  {userRole === 'administrador' ? 'Escritura Completa (Admin)' : 'Solo Lectura'}
+                  {isAdminRole(userRole) ? 'Escritura Completa (Admin)' : 'Solo Lectura'}
                 </span>
               </div>
               <div className="flex justify-between text-[11px] text-slate-400">

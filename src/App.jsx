@@ -1,3 +1,4 @@
+import { normalizeRole, isAdminRole } from './utils/roles';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { supabase, isMock, getValidOrgId, subscribeToOrganizationChanges } from './supabaseClient';
 
@@ -467,7 +468,7 @@ export default function App() {
   }, [user]);
 
   // Advanced States
-  const [userRole, setUserRole] = useState('administrador');
+  const [userRole, setUserRole] = useState('visualizador');
   const [organizationId, setOrganizationId] = useState('11111111-1111-1111-1111-111111111111');
   const [realtimeTrigger, setRealtimeTrigger] = useState(0);
   const [realtimeToast, setRealtimeToast] = useState(null);
@@ -570,21 +571,21 @@ export default function App() {
       
       if (data && data.length > 0) {
         const membership = data[0];
-        setUserRole(membership.role || 'solo lectura');
+        setUserRole(normalizeRole(membership.role));
         setOrganizationId(membership.organization_id || '11111111-1111-1111-1111-111111111111');
-        localStorage.setItem('somos_noveli_crm_role', membership.role || 'solo lectura');
+        localStorage.setItem('somos_noveli_crm_role', normalizeRole(membership.role) || '');
         localStorage.setItem('somos_noveli_crm_org_id', membership.organization_id || '11111111-1111-1111-1111-111111111111');
       } else {
-        setUserRole('solo lectura');
+        setUserRole('visualizador');
         setOrganizationId('11111111-1111-1111-1111-111111111111');
-        localStorage.setItem('somos_noveli_crm_role', 'solo lectura');
+        localStorage.setItem('somos_noveli_crm_role', 'visualizador');
         localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
       }
     } catch (err) {
       console.error("Error fetching database role:", err);
-      setUserRole(activeUser.role || 'solo lectura');
+      setUserRole(normalizeRole(activeUser.role));
       setOrganizationId('11111111-1111-1111-1111-111111111111');
-      localStorage.setItem('somos_noveli_crm_role', activeUser.role || 'solo lectura');
+      localStorage.setItem('somos_noveli_crm_role', normalizeRole(activeUser.role) || '');
       localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
     } finally {
       setLoading(false);
@@ -599,7 +600,7 @@ export default function App() {
         if (active) {
           setUser(null);
           userRef.current = null;
-          setUserRole('solo lectura');
+          setUserRole('visualizador');
           setLoading(false);
         }
         return;
@@ -619,14 +620,14 @@ export default function App() {
           userRef.current = activeUser;
           if (data && data.length > 0) {
             const membership = data[0];
-            setUserRole(membership.role || 'solo lectura');
+            setUserRole(normalizeRole(membership.role));
             setOrganizationId(membership.organization_id || '11111111-1111-1111-1111-111111111111');
-            localStorage.setItem('somos_noveli_crm_role', membership.role || 'solo lectura');
+            localStorage.setItem('somos_noveli_crm_role', normalizeRole(membership.role) || '');
             localStorage.setItem('somos_noveli_crm_org_id', membership.organization_id || '11111111-1111-1111-1111-111111111111');
           } else {
-            setUserRole('solo lectura');
+            setUserRole('visualizador');
             setOrganizationId('11111111-1111-1111-1111-111111111111');
-            localStorage.setItem('somos_noveli_crm_role', 'solo lectura');
+            localStorage.setItem('somos_noveli_crm_role', 'visualizador');
             localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
           }
         }
@@ -635,9 +636,9 @@ export default function App() {
         if (active) {
           setUser(activeUser);
           userRef.current = activeUser;
-          setUserRole(activeUser.role || 'solo lectura');
+          setUserRole(normalizeRole(activeUser.role));
           setOrganizationId('11111111-1111-1111-1111-111111111111');
-          localStorage.setItem('somos_noveli_crm_role', activeUser.role || 'solo lectura');
+          localStorage.setItem('somos_noveli_crm_role', normalizeRole(activeUser.role) || '');
           localStorage.setItem('somos_noveli_crm_org_id', '11111111-1111-1111-1111-111111111111');
         }
       } finally {
@@ -798,7 +799,7 @@ export default function App() {
   const handleAuthSuccess = (authUser) => {
     setUser(authUser);
     userRef.current = authUser;
-    setUserRole(authUser.role || 'administrador');
+    setUserRole(normalizeRole(authUser.role));
   };
 
 
@@ -1149,7 +1150,7 @@ export default function App() {
         case 'configuration': return <Configuration {...commonProps} />;
         case 'integrations': return <Integrations {...commonProps} />;
         case 'settings-audit': {
-          if (userRole !== 'administrador' && userRole !== 'admin') {
+          if (!isAdminRole(userRole)) {
             return (
               <div className="p-8 text-center text-rose-500 font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
                 No tienes permiso para acceder a Auditoría del CRM.
@@ -1159,7 +1160,7 @@ export default function App() {
           return <CRMAudit {...commonProps} />;
         }
         case 'settings-users': {
-          if (userRole !== 'administrador' && userRole !== 'admin') {
+          if (!isAdminRole(userRole)) {
             return (
               <div className="p-8 text-center text-rose-500 font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl animate-fade-in shadow-sm">
                 No tienes permiso para administrar usuarios.

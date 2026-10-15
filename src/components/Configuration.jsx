@@ -1,3 +1,4 @@
+import { isAdminRole } from '../utils/roles';
 import { useEffect, useState } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { 
@@ -378,8 +379,8 @@ export default function Configuration({ isReadOnly, userRole, organizationId }) 
     { name: "Editor", desc: "Edita clientes, prospectos, servicios contratados, checklist de tareas y documentos.", color: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border-blue-200" },
     { name: "Diseñador", desc: "Gestión de tareas de portadas y maquetación, subida de portadas y entregas.", color: "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-400 border-pink-200" },
     { name: "Corrector", desc: "Acceso a tareas de corrección, descarga de manuscritos y subida de revisiones.", color: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200" },
-    { name: "Contador", desc: "Gestión completa de ingresos, gastos, conciliaciones de pagos e impuestos del periodo.", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200" },
-    { name: "Solo Lectura", desc: "Visualización de reportes, agendas, buscador global y tableros sin poder guardar cambios.", color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-350 border-slate-200" }
+    { name: "Finanzas", desc: "Gestión completa de ingresos, gastos, conciliaciones de pagos e impuestos del periodo.", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200" },
+    { name: "Visualizador", desc: "Visualización de reportes, agendas, buscador global y tableros sin poder guardar cambios.", color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-350 border-slate-200" }
   ];
 
   if (loading) {
@@ -454,7 +455,7 @@ export default function Configuration({ isReadOnly, userRole, organizationId }) 
         >
           Roles y Permisos
         </button>
-        {userRole === 'administrador' && (
+        {isAdminRole(userRole) && (
           <button
             onClick={() => setActiveTab('audit')}
             className={`px-4 py-2.5 font-bold text-xs border-b-2 transition-all cursor-pointer ${
@@ -1033,7 +1034,7 @@ export default function Configuration({ isReadOnly, userRole, organizationId }) 
                 Control de políticas y permisos. Asigna perfiles para controlar las vistas a las que cada miembro de la editorial puede acceder.
               </p>
             </div>
-            {userRole === 'administrador' && (
+            {isAdminRole(userRole) && (
               <a
                 href="/configuracion/usuarios"
                 className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-650/15 text-center whitespace-nowrap"
@@ -1171,7 +1172,7 @@ export default function Configuration({ isReadOnly, userRole, organizationId }) 
         </div>
       )}
 
-      {activeTab === 'audit' && userRole === 'administrador' && (
+      {activeTab === 'audit' && isAdminRole(userRole) && (
         <AuditTestingCenter organizationId={organizationId} userRole={userRole} />
       )}
     </div>

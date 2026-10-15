@@ -1,3 +1,4 @@
+import { normalizeRole, canRoleAccessModule, canRolePerformAction } from './utils/roles';
 import { supabase, getCurrentOrganizationId, subscribeToOrganizationChanges } from './supabaseClient';
 
 
@@ -233,7 +234,7 @@ export const filterByPeriod = (items, dateField, config) => {
  * @returns {boolean} True if write permission is allowed, false otherwise
  */
 export const hasPermission = (role, module) => {
-  return canPerformAction(module, 'write');
+  return canRolePerformAction(role, module, 'write');
 };
 
 /**
@@ -680,80 +681,24 @@ export const syncStageEventsToAgenda = async (serviceId) => {
   }
 };
 
-const ROLE_PERMISSIONS = {
-  administrador: {
-    modules: '*',
-  },
-  editor: {
-    modules: [
-      'dashboard', 'notifications', 'quotations', 'clients', 'prospects', 'seguimientos',
-      'services', 'completed_sales', 'documents', 'catalog', 'packs', 'website', 
-      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones', 'website-solicitudes', 'website-footer', 'website-hero', 'website-identidad',
-      'reports'
-    ]
-  },
-  diseñador: {
-    modules: [
-      'dashboard', 'notifications', 'clients', 'prospects', 'seguimientos', 'services', 
-      'completed_sales', 'documents', 'website', 
-      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones', 'website-solicitudes', 'website-footer', 'website-hero', 'website-identidad',
-      'reports'
-    ]
-  },
-  corrector: {
-    modules: [
-      'dashboard', 'notifications', 'clients', 'prospects', 'seguimientos', 'services', 
-      'completed_sales', 'documents', 'website', 
-      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones', 'website-solicitudes', 'website-footer', 'website-hero', 'website-identidad',
-      'reports'
-    ]
-  },
-  contador: {
-    modules: [
-      'dashboard', 'notifications', 'clients', 'prospects', 'seguimientos', 'services', 'completed_sales', 
-      'incomes', 'expenses', 'taxes', 'currency_rates', 'providers', 'staff', 'reserve',
-      'reports'
-    ]
-  },
-  'solo lectura': {
-    modules: [
-      'dashboard', 'notifications', 'quotations', 'clients', 'prospects', 'seguimientos',
-      'services', 'completed_sales', 'documents', 'catalog', 'packs', 'website', 
-      'website-servicios', 'website-libros', 'website-configuracion', 'website-enlaces', 'website-secciones', 'website-solicitudes', 'website-footer', 'website-hero', 'website-identidad',
-      'reports'
-    ]
-  }
-};
-
 export { getCurrentOrganizationId, subscribeToOrganizationChanges };
 
 export const getCurrentUserRole = () => {
-  const userJson = localStorage.getItem('somos_noveli_crm_user');
-  if (userJson) {
-    try {
-      const user = JSON.parse(userJson);
-      if (user.role) return user.role.toLowerCase();
-    } catch(e) {}
+  // Membership role takes priority over an older cached Auth user role.
+  const membershipRole = localStorage.getItem('somos_noveli_crm_role');
+  if (membershipRole !== null) return normalizeRole(membershipRole);
+  try {
+    return normalizeRole(JSON.parse(localStorage.getItem('somos_noveli_crm_user') || 'null')?.role);
+  } catch {
+    return null;
   }
-  return (localStorage.getItem('somos_noveli_crm_role') || 'solo lectura').toLowerCase();
 };
 
-export const canAccessModule = (moduleKey) => {
-  const role = getCurrentUserRole();
-  if (role === 'admin' || role === 'administrador') return true;
-  const permissions = ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS['solo lectura'];
-  if (permissions.modules === '*') return true;
-  return permissions.modules.includes(moduleKey);
-};
+export const canAccessModule = (moduleKey) =>
+  canRoleAccessModule(getCurrentUserRole(), moduleKey);
 
-export const canPerformAction = (moduleKey, action) => {
-  const role = getCurrentUserRole();
-  if (role === 'solo lectura') return false;
-  if (role === 'admin' || role === 'administrador') return true;
-  
-  // For other roles, block write actions if they cannot access the module
-  return canAccessModule(moduleKey);
-};
+export const canPerformAction = (moduleKey, action) =>
+  canRolePerformAction(getCurrentUserRole(), moduleKey, action);
 
 export const safeNumber = (value) => {
   if (value === null || value === undefined) return 0;

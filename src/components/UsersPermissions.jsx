@@ -1,3 +1,4 @@
+import { ROLE_OPTIONS, normalizeRole } from '../utils/roles';
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { 
@@ -5,17 +6,7 @@ import {
   AlertTriangle, ShieldCheck, Mail, Briefcase, Key, RefreshCw, CheckSquare, Square
 } from 'lucide-react';
 
-const AVAILABLE_ROLES = [
-  { id: 'admin', label: 'Administrador' },
-  { id: 'direccion', label: 'Dirección' },
-  { id: 'editor', label: 'Editor' },
-  { id: 'corrector', label: 'Corrector' },
-  { id: 'maquetador', label: 'Maquetador' },
-  { id: 'diseñador', label: 'Diseñador' },
-  { id: 'finanzas', label: 'Finanzas' },
-  { id: 'asistente', label: 'Asistente' },
-  { id: 'visualizador', label: 'Visualizador' }
-];
+const AVAILABLE_ROLES = ROLE_OPTIONS;
 
 const AVAILABLE_AREAS = [
   'Dirección', 'Editorial', 'Diseño', 'Maquetación', 
@@ -154,7 +145,7 @@ export default function UsersPermissions({ organizationId, userRole }) {
           user_id: userId,
           email: newEmail.trim().toLowerCase(),
           full_name: newFullName.trim(),
-          role: newRole,
+          role: normalizeRole(newRole),
           area: newArea,
           active: true,
           permissions: newPermissions
@@ -188,7 +179,7 @@ export default function UsersPermissions({ organizationId, userRole }) {
   const openEditModal = (member) => {
     setSelectedMember(member);
     setEditFullName(member.full_name || '');
-    setEditRole(member.role || 'editor');
+    setEditRole(normalizeRole(member.role) || '');
     setEditArea(member.area || 'Editorial');
     setEditActive(member.active !== false);
     // Parse permissions json or set defaults
@@ -209,7 +200,7 @@ export default function UsersPermissions({ organizationId, userRole }) {
         .from('organization_members')
         .update({
           full_name: editFullName.trim(),
-          role: editRole,
+          role: normalizeRole(editRole),
           area: editArea,
           active: editActive,
           permissions: editPermissions
