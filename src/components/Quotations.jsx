@@ -1,3 +1,5 @@
+import { canDeleteEntity } from '../utils/roles';
+import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
 import { supabase, getValidOrgId, isMock } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit, formatDate } from '../utils';
@@ -625,6 +627,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
   };
 
   const handleDeleteQuotation = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'quotations')) return;
     if (!window.confirm('¿Estás seguro de que deseas eliminar esta propuesta comercial?')) return;
     try {
       const normalizedId = normalizeUuid(id);
@@ -1820,7 +1823,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => handleDeleteQuotation(quote.id)}
+                            disabled={!canDeleteEntity(getCurrentUserRole(), 'quotations')} onClick={() => handleDeleteQuotation(quote.id)}
                             className="inline-flex p-1.5 rounded-lg border border-slate-105 dark:border-slate-800 text-slate-455 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer align-middle"
                             title="Eliminar"
                           >

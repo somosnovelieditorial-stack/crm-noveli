@@ -1,3 +1,5 @@
+import { canDeleteEntity } from '../utils/roles';
+import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, formatDate, filterByPeriod, exportToCSV, syncPaymentStatus } from '../utils';
@@ -593,6 +595,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
   };
 
   const handleDeleteService = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'services')) return;
     if (isReadOnly) {
       alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
       return;
@@ -1363,7 +1366,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleDeleteService(service.id)}
+                      disabled={!canDeleteEntity(getCurrentUserRole(), 'services')} onClick={() => handleDeleteService(service.id)}
                       className="p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-650 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />

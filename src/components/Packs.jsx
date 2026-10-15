@@ -1,3 +1,5 @@
+import { canDeleteEntity } from '../utils/roles';
+import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import QuickQuoteModal from './QuickQuoteModal';
@@ -132,6 +134,7 @@ export default function Packs({ realtimeTrigger }) {
   };
 
   const handleDeletePack = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'service_packs')) return;
     if (window.confirm('¿Estás seguro de que deseas eliminar este pack editorial?')) {
       try {
         const { error } = await supabase
@@ -458,7 +461,7 @@ export default function Packs({ realtimeTrigger }) {
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => handleDeletePack(pack.id)}
+                      disabled={!canDeleteEntity(getCurrentUserRole(), 'service_packs')} onClick={() => handleDeletePack(pack.id)}
                       className="p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-650 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

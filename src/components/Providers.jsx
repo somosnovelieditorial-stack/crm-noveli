@@ -1,3 +1,5 @@
+import { canDeleteEntity } from '../utils/roles';
+import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { formatDate } from '../utils';
@@ -88,6 +90,7 @@ export default function Providers() {
   };
 
   const handleDeleteProvider = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'providers')) return;
     if (window.confirm('¿Estás seguro de que deseas eliminar este proveedor?')) {
       try {
         const { error } = await supabase
@@ -297,7 +300,7 @@ export default function Providers() {
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDeleteProvider(prov.id)}
+                        disabled={!canDeleteEntity(getCurrentUserRole(), 'providers')} onClick={() => handleDeleteProvider(prov.id)}
                         className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
                         title="Eliminar"
                       >

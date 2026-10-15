@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ROLE_OPTIONS, normalizeRole, isAdminRole, isWriterRole,
-  canRoleAccessModule, canRolePerformAction,
+  canRoleAccessModule, canRolePerformAction, canDeleteEntity,
 } from './roles.js';
 
 test('exactly six canonical roles and the six approved aliases', () => {
@@ -48,4 +48,23 @@ test('canonical writers retain their existing module scope', () => {
   assert.equal(canRolePerformAction('maquetador', 'services'), true);
   assert.equal(canRolePerformAction('asistente', 'clients'), true);
   assert.equal(canRolePerformAction('direccion', 'configuration'), true);
+});
+
+test('DELETE follows admin and operational RLS; unknown tables and roles fail closed', () => {
+  for (const table of ['clients', 'prospects', 'quotations', 'services', 'providers',
+    'service_catalog', 'service_packs', 'activity_log', 'website_settings',
+    'website_sections', 'website_services', 'website_books', 'website_links']) {
+    assert.equal(canDeleteEntity('admin', table), true);
+    assert.equal(canDeleteEntity('direccion', table), true);
+    for (const role of ['editor', 'diseñador', 'corrector', 'finanzas', 'visualizador', null, 'unknown'])
+      assert.equal(canDeleteEntity(role, table), false);
+  }
+  for (const table of ['quotation_items', 'service_pack_items', 'service_checklists',
+    'service_stages', 'editorial_stages', 'documents', 'agenda_events']) {
+    for (const role of ['admin', 'editor', 'diseñador', 'corrector', 'finanzas'])
+      assert.equal(canDeleteEntity(role, table), true);
+    for (const role of ['visualizador', 'unknown', null])
+      assert.equal(canDeleteEntity(role, table), false);
+  }
+  assert.equal(canDeleteEntity('admin', 'unreviewed_table'), false);
 });

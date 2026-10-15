@@ -1,3 +1,5 @@
+import { canDeleteEntity } from '../utils/roles';
+import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { formatDate, exportToCSV, formatCLP } from '../utils';
@@ -742,6 +744,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
 
 
   const handleDeleteProspect = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'prospects')) return;
     if (isReadOnly) {
       alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
       return;
@@ -1523,7 +1526,7 @@ export default function Prospects({ isReadOnly = false, userRole = 'administrado
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDeleteProspect(p.id)}
+                            disabled={!canDeleteEntity(getCurrentUserRole(), 'prospects')} onClick={() => handleDeleteProspect(p.id)}
                             className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
                             title="Eliminar"
                           >

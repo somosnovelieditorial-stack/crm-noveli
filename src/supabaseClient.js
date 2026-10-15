@@ -1809,13 +1809,14 @@ class MutationQueryBuilder {
     if (this.method === 'insert' && records.length > 0) {
       if (this.table === 'services') {
         try {
-          const stagesRes = await this.realClient.from('editorial_stages').select('*').eq('active', true).order('order', { ascending: true });
+          const stagesRes = await this.realClient.from('editorial_stages').select('*').eq('organization_id', orgId).eq('active', true).order('order', { ascending: true });
           const activeStages = stagesRes.data || [];
           const serviceStagesToInsert = [];
           records.forEach(serv => {
             activeStages.forEach((stage, idx) => {
               serviceStagesToInsert.push({
                 service_id: serv.id,
+                organization_id: serv.organization_id || orgId,
                 stage_name: stage.name,
                 status: idx === 0 ? 'en proceso' : 'pendiente',
                 start_date: idx === 0 ? new Date().toISOString().split('T')[0] : null,
@@ -1875,7 +1876,8 @@ class MutationQueryBuilder {
               module: moduleName,
               action: actionType,
               description: desc,
-              entity_id: item.id
+              entity_id: item.id,
+              organization_id: item.organization_id || orgId
             };
           });
           if (logsToInsert.length > 0) {
@@ -1939,7 +1941,8 @@ class MutationQueryBuilder {
               module: moduleName,
               action: actionType,
               description: desc,
-              entity_id: item.id
+              entity_id: item.id,
+              organization_id: item.organization_id || orgId
             };
           });
           if (logsToInsert.length > 0) {
@@ -1983,7 +1986,8 @@ class MutationQueryBuilder {
               module: moduleName,
               action: actionType,
               description: desc,
-              entity_id: item.id
+              entity_id: item.id,
+              organization_id: item.organization_id || orgId
             };
           });
           if (logsToInsert.length > 0) {

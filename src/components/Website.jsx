@@ -1,3 +1,5 @@
+import { canDeleteEntity } from '../utils/roles';
+import { getCurrentUserRole } from '../utils';
 import React, { useState, useEffect } from 'react';
 import { supabase, isMock } from '../supabaseClient';
 import { 
@@ -1580,6 +1582,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
   };
 
   const handleDeleteService = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'website_services')) return;
     if (isReadOnly) return;
     if (!window.confirm("¿Eliminar este servicio?")) return;
     try {
@@ -1787,6 +1790,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
   };
 
   const handleDeleteBook = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'website_books')) return;
     if (isReadOnly) return;
     if (!window.confirm("¿Eliminar este libro?")) return;
     try {
@@ -2188,6 +2192,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
   };
 
   const handleDeleteLink = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'website_links')) return;
     if (isReadOnly) return;
     if (!window.confirm("¿Eliminar este enlace?")) return;
     try {
@@ -2290,6 +2295,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
   };
 
   const handleDeleteSection = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'website_sections')) return;
     if (isReadOnly) return;
     if (!window.confirm("¿Eliminar esta sección?")) return;
     try {
@@ -3188,7 +3194,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                         </td>
                         <td className="py-3 text-right space-x-1">
                           <button onClick={() => startEditService(s)} className="p-1 hover:bg-slate-100 text-slate-450 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleDeleteService(s.id)} className="p-1 hover:bg-rose-50 text-slate-450 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <button disabled={!canDeleteEntity(getCurrentUserRole(), 'website_services')} onClick={() => handleDeleteService(s.id)} className="p-1 hover:bg-rose-50 text-slate-450 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-3.5 h-3.5" /></button>
                         </td>
                       </tr>
                     ))}
@@ -3512,7 +3518,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                           </button>
                           
                           <button onClick={() => startEditBook(b)} className="p-1 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-4 h-4" /></button>
-                          <button onClick={() => handleDeleteBook(b.id)} className="p-1 hover:bg-rose-50 text-slate-400 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-4 h-4" /></button>
+                          <button disabled={!canDeleteEntity(getCurrentUserRole(), 'website_books')} onClick={() => handleDeleteBook(b.id)} className="p-1 hover:bg-rose-50 text-slate-400 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </div>
                       {b.short_description && <p className="text-xs text-slate-500 italic font-sans leading-relaxed">"{b.short_description}"</p>}
@@ -3899,7 +3905,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                         </td>
                         <td className="py-3 text-right space-x-1.5">
                           <button onClick={() => startEditLink(l)} className="p-1 hover:bg-slate-100 text-slate-455 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Edit className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleDeleteLink(l.id)} className="p-1 hover:bg-rose-50 text-slate-455 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <button disabled={!canDeleteEntity(getCurrentUserRole(), 'website_links')} onClick={() => handleDeleteLink(l.id)} className="p-1 hover:bg-rose-50 text-slate-455 rounded border-none bg-transparent cursor-pointer inline-flex items-center"><Trash2 className="w-3.5 h-3.5" /></button>
                         </td>
                       </tr>
                     ))}
@@ -3983,7 +3989,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                       </button>
                       
                       <button onClick={() => startEditSection(sec)} className="p-1 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded border-none bg-transparent cursor-pointer"><Edit className="w-4 h-4" /></button>
-                      <button onClick={() => handleDeleteSection(sec.id)} className="p-1 hover:bg-rose-50 text-slate-400 rounded border-none bg-transparent cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                      <button disabled={!canDeleteEntity(getCurrentUserRole(), 'website_sections')} onClick={() => handleDeleteSection(sec.id)} className="p-1 hover:bg-rose-50 text-slate-400 rounded border-none bg-transparent cursor-pointer"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </div>
                   <p className="text-xs text-slate-500 leading-relaxed font-sans">{sec.content}</p>

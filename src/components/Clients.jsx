@@ -1,3 +1,5 @@
+import { canDeleteEntity } from '../utils/roles';
+import { getCurrentUserRole } from '../utils';
 import React, { useEffect, useState, Component } from 'react';
 import { supabase, isMock } from '../supabaseClient';
 import ClientQuotesModal from './ClientQuotesModal';
@@ -1165,6 +1167,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
   };
 
   const handleDeleteClient = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'clients')) return;
     if (isReadOnly) {
       alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
       return;
@@ -2236,7 +2239,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => handleDeleteClient(client.id)}
+                            disabled={!canDeleteEntity(getCurrentUserRole(), 'clients')} onClick={() => handleDeleteClient(client.id)}
                             className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer align-middle"
                             title="Eliminar"
                           >

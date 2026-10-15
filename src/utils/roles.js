@@ -60,3 +60,17 @@ export const canRolePerformAction = (value, module, action = 'write') => {
   if (['read', 'view', 'ver', 'select'].includes(action)) return true;
   return isWriterRole(value);
 };
+
+const adminDeleteTables = new Set([
+  'clients', 'prospects', 'quotations', 'services', 'providers',
+  'service_catalog', 'service_packs', 'activity_log',
+  'website_settings', 'website_sections', 'website_services', 'website_books', 'website_links',
+]);
+const writerDeleteTables = new Set([
+  'quotation_items', 'service_pack_items', 'service_checklists', 'service_stages',
+  'editorial_stages', 'documents', 'agenda_events', 'website_book_categories',
+  'website_book_category_links', 'website_footer_gallery', 'website_hero_quick_services',
+]);
+export const canDeleteEntity = (role, table) =>
+  adminDeleteTables.has(table) ? isAdminRole(role) :
+    (writerDeleteTables.has(table) && isWriterRole(role));
