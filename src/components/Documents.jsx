@@ -1,3 +1,4 @@
+import { createDocumentUrl, getDocumentPath } from '../utils/storageDocuments';
 import { useEffect, useState } from 'react';
 import { supabase, isMock } from '../supabaseClient';
 import { formatDate } from '../utils';
@@ -55,39 +56,8 @@ export default function Documents({ realtimeTrigger }) {
   const [signedUrl, setSignedUrl] = useState('');
   const [loadingViewer, setLoadingViewer] = useState(false);
 
-  const getCleanPath = (pathString) => {
-    if (!pathString) return '';
-    let clean = pathString;
-    
-    // If it's a full URL
-    if (clean.startsWith('http://') || clean.startsWith('https://')) {
-      try {
-        const url = new URL(clean);
-        const match = url.pathname.match(/\/object\/(?:sign|public|authenticated)\/documents\/(.+)$/);
-        if (match && match[1]) {
-          clean = match[1];
-        } else {
-          const parts = url.pathname.split('/documents/');
-          if (parts.length > 1) {
-            clean = parts.slice(1).join('/documents/');
-          }
-        }
-      } catch (e) {
-        console.error("Error parsing URL in getCleanPath:", e);
-      }
-    }
-    
-    // Decode URI component (e.g. spaces as %20)
-    try {
-      clean = decodeURIComponent(clean);
-    } catch (e) {}
-
-    // If it starts with 'documents/' prefix, remove it
-    if (clean.startsWith('documents/')) {
-      clean = clean.substring('documents/'.length);
-    }
-
-    return clean;
+  const getCleanPath = (value) => {
+    try { return getDocumentPath(value); } catch { return ''; }
   };
 
   const getMimeType = (doc) => {
@@ -193,9 +163,7 @@ export default function Documents({ realtimeTrigger }) {
             .from('documents')
             .remove([doc.file_path]);
 
-          if (storageErr) {
-            console.warn("Storage warning (could be mock):", storageErr);
-          }
+          if (storageErr) throw storageErr;
         }
 
         const { error: dbErr } = await supabase
@@ -227,11 +195,7 @@ export default function Documents({ realtimeTrigger }) {
       alert(`Simulación de descarga en Modo Demo: descargando archivo "${docName}" desde la ruta "${cleanPath}"`);
     } else {
       try {
-        const { data, error } = await supabase.storage
-          .from('documents')
-          .createSignedUrl(cleanPath, 3600);
-        
-        if (error) throw error;
+        const data = { signedUrl: await createDocumentUrl(supabase.storage, { file_path: cleanPath }) };
         if (data?.signedUrl) {
           const a = document.createElement('a');
           a.href = data.signedUrl;
@@ -269,11 +233,7 @@ export default function Documents({ realtimeTrigger }) {
     } else {
       setLoadingViewer(true);
       try {
-        const { data, error } = await supabase.storage
-          .from('documents')
-          .createSignedUrl(cleanPath, 3600);
-        
-        if (error) throw error;
+        const data = { signedUrl: await createDocumentUrl(supabase.storage, { file_path: cleanPath }) };
         if (data?.signedUrl) {
           setSignedUrl(data.signedUrl);
         } else {
@@ -343,11 +303,8 @@ export default function Documents({ realtimeTrigger }) {
 
         if (uploadErr) throw uploadErr;
 
-        const { data: publicUrlData } = supabase.storage
-          .from('documents')
-          .getPublicUrl(storagePath);
-        
-        fileUrl = publicUrlData?.publicUrl || '';
+        // Private bucket: access is signed on demand; persist only file_path.
+        fileUrl = '';
       } else {
         fileUrl = `mock://documents/${storagePath}`;
       }

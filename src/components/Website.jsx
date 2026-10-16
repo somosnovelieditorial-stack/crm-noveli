@@ -1069,12 +1069,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         finalUrl = `mock://hero/${storagePath}`;
       } else {
         const { error: uploadErr } = await supabase.storage
-          .from('documents')
+          .from('brand-assets')
           .upload(storagePath, file, { upsert: true });
         if (uploadErr) throw uploadErr;
 
         const { data: publicUrlData } = supabase.storage
-          .from('documents')
+          .from('brand-assets')
           .getPublicUrl(storagePath);
         finalUrl = publicUrlData?.publicUrl || '';
       }
@@ -1317,12 +1317,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         finalUrl = `mock://identity/${storagePath}`;
       } else {
         const { error: uploadErr } = await supabase.storage
-          .from('documents')
+          .from('brand-assets')
           .upload(storagePath, file, { upsert: true });
         if (uploadErr) throw uploadErr;
 
         const { data: publicUrlData } = supabase.storage
-          .from('documents')
+          .from('brand-assets')
           .getPublicUrl(storagePath);
         finalUrl = publicUrlData?.publicUrl || '';
       }
@@ -1979,12 +1979,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         finalUrl = `mock://covers/${storagePath}`;
       } else {
         const { error: uploadErr } = await supabase.storage
-          .from('documents')
+          .from('brand-assets')
           .upload(storagePath, file, { upsert: true });
         if (uploadErr) throw uploadErr;
 
         const { data: publicUrlData } = supabase.storage
-          .from('documents')
+          .from('brand-assets')
           .getPublicUrl(storagePath);
         finalUrl = publicUrlData?.publicUrl || '';
       }
@@ -2023,12 +2023,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         finalUrl = `mock://services/${storagePath}`;
       } else {
         const { error: uploadErr } = await supabase.storage
-          .from('documents')
+          .from('brand-assets')
           .upload(storagePath, file, { upsert: true });
         if (uploadErr) throw uploadErr;
 
         const { data: publicUrlData } = supabase.storage
-          .from('documents')
+          .from('brand-assets')
           .getPublicUrl(storagePath);
         finalUrl = publicUrlData?.publicUrl || '';
       }
@@ -2060,12 +2060,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         finalUrl = `mock://footer/${storagePath}`;
       } else {
         const { error: uploadErr } = await supabase.storage
-          .from('documents')
+          .from('brand-assets')
           .upload(storagePath, file, { upsert: true });
         if (uploadErr) throw uploadErr;
 
         const { data: publicUrlData } = supabase.storage
-          .from('documents')
+          .from('brand-assets')
           .getPublicUrl(storagePath);
         finalUrl = publicUrlData?.publicUrl || '';
       }

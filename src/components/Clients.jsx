@@ -1,3 +1,4 @@
+import { openPrivateDocument } from '../utils/storageDocuments';
 import { canDeleteEntity, isFinanceRole } from '../utils/roles';
 import { getCurrentUserRole } from '../utils';
 import React, { useEffect, useState, Component } from 'react';
@@ -485,11 +486,8 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
 
         if (uploadErr) throw uploadErr;
 
-        const { data: publicUrlData } = supabase.storage
-          .from('documents')
-          .getPublicUrl(storagePath);
-        
-        fileUrl = publicUrlData?.publicUrl || '';
+        // Private bucket: access is signed on demand; persist only file_path.
+        fileUrl = '';
       } else {
         fileUrl = `mock://documents/${storagePath}`;
       }
@@ -552,9 +550,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
           const { error: storageErr } = await supabase.storage
             .from('documents')
             .remove([doc.file_path]);
-          if (storageErr) {
-            console.warn("Storage warning:", storageErr);
-          }
+          if (storageErr) throw storageErr;
         }
 
         const { error: dbErr } = await supabase
@@ -573,43 +569,21 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
   };
 
   const handleDownloadClientFile = (doc) => {
-    const docName = doc.title || doc.name || doc.file_name || 'Documento';
-    if (isMock) {
-      alert(`Simulación de descarga en Modo Demo: descargando archivo "${docName}"`);
-    } else {
-      if (doc.file_url) {
-        window.open(doc.file_url, '_blank');
-      } else {
-        const { data } = supabase.storage
-          .from('documents')
-          .getPublicUrl(doc.file_path);
-        if (data?.publicUrl) {
-          window.open(data.publicUrl, '_blank');
-        } else {
-          alert('No se pudo generar el enlace de descarga');
-        }
-      }
+    const mockMode = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
+    if (mockMode) {
+      alert('Simulación de acceso al documento en Modo Demo.');
+      return;
     }
+    return openPrivateDocument(supabase.storage, doc);
   };
 
   const handleViewClientFile = (doc) => {
-    const docName = doc.title || doc.name || doc.file_name || 'Documento';
-    if (isMock) {
-      alert(`Simulación de visualización en Modo Demo: viendo archivo "${docName}"`);
-    } else {
-      if (doc.file_url) {
-        window.open(doc.file_url, '_blank');
-      } else {
-        const { data } = supabase.storage
-          .from('documents')
-          .getPublicUrl(doc.file_path);
-        if (data?.publicUrl) {
-          window.open(data.publicUrl, '_blank');
-        } else {
-          alert('No se pudo generar el enlace de visualización');
-        }
-      }
+    const mockMode = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
+    if (mockMode) {
+      alert('Simulación de acceso al documento en Modo Demo.');
+      return;
     }
+    return openPrivateDocument(supabase.storage, doc);
   };
 
   const getDocTypeColor = (type) => {
