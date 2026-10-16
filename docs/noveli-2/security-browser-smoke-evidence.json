@@ -1,0 +1,1061 @@
+{
+  "date": "2026-10-16 America/Santiago",
+  "environment": "LOCAL ONLY; 127.0.0.1:5179 / 127.0.0.1:54321",
+  "browser": "HeadlessChrome/155.0.0.0; existing executable; Node v24 native WebSocket CDP",
+  "status": "FAIL: frontend regressions discovered, no production changes",
+  "actionsRecorded": 193,
+  "httpResponsesObservedIncludingPreflights": 8217,
+  "supabaseResponsesIncludingPreflights": 4147,
+  "expectedNegativeHttpResponses": [
+    {
+      "phase": "browser-profile-and-storage",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/storage/v1/object/public/documents/ed6b16c5-db1d-4869-99c1-c5ff22dae8e1/clientes/2f2cef37-1a74-4eca-bdaa-a8116ae10a5c/contrato/.security-smoke-upload.pdf",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "expected-viewer-storage-denial",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/storage/v1/object/documents/ed6b16c5-db1d-4869-99c1-c5ff22dae8e1/general/negative-viewer.txt",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "expected-storage-expiry-and-public-brand",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/storage/v1/object/sign/documents/ed6b16c5-db1d-4869-99c1-c5ff22dae8e1/clientes/2f2cef37-1a74-4eca-bdaa-a8116ae10a5c/contrato/.security-smoke-upload.pdf",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "expected-cross-tenant-denials",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/storage/v1/object/sign/documents/a9effe6f-c29e-4eec-8341-cd9ba4df28a2/general/LOCAL-other-tenant.pdf",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "expected-cross-tenant-denials",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/storage/v1/object/documents/a9effe6f-c29e-4eec-8341-cd9ba4df28a2/general/LOCAL-other-tenant.pdf",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "expected-unknown-write-denial",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/storage/v1/object/documents/ed6b16c5-db1d-4869-99c1-c5ff22dae8e1/general/negative-unknown.txt",
+      "status": 400,
+      "mime": "application/json"
+    }
+  ],
+  "unexpectedHttpResponses": [
+    {
+      "phase": "bootstrap",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "bootstrap",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "auth-admin-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "auth-admin-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "auth-logout",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "auth-relogin",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "auth-relogin",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "client-edit-save",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/exchange_rates",
+      "status": 406,
+      "mime": "application/json"
+    },
+    {
+      "phase": "quotation-save",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/exchange_rates",
+      "status": 406,
+      "mime": "application/json"
+    },
+    {
+      "phase": "cms-identity",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "cms-identity",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-finanzas-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-finanzas-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-finanzas-cms-navigate",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-finanzas-cms-navigate",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-editor-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-editor-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-editor-cms-navigate",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-editor-cms-navigate",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-diseñador-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-diseñador-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-diseñador-cms-navigate",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-diseñador-cms-navigate",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-corrector-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-corrector-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-corrector-cms-navigate",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-corrector-cms-navigate",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-visualizador-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-visualizador-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-visualizador-cms-navigate",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-visualizador-cms-navigate",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-unknown-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-unknown-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-unknown-cms-navigate",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "role-unknown-cms-navigate",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "viewer-delete-ui-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "viewer-delete-ui-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "admin-final-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "admin-final-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "cms-missing-column-confirmation",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "cms-restore-nav",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "cms-restore-nav",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/website_book_category_links",
+      "status": 400,
+      "mime": "application/json"
+    },
+    {
+      "phase": "unknown-negative-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "unknown-negative-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "admin-idle-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    },
+    {
+      "phase": "admin-idle-login",
+      "type": "response",
+      "url": "http://127.0.0.1:54321/rest/v1/rpc/get_org_branding",
+      "status": 401,
+      "mime": "application/json"
+    }
+  ],
+  "consoleMessageCounts": {
+    "clientsError ": 29,
+    "incomesError ": 29,
+    "expensesError ": 29,
+    "servicesError ": 29,
+    "DEBUG CREAR CLIENTE - PAYLOAD ENVIADO: Object": 1,
+    "DEBUG CREAR CLIENTE - DATA SUPABASE: Object": 1,
+    "DEBUG CREAR CLIENTE - ERROR SUPABASE: ": 1,
+    "Error saving client: ReferenceError: createdClient is not defined": 1,
+    "Error uploading client document: Error: Formato no permitido. Solo se aceptan: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, WEBP.": 1,
+    "A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://react.dev/link/controlled-components": 1
+  },
+  "pageErrors": [],
+  "harnessRetryErrors": [
+    {
+      "phase": "client-edit-name",
+      "type": "harness_error",
+      "message": "Uncaught: Error: Missing input\n    at <anonymous>:1:144\n    at <anonymous>:1:513"
+    },
+    {
+      "phase": "client-edit-save",
+      "type": "harness_error",
+      "message": "Uncaught: SyntaxError: await is only valid in async functions and the top level bodies of modules"
+    },
+    {
+      "phase": "client-detail",
+      "type": "harness_error",
+      "message": "Uncaught: SyntaxError: await is only valid in async functions and the top level bodies of modules"
+    },
+    {
+      "phase": "client-signed-open",
+      "type": "harness_error",
+      "message": "Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'click'): TypeError: Cannot read properties of undefined (reading 'click')\n    at <anonymous>:1:81\n    at <anonymous>:1:158"
+    },
+    {
+      "phase": "service-edit-open",
+      "type": "harness_error",
+      "message": "Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'click'): TypeError: Cannot read properties of undefined (reading 'click')\n    at <anonymous>:1:120\n    at <anonymous>:1:255"
+    },
+    {
+      "phase": "service-edit-title",
+      "type": "harness_error",
+      "message": "Uncaught: Error: Missing input\n    at <anonymous>:1:150\n    at <anonymous>:1:517"
+    },
+    {
+      "phase": "service-edit-save",
+      "type": "harness_error",
+      "message": "Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'click'): TypeError: Cannot read properties of undefined (reading 'click')\n    at <anonymous>:1:85\n    at <anonymous>:1:255"
+    }
+  ],
+  "externalRequestsBlocked": {
+    "https://fonts.googleapis.com/css2": 71
+  },
+  "idleObservationSeconds": 7,
+  "idleResponses": 0,
+  "roleObservations": [
+    {
+      "path": "/clientes",
+      "role": "finanzas",
+      "denied": false,
+      "writeButtons": [
+        "Añadir Cliente"
+      ],
+      "deletes": 0,
+      "textTail": "lizado\nPerdido / Rechazado\nPAÍS:\nTodos\nTIPO:\nTodos\nNacional\nInternacional\nNOMBRE\tCONTACTO\tPAÍS / TIPO\tDIVISA\tESTADO\tCREADO\tACCIONES\n\nLOCAL Browser Client Edited\n\t\t\n-\nNACIONAL\tCLP\tPROSPECTO\t15-10-2026\t",
+      "scenario": "role-finanzas-clients"
+    },
+    {
+      "path": "/documentos",
+      "role": "finanzas",
+      "denied": false,
+      "writeButtons": [
+        "Subir Documento"
+      ],
+      "deletes": 0,
+      "textTail": "s.\n\n0 Proveedores\nProveedores\n\nContratos, acuerdos y facturas emitidas por proveedores de servicios.\n\n1 Archivos\nGeneral / Otros\n\nDocumentos institucionales y archivos sueltos no asociados a clientes.",
+      "scenario": "role-finanzas-documents"
+    },
+    {
+      "path": "/sitio-web/identidad",
+      "role": "finanzas",
+      "denied": false,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": "O CLARO\nINICIO\nSERVICIOS\nLIBROS\nCABECERA/PIE EN FONDO OSCURO\nINICIO\nSERVICIOS\nLIBROS\nPESTAÑA DEL NAVEGADOR\nN\nLOCAL Browser Brand | Editorial Independiente\nSe actualizará automáticamente en noveli-web.",
+      "scenario": "role-finanzas-cms"
+    },
+    {
+      "path": "/ingresos",
+      "role": "finanzas",
+      "denied": false,
+      "writeButtons": [
+        "Registrar Ingreso"
+      ],
+      "deletes": 0,
+      "textTail": "ignado\n\t\n$0\nExento (Sin IVA)\n\tTransferencia\t\nPENDIENTE\n\t\nDistribución\n\n16-10-2026\t\nLOCAL Browser Client Edited\nLOCAL Browser Book Edited\n\t\n$1.600\nExento (Sin IVA)\n\tTransferencia\t\nPAGADO\n\t\nDistribución",
+      "scenario": "role-finanzas-finance"
+    },
+    {
+      "path": "/configuration",
+      "role": "finanzas",
+      "denied": true,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": "o Lectura: Tu rol de finanzas no tiene permisos de edición en el módulo de Configuración. Todos los botones de guardado e inserción han sido desactivados.\nNo tienes permiso para acceder a este módulo.",
+      "scenario": "role-finanzas-admin"
+    },
+    {
+      "path": "/clientes",
+      "role": "editor",
+      "denied": false,
+      "writeButtons": [
+        "Añadir Cliente"
+      ],
+      "deletes": 0,
+      "textTail": "lizado\nPerdido / Rechazado\nPAÍS:\nTodos\nTIPO:\nTodos\nNacional\nInternacional\nNOMBRE\tCONTACTO\tPAÍS / TIPO\tDIVISA\tESTADO\tCREADO\tACCIONES\n\nLOCAL Browser Client Edited\n\t\t\n-\nNACIONAL\tCLP\tPROSPECTO\t15-10-2026\t",
+      "scenario": "role-editor-clients"
+    },
+    {
+      "path": "/documentos",
+      "role": "editor",
+      "denied": false,
+      "writeButtons": [
+        "Subir Documento"
+      ],
+      "deletes": 0,
+      "textTail": "s.\n\n0 Proveedores\nProveedores\n\nContratos, acuerdos y facturas emitidas por proveedores de servicios.\n\n1 Archivos\nGeneral / Otros\n\nDocumentos institucionales y archivos sueltos no asociados a clientes.",
+      "scenario": "role-editor-documents"
+    },
+    {
+      "path": "/sitio-web/identidad",
+      "role": "editor",
+      "denied": false,
+      "writeButtons": [
+        "Guardar Identidad Visual"
+      ],
+      "deletes": 0,
+      "textTail": "O CLARO\nINICIO\nSERVICIOS\nLIBROS\nCABECERA/PIE EN FONDO OSCURO\nINICIO\nSERVICIOS\nLIBROS\nPESTAÑA DEL NAVEGADOR\nN\nLOCAL Browser Brand | Editorial Independiente\nSe actualizará automáticamente en noveli-web.",
+      "scenario": "role-editor-cms"
+    },
+    {
+      "path": "/ingresos",
+      "role": "editor",
+      "denied": true,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": "odo Solo Lectura: Tu rol de editor no tiene permisos de edición en el módulo de Ingresos. Todos los botones de guardado e inserción han sido desactivados.\nNo tienes permiso para acceder a este módulo.",
+      "scenario": "role-editor-finance"
+    },
+    {
+      "path": "/configuration",
+      "role": "editor",
+      "denied": true,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": "olo Lectura: Tu rol de editor no tiene permisos de edición en el módulo de Configuración. Todos los botones de guardado e inserción han sido desactivados.\nNo tienes permiso para acceder a este módulo.",
+      "scenario": "role-editor-admin"
+    },
+    {
+      "path": "/clientes",
+      "role": "diseñador",
+      "denied": false,
+      "writeButtons": [
+        "Añadir Cliente"
+      ],
+      "deletes": 0,
+      "textTail": "lizado\nPerdido / Rechazado\nPAÍS:\nTodos\nTIPO:\nTodos\nNacional\nInternacional\nNOMBRE\tCONTACTO\tPAÍS / TIPO\tDIVISA\tESTADO\tCREADO\tACCIONES\n\nLOCAL Browser Client Edited\n\t\t\n-\nNACIONAL\tCLP\tPROSPECTO\t15-10-2026\t",
+      "scenario": "role-diseñador-clients"
+    },
+    {
+      "path": "/documentos",
+      "role": "diseñador",
+      "denied": false,
+      "writeButtons": [
+        "Subir Documento"
+      ],
+      "deletes": 0,
+      "textTail": "s.\n\n0 Proveedores\nProveedores\n\nContratos, acuerdos y facturas emitidas por proveedores de servicios.\n\n1 Archivos\nGeneral / Otros\n\nDocumentos institucionales y archivos sueltos no asociados a clientes.",
+      "scenario": "role-diseñador-documents"
+    },
+    {
+      "path": "/sitio-web/identidad",
+      "role": "diseñador",
+      "denied": false,
+      "writeButtons": [
+        "Guardar Identidad Visual"
+      ],
+      "deletes": 0,
+      "textTail": "O CLARO\nINICIO\nSERVICIOS\nLIBROS\nCABECERA/PIE EN FONDO OSCURO\nINICIO\nSERVICIOS\nLIBROS\nPESTAÑA DEL NAVEGADOR\nN\nLOCAL Browser Brand | Editorial Independiente\nSe actualizará automáticamente en noveli-web.",
+      "scenario": "role-diseñador-cms"
+    },
+    {
+      "path": "/ingresos",
+      "role": "diseñador",
+      "denied": true,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": " Solo Lectura: Tu rol de diseñador no tiene permisos de edición en el módulo de Ingresos. Todos los botones de guardado e inserción han sido desactivados.\nNo tienes permiso para acceder a este módulo.",
+      "scenario": "role-diseñador-finance"
+    },
+    {
+      "path": "/configuration",
+      "role": "diseñador",
+      "denied": true,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": " Lectura: Tu rol de diseñador no tiene permisos de edición en el módulo de Configuración. Todos los botones de guardado e inserción han sido desactivados.\nNo tienes permiso para acceder a este módulo.",
+      "scenario": "role-diseñador-admin"
+    },
+    {
+      "path": "/clientes",
+      "role": "corrector",
+      "denied": false,
+      "writeButtons": [
+        "Añadir Cliente"
+      ],
+      "deletes": 0,
+      "textTail": "lizado\nPerdido / Rechazado\nPAÍS:\nTodos\nTIPO:\nTodos\nNacional\nInternacional\nNOMBRE\tCONTACTO\tPAÍS / TIPO\tDIVISA\tESTADO\tCREADO\tACCIONES\n\nLOCAL Browser Client Edited\n\t\t\n-\nNACIONAL\tCLP\tPROSPECTO\t15-10-2026\t",
+      "scenario": "role-corrector-clients"
+    },
+    {
+      "path": "/documentos",
+      "role": "corrector",
+      "denied": false,
+      "writeButtons": [
+        "Subir Documento"
+      ],
+      "deletes": 0,
+      "textTail": "s.\n\n0 Proveedores\nProveedores\n\nContratos, acuerdos y facturas emitidas por proveedores de servicios.\n\n1 Archivos\nGeneral / Otros\n\nDocumentos institucionales y archivos sueltos no asociados a clientes.",
+      "scenario": "role-corrector-documents"
+    },
+    {
+      "path": "/sitio-web/identidad",
+      "role": "corrector",
+      "denied": false,
+      "writeButtons": [
+        "Guardar Identidad Visual"
+      ],
+      "deletes": 0,
+      "textTail": "O CLARO\nINICIO\nSERVICIOS\nLIBROS\nCABECERA/PIE EN FONDO OSCURO\nINICIO\nSERVICIOS\nLIBROS\nPESTAÑA DEL NAVEGADOR\nN\nLOCAL Browser Brand | Editorial Independiente\nSe actualizará automáticamente en noveli-web.",
+      "scenario": "role-corrector-cms"
+    },
+    {
+      "path": "/ingresos",
+      "role": "corrector",
+      "denied": true,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": " Solo Lectura: Tu rol de corrector no tiene permisos de edición en el módulo de Ingresos. Todos los botones de guardado e inserción han sido desactivados.\nNo tienes permiso para acceder a este módulo.",
+      "scenario": "role-corrector-finance"
+    },
+    {
+      "path": "/configuration",
+      "role": "corrector",
+      "denied": true,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": " Lectura: Tu rol de corrector no tiene permisos de edición en el módulo de Configuración. Todos los botones de guardado e inserción han sido desactivados.\nNo tienes permiso para acceder a este módulo.",
+      "scenario": "role-corrector-admin"
+    },
+    {
+      "path": "/clientes",
+      "role": "visualizador",
+      "denied": false,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": "lizado\nPerdido / Rechazado\nPAÍS:\nTodos\nTIPO:\nTodos\nNacional\nInternacional\nNOMBRE\tCONTACTO\tPAÍS / TIPO\tDIVISA\tESTADO\tCREADO\tACCIONES\n\nLOCAL Browser Client Edited\n\t\t\n-\nNACIONAL\tCLP\tPROSPECTO\t15-10-2026\t",
+      "scenario": "role-visualizador-clients"
+    },
+    {
+      "path": "/documentos",
+      "role": "visualizador",
+      "denied": false,
+      "writeButtons": [
+        "Subir Documento"
+      ],
+      "deletes": 0,
+      "textTail": "s.\n\n0 Proveedores\nProveedores\n\nContratos, acuerdos y facturas emitidas por proveedores de servicios.\n\n1 Archivos\nGeneral / Otros\n\nDocumentos institucionales y archivos sueltos no asociados a clientes.",
+      "scenario": "role-visualizador-documents"
+    },
+    {
+      "path": "/sitio-web/identidad",
+      "role": "visualizador",
+      "denied": false,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": "O CLARO\nINICIO\nSERVICIOS\nLIBROS\nCABECERA/PIE EN FONDO OSCURO\nINICIO\nSERVICIOS\nLIBROS\nPESTAÑA DEL NAVEGADOR\nN\nLOCAL Browser Brand | Editorial Independiente\nSe actualizará automáticamente en noveli-web.",
+      "scenario": "role-visualizador-cms"
+    },
+    {
+      "path": "/ingresos",
+      "role": "visualizador",
+      "denied": true,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": "lo Lectura: Tu rol de visualizador no tiene permisos de edición en el módulo de Ingresos. Todos los botones de guardado e inserción han sido desactivados.\nNo tienes permiso para acceder a este módulo.",
+      "scenario": "role-visualizador-finance"
+    },
+    {
+      "path": "/configuration",
+      "role": "visualizador",
+      "denied": true,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": "ctura: Tu rol de visualizador no tiene permisos de edición en el módulo de Configuración. Todos los botones de guardado e inserción han sido desactivados.\nNo tienes permiso para acceder a este módulo.",
+      "scenario": "role-visualizador-admin"
+    },
+    {
+      "path": "/clientes",
+      "role": "visualizador",
+      "denied": false,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": "sperando Manuscrito/Archivos\nListo para Iniciar\nEn Proceso Editorial\nFinalizado\nPerdido / Rechazado\nPAÍS:\nTodos\nTIPO:\nTodos\nNacional\nInternacional\nNo se encontraron clientes con los filtros aplicados.",
+      "scenario": "role-unknown-clients"
+    },
+    {
+      "path": "/documentos",
+      "role": "visualizador",
+      "denied": false,
+      "writeButtons": [
+        "Subir Documento"
+      ],
+      "deletes": 0,
+      "textTail": "s.\n\n0 Proveedores\nProveedores\n\nContratos, acuerdos y facturas emitidas por proveedores de servicios.\n\n0 Archivos\nGeneral / Otros\n\nDocumentos institucionales y archivos sueltos no asociados a clientes.",
+      "scenario": "role-unknown-documents"
+    },
+    {
+      "path": "/sitio-web/identidad",
+      "role": "visualizador",
+      "denied": false,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": "L\nINICIO\nSERVICIOS\nLIBROS\nCABECERA/PIE EN FONDO OSCURO\nNOVELI — EDITORIAL\nINICIO\nSERVICIOS\nLIBROS\nPESTAÑA DEL NAVEGADOR\nN\nNOVELI | Editorial Independiente\nSe actualizará automáticamente en noveli-web.",
+      "scenario": "role-unknown-cms"
+    },
+    {
+      "path": "/ingresos",
+      "role": "visualizador",
+      "denied": true,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": "lo Lectura: Tu rol de visualizador no tiene permisos de edición en el módulo de Ingresos. Todos los botones de guardado e inserción han sido desactivados.\nNo tienes permiso para acceder a este módulo.",
+      "scenario": "role-unknown-finance"
+    },
+    {
+      "path": "/configuration",
+      "role": "visualizador",
+      "denied": true,
+      "writeButtons": [],
+      "deletes": 0,
+      "textTail": "ctura: Tu rol de visualizador no tiene permisos de edición en el módulo de Configuración. Todos los botones de guardado e inserción han sido desactivados.\nNo tienes permiso para acceder a este módulo.",
+      "scenario": "role-unknown-admin"
+    }
+  ],
+  "scenarioOutcomes": [
+    {
+      "phase": "client-edit-save",
+      "action": "eval",
+      "result": {
+        "saved": true,
+        "error": false
+      }
+    },
+    {
+      "phase": "client-document-upload-valid",
+      "action": "eval",
+      "result": {
+        "text": "onfiguración\nOscuro\nSalir\nClientes\n\nGestión completa y base de datos de autores y clientes de la editorial.\n\nExportar Reporte\nAñadir Cliente\nESTADO:\nTodos\nProspecto\nInteresado\nContrato Enviado\nLink de Pago Enviado\nEsperando Pago\nPago Recibido\nContrato Firmado Recibido\nEsperando Manuscrito/Archivos\nListo para Iniciar\nEn Proceso Editorial\nFinalizado\nPerdido / Rechazado\nPAÍS:\nTodos\nTIPO:\nTodos\nNacional\nInternacional\nNOMBRE\tCONTACTO\tPAÍS / TIPO\tDIVISA\tESTADO\tCREADO\tACCIONES\n\nLOCAL Browser Client Edited\n\t\t\n-\nNACIONAL\tCLP\tPROSPECTO\t15-10-2026\t\nFicha del Cliente\nINFORMACIÓN\nDOCUMENTOS (1)\nDOCUMENTOS DEL CLIENTE (1)\nLOCAL Browser Attachment\n.security-smoke-upload.pdf\nCONTRATO\nSUBIR DOCUMENTO NUEVO\nARCHIVO *\nNOMBRE VISUAL *\nCATEGORÍA\ncontrato\nfactura\nboleta\ncomprobante de pago\nmanuscrito\nportada\narchivo final\ndocumento legal\nimagen\notro\nNOTAS (OPCIONAL)\nSubir Documento\nVer propuestas\nEditar Ficha",
+        "buttons": [
+          "Añadir Cliente",
+          "Ver detalles",
+          "Marcar como pagado",
+          "Ver Propuestas",
+          "Editar",
+          "Eliminar",
+          "",
+          "INFORMACIÓN",
+          "DOCUMENTOS (1)",
+          "Ver",
+          "Descargar",
+          "Eliminar",
+          "Subir Documento",
+          "Ver propuestas",
+          "Editar Ficha"
+        ]
+      }
+    },
+    {
+      "phase": "browser-profile-and-storage",
+      "action": "eval",
+      "result": {
+        "profile": "Local admin",
+        "signedStatus": 200,
+        "publicStatus": 400
+      }
+    },
+    {
+      "phase": "cms-save",
+      "action": "eval",
+      "result": {
+        "savedText": "Logo\nAlto logo header (logo_header_height)\nAlto logo footer (logo_footer_height)\nAlto logo menu lateral (logo_menu_height)\nAlto logo movil (logo_mobile_height)\nIdentidad de Marca Activa\nGuardar Identidad Visual\nVISUALIZACIÓN DE MARCA\nCABECERA EN FONDO CLARO\nINICIO\nSERVICIOS\nLIBROS\nCABECERA/PIE EN FONDO OSCURO\nINICIO\nSERVICIOS\nLIBROS\nPESTAÑA DEL NAVEGADOR\nN\nLOCAL Browser Brand | Editorial Independiente\nSe actualizará automáticamente en noveli-web.",
+        "images": [
+          {
+            "src": "http://127.0.0.1:54321/storage/v1/object/public/brand-assets/ed6b16c5-db1d-4869-99c1-c5ff22dae8e1/website/identity/1792119464342_identity_main.png",
+            "loaded": true
+          },
+          {
+            "src": "http://127.0.0.1:54321/storage/v1/object/public/brand-assets/ed6b16c5-db1d-4869-99c1-c5ff22dae8e1/website/identity/1792119464342_identity_main.png",
+            "loaded": true
+          },
+          {
+            "src": "http://127.0.0.1:54321/storage/v1/object/public/brand-assets/ed6b16c5-db1d-4869-99c1-c5ff22dae8e1/website/identity/1792119464342_identity_main.png",
+            "loaded": true
+          }
+        ]
+      }
+    },
+    {
+      "phase": "income-save",
+      "action": "eval",
+      "result": "ir\nIngresos (Facturación)\n\nControl de cobros a autores, abonos por servicios y registro de impuestos por ventas.\n\nExportar Reporte\nRegistrar Ingreso\nPERÍODO DE CONSULTA\nMensual\nAnual\nPersonalizado\nEnero\nFebrero\nMarzo\nAbril\nMayo\nJunio\nJulio\nAgosto\nSeptiembre\nOctubre\nNoviembre\nDiciembre\n2024\n2025\n2026\n2027\nCliente:\nTodos\nLOCAL Browser Client Edited\nEstado:\nTodos\nPagado\nPendiente\nParcial\nIncluye IVA:\nTodos\nSí\nNo\nTOTAL INGRESADO (CLP EQUIVALENT)\n\n$1.500\n\nTOTAL PAGADO\n\n$1.500\n\nTOTAL PENDIENTE\n\n$0\n\nTOTAL NETO\n\n$1.500\n\nIVA ESTIMADO\n\n$0\n\nFECHA\tCLIENTE / SERVICIO\tMONTO / DESGLOSE\tM. PAGO\tESTADO\tACCIONES\n16-10-2026\t\nLOCAL Browser Client Edited\nSin servicio asignado\n\t\n$0\nExento (Sin IVA)\n\tTransferencia\t\nPENDIENTE\n\t\nDistribución\n\n16-10-2026\t\nLOCAL Browser Client Edited\nLOCAL Browser Book\n\t\n$1.500\nExento (Sin IVA)\n\tTransferencia\t\nPAGADO\n\t\nDistribución"
+    },
+    {
+      "phase": "expense-save",
+      "action": "eval",
+      "result": {
+        "text": "alizado\nEnero\nFebrero\nMarzo\nAbril\nMayo\nJunio\nJulio\nAgosto\nSeptiembre\nOctubre\nNoviembre\nDiciembre\n2024\n2025\n2026\n2027\nCategoría:\nTodos\nsoftware\ndiseño\nimpresión\npublicidad\nlegal\nimpuestos\noficina virtual\notros\nProveedor:\nTodos\nDeducible:\nTodos\nSí (Deducible)\nNo (No Deducible)\nTOTAL GASTOS DEL PERIODO (CLP EQUIVALENT)\n\n$500\n\nTOTAL DEDUCIBLE\n\n$500\n\nTOTAL NO DEDUCIBLE\n\n$0\n\nFECHA\tCATEGORÍA / PROVEEDOR\tMONTO / DESGLOSE\tDEDUCIBLE\tACCIONES\n16-10-2026\t\nOtros\nSin proveedor\n\t\n$500\nHonorario / Exento\n\t\nSí\n\t",
+        "rowButtons": [
+          {
+            "title": "",
+            "svg": "lucide lucide-pen w-4 h-4"
+          },
+          {
+            "title": "",
+            "svg": "lucide lucide-trash2 lucide-trash-2 w-4 h-4"
+          }
+        ]
+      }
+    },
+    {
+      "phase": "documents-save",
+      "action": "eval",
+      "result": "izadas\nDocumentos\nCatálogo y Packs\nFinanzas\nIngresos\nGastos\nImpuestos\nMonedas al día\nPersonal\nReserva operacional\nSitio Web\nGestión Web\nCatálogo Web\nHero Principal\nIdentidad Visual\nFooter Web\nSolicitudes Web\nReportes\nConfiguración\nOscuro\nSalir\nCentro Documental\n\nRepositorio y almacenamiento digital de contratos, manuscritos, portadas y comprobantes.\n\nSubir Documento\nTIPO:\nTodos\ncontrato\nfactura\nboleta\ncomprobante de pago\nmanuscrito\nportada\narchivo final\ndocumento legal\nimagen\notro\nAUTOR:\nTodos\nLOCAL Browser Client Edited\nPROVEEDOR:\nTodos\nLIBRO:\nTodos\nLOCAL Browser Book\nDESDE:\nHASTA:\nInicio\nVISTA:\n1 Autores\nClientes / Autores\n\nDocumentos organizados por autor, contratos y manuscritos recibidos.\n\n0 Proveedores\nProveedores\n\nContratos, acuerdos y facturas emitidas por proveedores de servicios.\n\n1 Archivos\nGeneral / Otros\n\nDocumentos institucionales y archivos sueltos no asociados a clientes."
+    },
+    {
+      "phase": "prospect-edit-save",
+      "action": "eval",
+      "result": true
+    },
+    {
+      "phase": "quotation-edit-save",
+      "action": "eval",
+      "result": {
+        "total2000": true,
+        "text": "reliminares.\n\nNueva Propuesta\nESTADO:\nTodos\nBorrador\nEnviada\nAceptada\nRechazada\nVencida\nConvertida a Prospecto\nPROPUESTA N°\tAUTOR / CONTACTO\tOBJETO\tEMISIÓN / VIGENCIA\tTOTAL\tESTADO\tACCIONES\nCOT-7585\t\nLOCAL Browser Quote Author\nSin contacto\tPropuesta de publicación y servicios editoriales personalizados.\t16-10-2026\nVence: 31-10-2026\n\t$2.000\tBORRADOR\t"
+      }
+    },
+    {
+      "phase": "service-edit-save-retry",
+      "action": "eval",
+      "result": true
+    },
+    {
+      "phase": "expense-edit-save",
+      "action": "eval",
+      "result": true
+    },
+    {
+      "phase": "income-edit-save",
+      "action": "eval",
+      "result": true
+    },
+    {
+      "phase": "viewer-services-controls",
+      "action": "eval",
+      "result": {
+        "write": [
+          "",
+          "Configurar etapas"
+        ]
+      }
+    },
+    {
+      "phase": "viewer-document-detail",
+      "action": "eval",
+      "result": {
+        "text": "lizador no tiene permisos de edición en el módulo de Documentos. Todos los botones de guardado e inserción han sido desactivados.\nCentro Documental\n\nRepositorio y almacenamiento digital de contratos, manuscritos, portadas y comprobantes.\n\nSubir Documento\nTIPO:\nTodos\ncontrato\nfactura\nboleta\ncomprobante de pago\nmanuscrito\nportada\narchivo final\ndocumento legal\nimagen\notro\nAUTOR:\nTodos\nLOCAL Browser Client Edited\nPROVEEDOR:\nTodos\nLIBRO:\nTodos\nLOCAL Browser Book Edited\nDESDE:\nHASTA:\nInicio\nGeneral\nVISTA:\nVolver atrás\nSubir un nivel\nPDF\nOTRO\nLOCAL Center Attachment\n\n.security-smoke-upload.pdf\n\n124 B",
+        "buttons": [
+          {
+            "text": "",
+            "title": "",
+            "disabled": false,
+            "svg": "lucide lucide-bell w-4.5 h-4.5"
+          },
+          {
+            "text": "Subir Documento",
+            "title": "",
+            "disabled": false,
+            "svg": "lucide lucide-cloud-upload w-4 h-4"
+          },
+          {
+            "text": "Inicio",
+            "title": "",
+            "disabled": false
+          },
+          {
+            "text": "General",
+            "title": "",
+            "disabled": false
+          },
+          {
+            "text": "",
+            "title": "Vista de cuadrícula",
+            "disabled": false,
+            "svg": "lucide lucide-layout-grid w-4 h-4"
+          },
+          {
+            "text": "",
+            "title": "Vista de lista",
+            "disabled": false,
+            "svg": "lucide lucide-list w-4 h-4"
+          },
+          {
+            "text": "",
+            "title": "Ver",
+            "disabled": false,
+            "svg": "lucide lucide-eye w-3.5 h-3.5"
+          },
+          {
+            "text": "",
+            "title": "Descargar",
+            "disabled": false,
+            "svg": "lucide lucide-download w-3.5 h-3.5"
+          },
+          {
+            "text": "",
+            "title": "Eliminar",
+            "disabled": false,
+            "svg": "lucide lucide-trash2 lucide-trash-2 w-3.5 h-3.5"
+          }
+        ]
+      }
+    },
+    {
+      "phase": "expected-viewer-storage-denial",
+      "action": "eval",
+      "result": {
+        "read": 200,
+        "writeRejected": true,
+        "status": "403"
+      }
+    },
+    {
+      "phase": "viewer-delete-ui-attempt",
+      "action": "eval",
+      "result": {
+        "stillExists": false
+      }
+    },
+    {
+      "phase": "expected-storage-expiry-and-public-brand",
+      "action": "eval",
+      "result": {
+        "valid": 200,
+        "expired": 400,
+        "brand": 200
+      }
+    },
+    {
+      "phase": "cms-missing-column-confirmation",
+      "action": "eval",
+      "result": {
+        "code": "42703",
+        "message": "column website_book_category_links.organization_id does not exist"
+      }
+    },
+    {
+      "phase": "expected-cross-tenant-denials",
+      "action": "eval",
+      "result": {
+        "listRows": 0,
+        "signRejected": true,
+        "updateRejected": true,
+        "deleteRows": 0
+      }
+    },
+    {
+      "phase": "browser-version-and-sign-ttl",
+      "action": "eval",
+      "result": {
+        "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+        "ttl": 300
+      }
+    },
+    {
+      "phase": "admin-document-delete",
+      "action": "eval",
+      "result": {
+        "remaining": [
+          "LOCAL Browser Attachment"
+        ]
+      }
+    },
+    {
+      "phase": "admin-income-delete",
+      "action": "eval",
+      "result": {
+        "remaining": 0
+      }
+    },
+    {
+      "phase": "admin-expense-delete",
+      "action": "eval",
+      "result": {
+        "remaining": 0
+      }
+    },
+    {
+      "phase": "admin-service-delete",
+      "action": "eval",
+      "result": {
+        "remaining": 0
+      }
+    },
+    {
+      "phase": "admin-quote-delete",
+      "action": "eval",
+      "result": {
+        "remaining": 0,
+        "items": 0
+      }
+    },
+    {
+      "phase": "admin-client-document-delete",
+      "action": "eval",
+      "result": {
+        "remaining": 0
+      }
+    },
+    {
+      "phase": "admin-client-delete",
+      "action": "eval",
+      "result": {
+        "remaining": 0
+      }
+    },
+    {
+      "phase": "admin-prospect-delete",
+      "action": "eval",
+      "result": {
+        "remaining": 0
+      }
+    },
+    {
+      "phase": "cms-restore-save",
+      "action": "eval",
+      "result": "NOVELI"
+    },
+    {
+      "phase": "expected-unknown-write-denial",
+      "action": "eval",
+      "result": {
+        "writeRejected": true,
+        "status": "403"
+      }
+    },
+    {
+      "phase": "idle-observation",
+      "action": "eval",
+      "result": {
+        "dashboard": true,
+        "loading": false
+      }
+    }
+  ],
+  "cleanup": {
+    "organizations": 0,
+    "authUsers": 0,
+    "storageObjects": 0,
+    "otherTenantObjectUnchangedBeforeCleanup": true,
+    "documentsPublic": false,
+    "brandAssetsPublic": true
+  }
+}
