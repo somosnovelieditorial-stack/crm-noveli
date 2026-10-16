@@ -1,4 +1,4 @@
-import { normalizeRole, canRoleAccessModule, canRolePerformAction } from './utils/roles';
+import { normalizeRole, isFinanceRole, canRoleAccessModule, canRolePerformAction } from './utils/roles';
 import { supabase, getCurrentOrganizationId, subscribeToOrganizationChanges } from './supabaseClient';
 
 
@@ -243,6 +243,7 @@ export const hasPermission = (role, module) => {
  * @param {boolean} forcePaid - If true, forces the client and all services to be 'pagado'
  */
 export const syncPaymentStatus = async (clientId, forcePaid = false) => {
+  if (!isFinanceRole(getCurrentUserRole())) return;
   if (!clientId) return;
   const todayStr = new Date().toISOString().split('T')[0];
 

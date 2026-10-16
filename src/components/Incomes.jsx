@@ -1,3 +1,5 @@
+import { canDeleteEntity, isFinanceRole, isAdminRole } from '../utils/roles';
+import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, formatDate, calculateVatSplit, filterByPeriod, exportToCSV } from '../utils';
@@ -188,6 +190,7 @@ export default function Incomes({ realtimeTrigger }) {
   };
 
   const handleDeleteIncome = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'incomes')) return;
     if (window.confirm('¿Estás seguro de que deseas eliminar este ingreso?')) {
       try {
         const { error } = await supabase
@@ -443,6 +446,7 @@ export default function Incomes({ realtimeTrigger }) {
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
+    if (!isFinanceRole(getCurrentUserRole())) return;
     if (formData.amount <= 0) {
       setFormError('El monto debe ser mayor a 0.');
       return;
@@ -461,6 +465,15 @@ export default function Incomes({ realtimeTrigger }) {
     };
 
     try {
+      let previousAllocations = [];
+      if (selectedIncome) {
+        const result = await supabase.from('income_allocations').select('id').eq('income_id', selectedIncome.id);
+        if (result.error) throw result.error;
+        previousAllocations = result.data || [];
+        if (!isAdminRole(getCurrentUserRole()) && previousAllocations.some(old => !allocationsList.some(item => item.id === old.id))) {
+          throw new Error('Eliminar asignaciones existentes requiere un administrador.');
+        }
+      }
       let incomeId = '';
       if (selectedIncome) {
         // Edit Mode
@@ -489,11 +502,10 @@ export default function Incomes({ realtimeTrigger }) {
 
       // Sync allocations list
       if (incomeId) {
-        const { error: delErr } = await supabase
-          .from('income_allocations')
-          .delete()
-          .eq('income_id', incomeId);
-        if (delErr) throw delErr;
+        if (isAdminRole(getCurrentUserRole())) {
+          const { error } = await supabase.from('income_allocations').delete().eq('income_id', incomeId);
+          if (error) throw error;
+        }
 
         if (allocationsList.length > 0) {
           const orgId = await getValidOrgId();
@@ -509,6 +521,7 @@ export default function Incomes({ realtimeTrigger }) {
             }
 
             return {
+              id: previousAllocations.some(old => old.id === alloc.id) ? alloc.id : crypto.randomUUID(),
               income_id: incomeId,
               organization_id: orgId,
               user_id: user?.id || 'mock-user-123',
@@ -520,10 +533,13 @@ export default function Incomes({ realtimeTrigger }) {
             };
           });
 
-          const { error: insErr } = await supabase
-            .from('income_allocations')
-            .insert(allocationsPayload);
-          if (insErr) throw insErr;
+          for (const allocation of allocationsPayload) {
+            const query = supabase.from('income_allocations');
+            const result = !isAdminRole(getCurrentUserRole()) && previousAllocations.some(old => old.id === allocation.id)
+              ? await query.update(allocation).eq('id', allocation.id)
+              : await query.insert(allocation);
+            if (result.error) throw result.error;
+          }
         }
       }
 
@@ -870,7 +886,7 @@ export default function Incomes({ realtimeTrigger }) {
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDeleteIncome(income.id)}
+                          disabled={!canDeleteEntity(getCurrentUserRole(), 'incomes')} onClick={() => handleDeleteIncome(income.id)}
                           className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />

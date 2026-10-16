@@ -1,5 +1,6 @@
 import { supabase, getValidOrgId } from './supabaseClient';
-import { formatCurrency } from './utils';
+import { formatCurrency, getCurrentUserRole } from './utils';
+import { isFinanceRole } from './utils/roles';
 
 // Helper to record errors in crm_error_logs table
 export const recordError = async (message, stack = '', moduleName = 'general') => {
@@ -51,6 +52,7 @@ export const createAutoIncome = async ({
   includes_vat = false,
   organization_id = null
 }) => {
+  if (!isFinanceRole(getCurrentUserRole())) return null;
   try {
     const orgId = organization_id || await getValidOrgId();
     const { data: { user } } = await supabase.auth.getUser();

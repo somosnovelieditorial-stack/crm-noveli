@@ -1,4 +1,4 @@
-import { canDeleteEntity } from '../utils/roles';
+import { canDeleteEntity, isAdminRole } from '../utils/roles';
 import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
 import { supabase, getValidOrgId, isMock } from '../supabaseClient';
@@ -353,6 +353,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
   };
 
   const handleCompanyLogoChange = async (e) => {
+    if (!isAdminRole(getCurrentUserRole())) return;
     const file = e.target.files[0];
     if (!file) return;
     setUploadingCompanyLogo(true);
@@ -370,6 +371,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
 
   const handleCompanySaveInline = async (e) => {
     e.preventDefault();
+    if (!isAdminRole(getCurrentUserRole())) return;
     try {
       const orgId = await getValidOrgId();
       const payload = {
@@ -2562,7 +2564,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                   <span>Vista Previa Interactiva</span>
                   <button
                     type="button"
-                    onClick={() => setIsCompanyModalOpen(true)}
+                    disabled={!isAdminRole(getCurrentUserRole())} onClick={() => setIsCompanyModalOpen(true)}
                     className="text-[10px] font-extrabold text-indigo-650 hover:text-indigo-500 transition-all cursor-pointer border border-indigo-150 rounded-lg px-2 py-0.5 bg-indigo-50/20"
                   >
                     Editar datos de empresa

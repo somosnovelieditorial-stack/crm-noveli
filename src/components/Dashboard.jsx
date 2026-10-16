@@ -1,3 +1,4 @@
+import { isFinanceRole } from '../utils/roles';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit, convertToClp, filterByPeriod } from '../utils';
@@ -33,8 +34,9 @@ const safeNumber = (value) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab }) {
+export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab, userRole }) {
   const [loading, setLoading] = useState(true);
+  const canFinance = isFinanceRole(userRole);
   const [activeTab, setActiveTab] = useState('finanzas'); // 'finanzas' | 'operativa'
   const [selectedDetail, setSelectedDetail] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -54,6 +56,8 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
   };
 
   const handleCardClick = (cardId) => {
+    if (!canFinance && ['total_disponible','utility','reserve','incomes','expenses','payroll',
+      'vat','taxes','receivables','funds_allocated','funds_available','to_distribute'].includes(cardId)) return;
     const detail = getDetailItems(cardId);
     openDetail(detail);
   };
@@ -132,6 +136,9 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
 
       // Fetch helper to capture missing tables or RLS errors
       const fetchWithErrors = async (tableName) => {
+        if (!canFinance && ['incomes','expenses','payroll_payments','income_allocations',
+          'operational_reserve_movements','staff','income_distributions','client_funds',
+          'fund_movements','income_tax_reservations'].includes(tableName)) return { data: [], error: null };
         try {
           const { data, error } = await supabase
             .from(tableName)
@@ -730,7 +737,7 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
     } finally {
       setLoading(false);
     }
-  }, [period, realtimeTrigger]);
+  }, [period, realtimeTrigger, canFinance]);
 
   const navigateToModule = (path) => {
     window.history.pushState(null, '', path);
@@ -1644,7 +1651,7 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
         {/* Pestañas Internas */}
         <div className="flex space-x-1 p-1 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 rounded-2xl w-fit">
           <button
-            onClick={() => setActiveTab('finanzas')}
+            disabled={!canFinance} onClick={() => setActiveTab('finanzas')}
             className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 cursor-pointer ${
               activeTab === 'finanzas'
                 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 shadow-xs border border-amber-500/20'
@@ -1668,7 +1675,7 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
         </div>
 
         {/* Mostrar PeriodFilter sólo si la pestaña activa es Finanzas */}
-        {activeTab === 'finanzas' && (
+        {canFinance && activeTab === 'finanzas' && (
           <div className="w-full lg:w-auto">
             <PeriodFilter onChange={handlePeriodChange} />
           </div>
@@ -1682,7 +1689,7 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
         </div>
       ) : (
         <>
-          {activeTab === 'finanzas' ? (
+          {canFinance && activeTab === 'finanzas' ? (
             /* ==========================================
                 PESTAÑA 1: FINANZAS
                ========================================== */
@@ -1867,7 +1874,7 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
                 </div>
 
                 {/* Por cobrar */}
-                <div 
+                {canFinance && (<div
                   onClick={() => handleCardClick('receivables')}
                   className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs flex flex-col justify-between group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300"
                 >
@@ -1881,7 +1888,7 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
                     <span>{stats.financials.pendingPaymentsCount} cuentas</span>
                     <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                </div>
+                </div>)}
 
                 {/* Fondos Asignados */}
                 <div 
@@ -2075,7 +2082,7 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
                 </div>
 
                 {/* Pagos Pendientes */}
-                <div 
+                {canFinance && (<div
                   onClick={() => handleCardClick('receivables')}
                   className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 shadow-2xs group hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all duration-300 flex flex-col justify-between"
                 >
@@ -2087,7 +2094,7 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
                     <span className="truncate">{formatCurrency(stats.counts.pendingPaymentsVal, 'CLP')}</span>
                     <ArrowUpRight className="w-3 h-3 text-slate-350 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   </div>
-                </div>
+                </div>)}
 
                 {/* Contratos Pendientes */}
                 <div 

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ROLE_OPTIONS, normalizeRole, isAdminRole, isWriterRole,
-  canRoleAccessModule, canRolePerformAction, canDeleteEntity,
+  canRoleAccessModule, canRolePerformAction, canDeleteEntity, isFinanceRole, isFinanceModule,
 } from './roles.js';
 
 test('exactly six canonical roles and the six approved aliases', () => {
@@ -67,4 +67,32 @@ test('DELETE follows admin and operational RLS; unknown tables and roles fail cl
       assert.equal(canDeleteEntity(role, table), false);
   }
   assert.equal(canDeleteEntity('admin', 'unreviewed_table'), false);
+});
+
+test('financial modules fail closed except admin/finance, including read-only viewers', () => {
+  for (const module of ['incomes', 'expenses', 'taxes', 'currency_rates', 'staff', 'reserve', 'reports']) {
+    assert.equal(isFinanceModule(module), true);
+    for (const role of ['admin', 'finanzas', 'contador', 'direccion']) {
+      assert.equal(isFinanceRole(role), true);
+      assert.equal(canRoleAccessModule(role, module), true);
+      assert.equal(canRolePerformAction(role, module, 'read'), true);
+      assert.equal(canRolePerformAction(role, module, 'write'), true);
+    }
+    for (const role of ['editor', 'diseñador', 'corrector', 'visualizador', 'unknown', null]) {
+      assert.equal(isFinanceRole(role), false);
+      assert.equal(canRoleAccessModule(role, module), false);
+      assert.equal(canRolePerformAction(role, module, 'read'), false);
+      assert.equal(canRolePerformAction(role, module, 'write'), false);
+    }
+  }
+  assert.equal(canRoleAccessModule('finanzas', 'configuration'), false);
+  assert.equal(canRoleAccessModule('finanzas', 'settings-audit'), false);
+  for (const table of ['incomes', 'income_allocations', 'income_distributions',
+    'income_tax_reservations', 'expenses', 'client_funds', 'fund_movements',
+    'operational_reserve_movements', 'payroll_payments', 'staff', 'exchange_rates',
+    'settings', 'company_settings']) {
+    assert.equal(canDeleteEntity('admin', table), true);
+    for (const role of ['finanzas', 'editor', 'diseñador', 'corrector', 'visualizador', 'unknown'])
+      assert.equal(canDeleteEntity(role, table), false);
+  }
 });

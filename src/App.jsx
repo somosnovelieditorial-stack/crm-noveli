@@ -1,6 +1,6 @@
-import { normalizeRole, isAdminRole } from './utils/roles';
+import { normalizeRole, isAdminRole, isFinanceRole, isFinanceModule } from './utils/roles';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { supabase, isMock, getValidOrgId, subscribeToOrganizationChanges } from './supabaseClient';
+import { supabase, fetchOrgBranding, isMock, getValidOrgId, subscribeToOrganizationChanges } from './supabaseClient';
 
 // Original Components
 import Login from './components/Login';
@@ -356,10 +356,7 @@ export default function App() {
   const fetchEditorialSettings = async () => {
     try {
       const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
-      const { data, error } = await supabase
-        .from('settings')
-        .select('editorial_name, logo_url, favicon_url')
-        .eq('organization_id', orgId);
+      const { data, error } = await fetchOrgBranding(orgId);
         
       if (!error && data && data.length > 0) {
         const item = data[0];
@@ -1115,6 +1112,10 @@ export default function App() {
 
   // Render current tab content
   const renderTabContent = () => {
+    if ((isFinanceModule(activeTab) && !isFinanceRole(userRole)) ||
+        (['configuration', 'integrations'].includes(activeTab) && !isAdminRole(userRole))) {
+      return <div className="p-8">No tienes permiso para acceder a este módulo.</div>;
+    }
     const isReadOnly = !hasPermission(userRole, activeTab);
     const commonProps = { isReadOnly, userRole, organizationId, realtimeTrigger };
 

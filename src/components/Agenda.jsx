@@ -1,3 +1,5 @@
+import { isFinanceRole } from '../utils/roles';
+import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { 
@@ -263,6 +265,7 @@ export default function Agenda() {
   };
 
   const handleQuickAction = async (event, actionType) => {
+    if (['marcar_pagado', 'payment_received'].includes(actionType) && !isFinanceRole(getCurrentUserRole())) return;
     const todayStr = new Date().toISOString().split('T')[0];
     const client = event.client;
     const service = event.service;
@@ -497,6 +500,7 @@ export default function Agenda() {
     if (isCompleted) return null;
 
     const addButton = (label, actionType, icon) => {
+      if (['marcar_pagado', 'payment_received'].includes(actionType) && !isFinanceRole(getCurrentUserRole())) return;
       buttons.push(
         <button
           key={actionType}

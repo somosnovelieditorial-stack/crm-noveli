@@ -1,3 +1,5 @@
+import { canDeleteEntity } from '../utils/roles';
+import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import { formatCurrency, formatDate, calculateVatSplit, filterByPeriod, exportToCSV } from '../utils';
@@ -210,6 +212,7 @@ export default function Expenses({ realtimeTrigger }) {
   };
 
   const handleDeleteExpense = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'expenses')) return;
     if (window.confirm('¿Estás seguro de que deseas eliminar este gasto?')) {
       try {
         const { error } = await supabase
@@ -797,7 +800,7 @@ export default function Expenses({ realtimeTrigger }) {
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDeleteExpense(expense.id)}
+                          disabled={!canDeleteEntity(getCurrentUserRole(), 'expenses')} onClick={() => handleDeleteExpense(expense.id)}
                           className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-655 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />

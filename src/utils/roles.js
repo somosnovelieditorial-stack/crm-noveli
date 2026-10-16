@@ -23,6 +23,10 @@ export const normalizeRole = (value) => {
 };
 
 export const isAdminRole = (value) => normalizeRole(value) === 'admin';
+export const isFinanceRole = (value) => ['admin', 'finanzas'].includes(normalizeRole(value));
+const financeModules = new Set(['incomes', 'expenses', 'taxes', 'currency_rates', 'staff', 'reserve', 'reports']);
+export const isFinanceModule = (module) => financeModules.has(module);
+
 export const isWriterRole = (value) => {
   const role = normalizeRole(value);
   return role !== null && role !== 'visualizador';
@@ -52,6 +56,7 @@ const modulesByRole = {
 
 export const canRoleAccessModule = (value, module) => {
   const role = normalizeRole(value);
+  if (isFinanceModule(module)) return isFinanceRole(role);
   return role === 'admin' || (modulesByRole[role]?.includes(module) ?? false);
 };
 
@@ -62,6 +67,9 @@ export const canRolePerformAction = (value, module, action = 'write') => {
 };
 
 const adminDeleteTables = new Set([
+  'incomes', 'income_allocations', 'income_distributions', 'income_tax_reservations',
+  'expenses', 'client_funds', 'fund_movements', 'operational_reserve_movements',
+  'payroll_payments', 'staff', 'exchange_rates', 'settings', 'company_settings',
   'clients', 'prospects', 'quotations', 'services', 'providers',
   'service_catalog', 'service_packs', 'activity_log',
   'website_settings', 'website_sections', 'website_services', 'website_books', 'website_links',

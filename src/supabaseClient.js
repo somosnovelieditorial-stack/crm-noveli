@@ -2332,6 +2332,12 @@ if (useRealSupabase) {
 export const supabase = supabaseInstance;
 export const isMock = !useRealSupabase;
 
+// Narrow, member-scoped branding projection; never fetch bank/tax settings for UI identity.
+export const fetchOrgBranding = (orgId) => realClient
+  ? realClient.rpc('get_org_branding', { org_uuid: orgId })
+  : mockSupabase.from('settings').select('editorial_name, logo_url, favicon_url').eq('organization_id', orgId);
+
+
 export const getCurrentOrganizationId = async () => {
   const defaultOrgId = '11111111-1111-1111-1111-111111111111';
   try {

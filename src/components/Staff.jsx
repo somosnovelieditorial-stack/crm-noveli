@@ -1,3 +1,5 @@
+import { canDeleteEntity } from '../utils/roles';
+import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
 import ExportDropdown from './ExportDropdown';
@@ -274,6 +276,7 @@ export default function Staff({ defaultSubTab = 'members', realtimeTrigger }) {
   };
 
   const handleDeleteStaff = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'staff')) return;
     if (window.confirm("¿Estás seguro de eliminar a esta persona? Se eliminará su historial de sueldos.")) {
       try {
         const { error } = await supabase.from('staff').delete().eq('id', id);
@@ -441,6 +444,7 @@ export default function Staff({ defaultSubTab = 'members', realtimeTrigger }) {
   };
 
   const handleDeletePayroll = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'payroll_payments')) return;
     if (window.confirm("¿Eliminar este registro de pago?")) {
       try {
         const { error: delExpErr } = await supabase.from('expenses').delete().eq('payroll_payment_id', id);
@@ -506,6 +510,7 @@ export default function Staff({ defaultSubTab = 'members', realtimeTrigger }) {
   };
 
   const handleDeleteReserve = async (id) => {
+    if (!canDeleteEntity(getCurrentUserRole(), 'operational_reserve_movements')) return;
     if (window.confirm("¿Eliminar este movimiento de reserva?")) {
       try {
         const { error } = await supabase.from('operational_reserve_movements').delete().eq('id', id);
@@ -715,7 +720,7 @@ export default function Staff({ defaultSubTab = 'members', realtimeTrigger }) {
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button 
-                          onClick={() => handleDeleteStaff(member.id)}
+                          disabled={!canDeleteEntity(getCurrentUserRole(), 'staff')} onClick={() => handleDeleteStaff(member.id)}
                           className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-rose-500 rounded transition-all cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -778,7 +783,7 @@ export default function Staff({ defaultSubTab = 'members', realtimeTrigger }) {
                       </td>
                       <td className="p-4">
                         <button 
-                          onClick={() => handleDeletePayroll(pay.id)}
+                          disabled={!canDeleteEntity(getCurrentUserRole(), 'payroll_payments')} onClick={() => handleDeletePayroll(pay.id)}
                           className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-rose-500 rounded transition-all cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -871,7 +876,7 @@ export default function Staff({ defaultSubTab = 'members', realtimeTrigger }) {
                         <td className="p-4 text-slate-500">{move.notes || 'Ajuste de Reserva'}</td>
                         <td className="p-4">
                           <button 
-                            onClick={() => handleDeleteReserve(move.id)}
+                            disabled={!canDeleteEntity(getCurrentUserRole(), 'operational_reserve_movements')} onClick={() => handleDeleteReserve(move.id)}
                             className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-rose-500 rounded transition-all cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />

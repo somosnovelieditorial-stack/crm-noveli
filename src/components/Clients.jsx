@@ -1,4 +1,4 @@
-import { canDeleteEntity } from '../utils/roles';
+import { canDeleteEntity, isFinanceRole } from '../utils/roles';
 import { getCurrentUserRole } from '../utils';
 import React, { useEffect, useState, Component } from 'react';
 import { supabase, isMock } from '../supabaseClient';
@@ -1189,6 +1189,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
   };
 
   const handleMarkAsPaid = async (client) => {
+    if (!isFinanceRole(getCurrentUserRole())) return;
     if (isReadOnly) {
       alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
       return;
@@ -1350,6 +1351,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
   };
 
   const handleToggleRequirement = async (field, currentValue) => {
+    if (['amount_paid', 'payment_status'].includes(field) && !isFinanceRole(getCurrentUserRole())) return;
     if (isReadOnly) return;
     
     const newValue = !currentValue;
@@ -2212,7 +2214,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
                             </span>
                           ) : (
                             <button
-                              onClick={() => handleMarkAsPaid(client)}
+                              disabled={!isFinanceRole(getCurrentUserRole())} onClick={() => handleMarkAsPaid(client)}
                               className="inline-flex p-1 rounded-md border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-emerald-600 dark:text-emerald-450 hover:bg-slate-55 dark:hover:bg-slate-800 cursor-pointer align-middle"
                               title="Marcar como pagado"
                             >
@@ -2601,6 +2603,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
                       <input
                         type="number"
                         value={formData.amount_paid}
+                        disabled={!isFinanceRole(getCurrentUserRole())}
                         onChange={(e) => setFormData({...formData, amount_paid: e.target.value})}
                         className="block w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl text-slate-700 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                         placeholder="e.g. 750000"
@@ -3364,7 +3367,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
                         <input
                           type="checkbox"
                           checked={selectedClient.payment_status === 'pagado'}
-                          disabled={isReadOnly}
+                          disabled={isReadOnly || !isFinanceRole(getCurrentUserRole())}
                           onChange={() => handleToggleRequirement('payment_status', selectedClient.payment_status)}
                           className="mt-0.5 h-3.5 w-3.5 rounded border-slate-350 text-brand-600 focus:ring-brand-500 cursor-pointer"
                         />

@@ -1,3 +1,5 @@
+import { isFinanceRole, isAdminRole } from '../utils/roles';
+import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { formatCurrency } from '../utils';
@@ -177,6 +179,7 @@ export default function IncomeDistributionModal({ isOpen, onClose, income, onSav
   };
 
   const handleSave = async () => {
+    if (!isFinanceRole(getCurrentUserRole())) return;
     if (remainingAmount < -1) {
       setError('El monto total distribuido excede el Disponible real neto.');
       return;
@@ -189,9 +192,23 @@ export default function IncomeDistributionModal({ isOpen, onClose, income, onSav
       const { data: { user } } = await supabase.auth.getUser();
       const orgId = income.organization_id || await getValidOrgId();
 
-      // 1. Clear pre-existing distributions and tax reservations
-      await supabase.from('income_distributions').delete().eq('income_id', income.id);
-      await supabase.from('income_tax_reservations').delete().eq('income_id', income.id);
+      // Check before ANY side effect: the legacy replacement flow requires DELETE.
+      const [existingDistributions, existingTax] = await Promise.all([
+        supabase.from('income_distributions').select('id').eq('income_id', income.id),
+        supabase.from('income_tax_reservations').select('id').eq('income_id', income.id),
+      ]);
+      if (existingDistributions.error) throw existingDistributions.error;
+      if (existingTax.error) throw existingTax.error;
+      if (!isAdminRole(getCurrentUserRole()) &&
+          (existingDistributions.data?.length || existingTax.data?.length)) {
+        throw new Error('Reemplazar una distribución existente requiere un administrador.');
+      }
+      if (isAdminRole(getCurrentUserRole())) {
+        for (const table of ['income_distributions', 'income_tax_reservations']) {
+          const { error } = await supabase.from(table).delete().eq('income_id', income.id);
+          if (error) throw error;
+        }
+      }
 
       // 2. Insert tax reservation if mode is iva
       if (taxMode === 'iva' && ivaAmount > 0) {
@@ -577,7 +594,7 @@ export default function IncomeDistributionModal({ isOpen, onClose, income, onSav
             <button
               type="button"
               onClick={handleSave}
-              disabled={loading || remainingAmount < -1}
+              disabled={loading || remainingAmount < -1 || !isFinanceRole(getCurrentUserRole())}
               className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
             >
               {loading ? 'Guardando...' : (
