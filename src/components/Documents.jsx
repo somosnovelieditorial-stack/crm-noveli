@@ -1,3 +1,5 @@
+import { mutationPermissions, deleteDocumentConfirmed } from '../utils/frontendMutations';
+import { getCurrentUserRole } from '../utils';
 import { createDocumentUrl, getDocumentPath } from '../utils/storageDocuments';
 import { useEffect, useState } from 'react';
 import { supabase, isMock } from '../supabaseClient';
@@ -9,7 +11,8 @@ import {
   FileSpreadsheet, Image, File, AlertTriangle
 } from 'lucide-react';
 
-export default function Documents({ realtimeTrigger }) {
+export default function Documents({ realtimeTrigger, isReadOnly = false, userRole = getCurrentUserRole() }) {
+  const permissions = mutationPermissions(userRole, 'documents', 'documents', isReadOnly);
   const [documents, setDocuments] = useState([]);
   const [clients, setClients] = useState([]);
   const [providers, setProviders] = useState([]);
@@ -123,12 +126,14 @@ export default function Documents({ realtimeTrigger }) {
   };
 
   const handleOpenAddModal = () => {
+    if (!permissions.write) return;
     setSelectedFile(null);
     setUploadProgress(0);
     setIsUploading(false);
     setFormData({
-      name: '',
-      file_type: 'contrato',
+      title: '',
+      document_type: 'contrato',
+      notes: '',
       client_id: '',
       provider_id: '',
       income_id: '',
@@ -155,28 +160,16 @@ export default function Documents({ realtimeTrigger }) {
   };
 
   const handleDeleteDocument = async (doc) => {
+    if (!permissions.delete) return;
     const docName = doc.title || doc.name || doc.file_name || 'Documento';
     if (window.confirm(`¿Estás seguro de que deseas eliminar el documento "${docName}"?`)) {
       try {
-        if (!isMock) {
-          const { error: storageErr } = await supabase.storage
-            .from('documents')
-            .remove([doc.file_path]);
-
-          if (storageErr) throw storageErr;
-        }
-
-        const { error: dbErr } = await supabase
-          .from('documents')
-          .delete()
-          .eq('id', doc.id);
-
-        if (dbErr) throw dbErr;
+        await deleteDocumentConfirmed(supabase, doc, isMock);
 
         setDocuments(documents.filter(d => d.id !== doc.id));
       } catch (err) {
         console.error("Error deleting document:", err);
-        alert("Error al eliminar el documento.");
+        alert(err.message || 'No se pudo eliminar el documento.');
       }
     }
   };
@@ -252,6 +245,7 @@ export default function Documents({ realtimeTrigger }) {
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
+    if (!permissions.write) return;
     if (!selectedFile) {
       setFormError('Por favor selecciona un archivo para subir.');
       return;
@@ -535,13 +529,13 @@ export default function Documents({ realtimeTrigger }) {
             Repositorio y almacenamiento digital de contratos, manuscritos, portadas y comprobantes.
           </p>
         </div>
-        <button
+        {permissions.write && (<button
           onClick={handleOpenAddModal}
           className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-sm transition-all shadow-md shadow-brand-600/20 cursor-pointer w-fit"
         >
           <UploadCloud className="w-4 h-4" />
           Subir Documento
-        </button>
+        </button>)}
       </div>
 
       {/* Filters Section */}
@@ -989,13 +983,13 @@ export default function Documents({ realtimeTrigger }) {
                             >
                               <Download className="w-3.5 h-3.5" />
                             </button>
-                            <button
+                            {permissions.delete && (<button
                               onClick={() => handleDeleteDocument(doc)}
                               className="p-1 rounded-lg border border-slate-100 dark:border-slate-800/80 text-slate-400 hover:text-rose-650 hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
                               title="Eliminar"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            </button>)}
                           </div>
                         </div>
                       </div>
@@ -1100,13 +1094,13 @@ export default function Documents({ realtimeTrigger }) {
                                 >
                                   <Download className="w-4 h-4" />
                                 </button>
-                                <button
+                                {permissions.delete && (<button
                                   onClick={() => handleDeleteDocument(doc)}
                                   className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-450 hover:text-rose-655 hover:bg-rose-50 dark:hover:bg-rose-955/20 cursor-pointer"
                                   title="Eliminar"
                                 >
                                   <Trash2 className="w-4 h-4" />
-                                </button>
+                                </button>)}
                               </td>
                             </tr>
                           );
@@ -1125,19 +1119,19 @@ export default function Documents({ realtimeTrigger }) {
               <FolderOpen className="w-12 h-12 text-slate-300 dark:text-slate-700 mb-3" />
               <p className="font-semibold text-slate-655 dark:text-slate-400">Esta carpeta está vacía</p>
               <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">No hay documentos en esta sección.</p>
-              <button
+              {permissions.write && (<button
                 onClick={handleOpenAddModal}
                 className="mt-4 flex items-center gap-1.5 px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-655 dark:bg-brand-955/15 dark:hover:bg-brand-950/30 dark:text-brand-400 border border-brand-200 dark:border-brand-900 rounded-xl font-bold text-xs cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" /> Subir archivo aquí
-              </button>
+              </button>)}
             </div>
           )}
         </div>
       )}
 
       {/* Upload Document Modal */}
-      {isModalOpen && (
+      {permissions.write && isModalOpen && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl max-w-lg w-full shadow-2xl animate-scale-up">
             <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 dark:border-slate-800">

@@ -1,3 +1,4 @@
+import { fetchBookCategoryLinks, replaceBookCategoryLinks } from '../utils/querySchema';
 import { canDeleteEntity } from '../utils/roles';
 import { getCurrentUserRole } from '../utils';
 import React, { useState, useEffect } from 'react';
@@ -1151,7 +1152,8 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         setIdentityLogoMenuHeight(normalizeLogoHeight(row.logo_menu_height, DEFAULT_LOGO_HEIGHTS.logo_menu_height));
         setIdentityLogoMobileHeight(normalizeLogoHeight(row.logo_mobile_height, DEFAULT_LOGO_HEIGHTS.logo_mobile_height));
         setIdentityActive(row.active !== false);
-      } else {
+      } else if (!isReadOnly) {
+        // Empty/hidden settings are not permission to create rows during a read.
         await seedDefaultSettings();
       }
     } catch (err) {
@@ -1613,9 +1615,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         loadMockBooks();
       } else {
         // Fetch categories and links
-        const { data: catLinks } = await supabase
-          .from('website_book_category_links')
-          .select('*');
+        const catLinks = await fetchBookCategoryLinks(supabase);
 
         const booksWithCategories = (data || []).map(b => {
           const linksForBook = (catLinks || []).filter(l => l.book_id === b.id);
@@ -1662,6 +1662,7 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         status: bookStatus,
         featured: bookFeatured,
         visible_on_website: bookVisible,
+        visible: bookVisible,
         sale_url: bookSaleUrl,
         sale_platform: bookSalePlatform,
         organization_id: getOrgId(),
@@ -1670,8 +1671,8 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
         purchase_type: bookPurchaseType,
         author_purchase_link: bookAuthorPurchaseLink,
         noveli_purchase_link: bookNoveliPurchaseLink,
-        novelty: bookNovelty,
-        upcoming: bookUpcoming
+        is_new: bookNovelty,
+        is_coming_soon: bookUpcoming
       };
 
       let bookId = editingBook?.id;
@@ -1712,29 +1713,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
           mockLinks.push({
             id: `bl-${Date.now()}-${catId}`,
             book_id: bookId,
-            category_id: catId,
-            organization_id: getOrgId()
+            category_id: catId
           });
         });
         localStorage.setItem('somos_noveli_category_links_cms', JSON.stringify(mockLinks));
       } else {
-        // Delete existing links for this book in Supabase
-        await supabase
-          .from('website_book_category_links')
-          .delete()
-          .eq('book_id', bookId);
-        
-        // Insert new links
-        if (bookSelectedCategories.length > 0) {
-          const linksToInsert = bookSelectedCategories.map(catId => ({
-            book_id: bookId,
-            category_id: catId,
-            organization_id: getOrgId()
-          }));
-          await supabase
-            .from('website_book_category_links')
-            .insert(linksToInsert);
-        }
+        await replaceBookCategoryLinks(supabase, bookId, bookSelectedCategories);
       }
 
       resetBookForm();
@@ -1750,15 +1734,17 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
   const toggleBookBool = async (book, field) => {
     if (isReadOnly) return;
     const newVal = !book[field];
+    const update = field === 'visible_on_website' ? { visible_on_website: newVal, visible: newVal } : { [field]: newVal };
     try {
       if (isMock || usingMockDb) {
-        const updated = books.map(b => b.id === book.id ? { ...b, [field]: newVal } : b);
+        const updated = books.map(b => b.id === book.id ? { ...b, ...update } : b);
         setBooks(updated);
         localStorage.setItem('somos_noveli_books_cms', JSON.stringify(updated));
       } else {
-        await supabase.from('website_books').update({ [field]: newVal }).eq('id', book.id);
+        const { error } = await supabase.from('website_books').update(update).eq('id', book.id);
+        if (error) throw error;
       }
-      setBooks(books.map(b => b.id === book.id ? { ...b, [field]: newVal } : b));
+      setBooks(books.map(b => b.id === book.id ? { ...b, ...update } : b));
     } catch (_) {}
   };
 
@@ -1870,7 +1856,8 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
           setCategories(updated);
           localStorage.setItem('somos_noveli_categories_cms', JSON.stringify(updated));
         } else {
-          await supabase.from('website_book_categories').update(payload).eq('id', editingCategory.id);
+          const { error } = await supabase.from('website_book_categories').update(payload).eq('id', editingCategory.id);
+          if (error) throw error;
         }
       } else {
         const nextOrder = categories.length > 0 ? Math.max(...categories.map(c => c.display_order || 0)) + 1 : 1;
@@ -1882,7 +1869,8 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
           setCategories(updated);
           localStorage.setItem('somos_noveli_categories_cms', JSON.stringify(updated));
         } else {
-          await supabase.from('website_book_categories').insert([insertPayload]);
+          const { error } = await supabase.from('website_book_categories').insert([insertPayload]);
+          if (error) throw error;
         }
       }
       resetCategoryForm();
@@ -2413,15 +2401,15 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
     setBookGenre(book.genre || '');
     setBookStatus(book.status || 'Destacado');
     setBookFeatured(!!book.featured);
-    setBookVisible(book.visible_on_website !== false);
+    setBookVisible(book.visible !== false && book.visible_on_website !== false);
     setBookSaleUrl(book.sale_url || '');
     setBookSalePlatform(book.sale_platform || 'Amazon');
     setBookOrigin(book.book_origin || 'published_by_noveli');
     setBookPurchaseType(book.purchase_type || 'noveli');
     setBookAuthorPurchaseLink(book.author_purchase_link || '');
     setBookNoveliPurchaseLink(book.noveli_purchase_link || '');
-    setBookNovelty(!!book.novelty);
-    setBookUpcoming(!!book.upcoming);
+    setBookNovelty(!!book.is_new);
+    setBookUpcoming(!!book.is_coming_soon);
     setBookSelectedCategories(book.categories || []);
   };
 
@@ -3473,12 +3461,12 @@ export default function Website({ isReadOnly, initialPath = 'dashboard', initial
                         <div>
                           <div className="flex flex-wrap items-center gap-1.5">
                             <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">{b.title}</h4>
-                            {b.novelty && (
+                            {b.is_new && (
                               <span className="text-[8px] font-extrabold uppercase px-1.5 py-0.5 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 rounded-md">
                                 Novedad
                               </span>
                             )}
-                            {b.upcoming && (
+                            {b.is_coming_soon && (
                               <span className="text-[8px] font-extrabold uppercase px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 rounded-md">
                                 Próximamente
                               </span>

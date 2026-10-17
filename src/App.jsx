@@ -1,3 +1,4 @@
+import { DEFAULT_BRANDING, normalizeBranding, loadMemberBranding } from './utils/branding';
 import { normalizeRole, isAdminRole, isFinanceRole, isFinanceModule } from './utils/roles';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { supabase, fetchOrgBranding, isMock, getValidOrgId, subscribeToOrganizationChanges } from './supabaseClient';
@@ -347,76 +348,40 @@ export default function App() {
 
   const [preselectedEntity, setPreselectedEntity] = useState(null);
 
-  const [editorialSettings, setEditorialSettings] = useState({
-    editorial_name: 'Somos Noveli',
-    logo_url: '',
-    favicon_url: ''
-  });
-
-  const fetchEditorialSettings = async () => {
-    try {
-      const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
-      const { data, error } = await fetchOrgBranding(orgId);
-        
-      if (!error && data && data.length > 0) {
-        const item = data[0];
-        setEditorialSettings({
-          editorial_name: item.editorial_name || 'Somos Noveli',
-          logo_url: item.logo_url || '',
-          favicon_url: item.favicon_url || ''
-        });
-
-        if (item.editorial_name) {
-          document.title = item.editorial_name;
-        }
-        const faviconSrc = item.favicon_url || item.logo_url;
-        if (faviconSrc) {
-          let faviconLink = document.querySelector("link[rel~='icon']");
-          if (!faviconLink) {
-            faviconLink = document.createElement('link');
-            faviconLink.rel = 'icon';
-            document.head.appendChild(faviconLink);
-          }
-          faviconLink.href = faviconSrc;
-        }
-      }
-    } catch (e) {
-      console.error("Error fetching editorial settings:", e);
-    }
-  };
+  const [memberBranding, setMemberBranding] = useState(null);
+  const [brandingMembership, setBrandingMembership] = useState(null);
+  const editorialSettings = user?.id && brandingMembership?.userId === user.id &&
+    memberBranding?.userId === user.id && memberBranding?.organizationId === brandingMembership.organizationId
+    ? memberBranding.branding : DEFAULT_BRANDING;
 
   useEffect(() => {
-    fetchEditorialSettings();
-
-    const handleSettingsUpdate = (e) => {
-      if (e.detail) {
-        const item = e.detail;
-        setEditorialSettings({
-          editorial_name: item.editorial_name || 'Somos Noveli',
-          logo_url: item.logo_url || '',
-          favicon_url: item.favicon_url || ''
-        });
-        if (item.editorial_name) {
-          document.title = item.editorial_name;
-        }
-        const faviconSrc = item.favicon_url || item.logo_url;
-        if (faviconSrc) {
-          let faviconLink = document.querySelector("link[rel~='icon']");
-          if (!faviconLink) {
-            faviconLink = document.createElement('link');
-            faviconLink.rel = 'icon';
-            document.head.appendChild(faviconLink);
-          }
-          faviconLink.href = faviconSrc;
-        }
-      }
+    let active = true;
+    loadMemberBranding(user?.id, brandingMembership, fetchOrgBranding)
+      .then(branding => {
+        if (active) setMemberBranding({ userId: user?.id, organizationId: brandingMembership?.organizationId, branding });
+      })
+      .catch(error => { if (active) console.error('Error fetching editorial settings:', error); });
+    const handleSettingsUpdate = event => {
+      if (user?.id && brandingMembership?.userId === user.id && event.detail)
+        setMemberBranding({ userId: user.id, organizationId: brandingMembership.organizationId, branding: normalizeBranding(event.detail) });
     };
-
     window.addEventListener('editorial-settings-updated', handleSettingsUpdate);
     return () => {
+      active = false;
       window.removeEventListener('editorial-settings-updated', handleSettingsUpdate);
     };
-  }, [user]);
+  }, [user?.id, brandingMembership]);
+
+  useEffect(() => {
+    document.title = editorialSettings.editorial_name;
+    let favicon = document.querySelector("link[rel~='icon']");
+    if (!favicon) {
+      favicon = document.createElement('link');
+      favicon.rel = 'icon';
+      document.head.appendChild(favicon);
+    }
+    favicon.href = editorialSettings.favicon_url;
+  }, [editorialSettings]);
 
   // Sync activeTab to window.location.pathname on popstate (back/forward browser buttons)
   useEffect(() => {
@@ -557,6 +522,7 @@ export default function App() {
   }, [activeTab]);
 
   const fetchUserRoleAndOrg = async (activeUser) => {
+    setBrandingMembership(null);
     try {
       const { data, error } = await supabase
         .from('organization_members')
@@ -568,6 +534,7 @@ export default function App() {
       
       if (data && data.length > 0) {
         const membership = data[0];
+        setBrandingMembership({ userId: activeUser.id, organizationId: membership.organization_id });
         setUserRole(normalizeRole(membership.role));
         setOrganizationId(membership.organization_id || '11111111-1111-1111-1111-111111111111');
         localStorage.setItem('somos_noveli_crm_role', normalizeRole(membership.role) || '');
@@ -593,6 +560,7 @@ export default function App() {
     let active = true;
 
     const loadUserRoleAndOrg = async (activeUser) => {
+      if (active) setBrandingMembership(null);
       if (!activeUser) {
         if (active) {
           setUser(null);
@@ -617,6 +585,7 @@ export default function App() {
           userRef.current = activeUser;
           if (data && data.length > 0) {
             const membership = data[0];
+        setBrandingMembership({ userId: activeUser.id, organizationId: membership.organization_id });
             setUserRole(normalizeRole(membership.role));
             setOrganizationId(membership.organization_id || '11111111-1111-1111-1111-111111111111');
             localStorage.setItem('somos_noveli_crm_role', normalizeRole(membership.role) || '');
@@ -662,6 +631,7 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
       const activeUser = session?.user ?? null;
+      if (!activeUser) setBrandingMembership(null);
 
       const prevUserId = userRef.current ? userRef.current.id : null;
       const nextUserId = activeUser ? activeUser.id : null;

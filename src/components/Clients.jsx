@@ -1,3 +1,4 @@
+import { insertClientRecord, mutationPermissions, deleteDocumentConfirmed } from '../utils/frontendMutations';
 import { openPrivateDocument } from '../utils/storageDocuments';
 import { canDeleteEntity, isFinanceRole } from '../utils/roles';
 import { getCurrentUserRole } from '../utils';
@@ -116,7 +117,8 @@ class ClientsErrorBoundary extends Component {
   }
 }
 
-function ClientsContent({ isReadOnly = false, userRole = 'administrador', realtimeTrigger }) {
+function ClientsContent({ isReadOnly = false, userRole = getCurrentUserRole(), realtimeTrigger }) {
+  const documentPermissions = mutationPermissions(userRole, 'clients', 'documents', isReadOnly);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
@@ -451,6 +453,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
   };
 
   const handleUploadClientDocument = async (file, docType, notes, docTitle) => {
+    if (!documentPermissions.write) return;
     if (!file) {
       alert('Por favor selecciona un archivo.');
       return;
@@ -543,22 +546,11 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
   };
 
   const handleDeleteClientDocument = async (doc) => {
+    if (!documentPermissions.delete) return;
     const docName = doc.title || doc.name || doc.file_name || 'Documento';
     if (window.confirm(`¿Estás seguro de que deseas eliminar el documento "${docName}"?`)) {
       try {
-        if (!isMock) {
-          const { error: storageErr } = await supabase.storage
-            .from('documents')
-            .remove([doc.file_path]);
-          if (storageErr) throw storageErr;
-        }
-
-        const { error: dbErr } = await supabase
-          .from('documents')
-          .delete()
-          .eq('id', doc.id);
-
-        if (dbErr) throw dbErr;
+        await deleteDocumentConfirmed(supabase, doc, isMock);
 
         setClientDocuments(clientDocuments.filter(d => d.id !== doc.id));
       } catch (err) {
@@ -1537,6 +1529,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
       const contract_duration_unit = formData.service_duration_unit || 'meses';
       const currency = formData.currency || 'CLP';
 
+      let createdClient;
       if (selectedClient) {
         // Edit Mode
         if (!selectedClient?.id) {
@@ -1662,27 +1655,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
         }
       } else {
         // Add Mode
-        console.error("DEBUG CREAR CLIENTE - PAYLOAD ENVIADO:", clientPayload);
-
-        const { data: newClient, error: clientError } = await supabase
-          .from('clients')
-          .insert(clientPayload)
-          .select('*')
-          .single();
-
-        console.error("DEBUG CREAR CLIENTE - DATA SUPABASE:", newClient);
-        console.error("DEBUG CREAR CLIENTE - ERROR SUPABASE:", clientError);
-
-        if (clientError) throw clientError;
-
-        let createdClient = newClient;
-        if (Array.isArray(createdClient)) {
-          createdClient = createdClient[0];
-        }
-
-        if (!createdClient || !createdClient.id) {
-          throw new Error('No se pudo crear el cliente ni obtener su ID');
-        }
+        createdClient = await insertClientRecord(supabase, clientPayload);
 
         // Paso A: Registrar servicio inicial (si está activo)
         if (formData.register_service) {
@@ -3541,7 +3514,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleDeleteClientDocument(doc)}
+                                disabled={!documentPermissions.delete} onClick={() => handleDeleteClientDocument(doc)}
                                 className="p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-rose-600 hover:bg-white dark:hover:bg-slate-900 cursor-pointer"
                                 title="Eliminar"
                               >
@@ -3562,7 +3535,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
                         <div>
                           <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Archivo *</label>
                           <input
-                            type="file"
+                            disabled={!documentPermissions.write} type="file"
                             onChange={(e) => {
                               const file = e.target.files[0];
                               if (file) {
@@ -3621,7 +3594,7 @@ function ClientsContent({ isReadOnly = false, userRole = 'administrador', realti
 
                       <button
                         type="button"
-                        disabled={isUploading || !newDocFile || !newDocTitle}
+                        disabled={!documentPermissions.write || isUploading || !newDocFile || !newDocTitle}
                         onClick={async () => {
                           await handleUploadClientDocument(newDocFile, newDocType, newDocNotes, newDocTitle);
                           setNewDocFile(null);

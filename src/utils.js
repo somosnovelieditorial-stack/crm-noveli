@@ -645,12 +645,11 @@ export const syncStageEventsToAgenda = async (serviceId) => {
         client_id: service.client_id || null,
         stage_id: stage.id,
         title: title,
-        type: 'etapa_servicio',
+        type: 'evento',
+        action_key: 'etapa_servicio',
         date: eventDate,
         status: eventStatus,
-        notes: notes,
-        description: notes,
-        category: 'entrega'
+        description: notes
       };
 
       const matchingEvent = (existingEvents || []).find(evt => evt.stage_id === stage.id);

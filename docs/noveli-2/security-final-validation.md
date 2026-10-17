@@ -1,24 +1,24 @@
 # Validación final de seguridad Noveli 2.0
 
-**NOT READY FOR DEPLOYMENT**
+**READY FOR PHASE A: YES.**
 
-Actualización: 2026-10-16 America/Santiago. La cadena DB/Storage y su transición pasan las pruebas locales; el smoke real en Chrome se ejecutó y encontró fallos de frontend que impiden cerrar la fase integral. No se autoriza aplicar todas las migraciones juntas en producción: 04B depende de operaciones y verificaciones intermedias. No se crearon migraciones nuevas durante este cierre.
+**READY FOR FULL DEPLOYMENT: NO. FULL DEPLOYMENT: NOT READY.**
+
+Actualización 2026-10-16: correcciones exclusivamente frontend y harness local, pendientes de revisión y sin commit. El smoke integral real de Chrome headless terminó en PASS. No se modificaron migraciones, grants, cuerpos SQL, RLS ni políticas Storage. Ninguna operación productiva ni push.
 
 ## Matriz de preparación y bloqueos
 
 | FASE | ESTADO | BLOQUEO |
 |---|---|---|
-| Baseline–03C | Validado localmente | Solo baseline figura remoto en el último preflight; despliegue posterior pendiente y no autorizado aquí |
-| 04A | TECHNICALLY READY (SQL); paquete fase A NO listo | Fallos frontend del smoke integral, revisión/corrección y repetición |
-| Migración assets | Script y transición local validados | 04A y RPC productivo pendientes; después dry-run en vivo, revisión y ejecución real autorizada |
-| default-org | Asociación tenant/gasto confirmada | Copia tenant-aware y metadata vinculada todavía no ejecutadas |
-| 04B | Validado localmente | Transición productiva, default-org y verificaciones previas del runbook |
-| Smoke navegador | EJECUTADO — FAIL | Clientes, controles de lectura Documents/Services, consulta CMS y branding/ruido React |
-| Producción completa | NOT READY | No desplegar hasta resolver bloqueos y completar orden A–E |
+| Baseline–03C | Validado localmente; regresiones PASS | Despliegue productivo pendiente de autorización |
+| 04A | READY FOR PHASE A; SQL y frontend compatibles validados | Revisión y despliegue productivo todavía no ejecutados |
+| Migración assets | Script/fixtures y transición local validados | Ejecutar/revisar dry-run productivo actualizado y después migrar 14 imágenes / 16 referencias |
+| default-org | Tenant y gasto reconciliados por metadata | Traslado físico tenant-aware y actualización de asociación pendientes |
+| 04B | Validado localmente en Estado B | Requiere transición productiva, default-org y verificaciones intermedias del runbook |
+| Smoke navegador | PASS: 73 assertions / 248 acciones | Sin bloqueos frontend encontrados en estos flujos |
+| Producción completa | NOT READY | Completar fases A–D y observación E en orden, con autorización separada |
 
-**READY FOR PHASE A: NO (paquete integral). 04A SQL permanece técnicamente preparado.**
-
-**READY FOR FULL DEPLOYMENT: NO.** No confundir las pruebas locales de B con autorización de despliegue remoto.
+La preparación local no autoriza desplegar. Permanecen pendientes 04A productivo, frontend compatible, migración real de assets, traslado default-org, verificación intermedia y 04B productivo.
 
 ## Checkpoints e integridad
 
@@ -55,7 +55,7 @@ SHA256 de 04B: `7321203bb0e3ce58844be4ef5d989b0c5f1202abb079ce0f5ec84ba362b9c917
 
 ## Reproducción local limpia y pruebas
 
-Se ejecutó `supabase db reset --local --version 20261016013219`: eliminó el estado previo local y reprodujo baseline → 04A. Se reiniciaron exclusivamente Auth, REST y gateway locales para evitar conexiones obsoletas después del reset. Las suites se ejecutaron en A; después el driver creó datos sintéticos, migró/verificó assets y aplicó 04B mediante `supabase migration up --local`. Se repitieron todas las suites en B. Así se validó el orden real, no solo un reset que aplicara B sobre buckets vacíos.
+La validación anterior aprobada de la transición A → B se conserva sin alterar sus suites. En esa validación se ejecutó `supabase db reset --local --version 20261016013219`: eliminó el estado previo local y reprodujo baseline → 04A. Se reiniciaron exclusivamente Auth, REST y gateway locales para evitar conexiones obsoletas después del reset. Las suites se ejecutaron en A; después el driver creó datos sintéticos, migró/verificó assets y aplicó 04B mediante `supabase migration up --local`. Se repitieron todas las suites en B. Así se validó el orden real, no solo un reset que aplicara B sobre buckets vacíos.
 
 | Suite | Estado A | Estado B |
 |---|---:|---:|
@@ -84,88 +84,68 @@ La matriz SQL/API incluye los seis roles canónicos, usuario desconocido/inactiv
 
 Estado final local: **46 tablas públicas, 13 funciones públicas, 306 políticas públicas, 126 restrictivas públicas, 16 políticas storage.objects y ocho restrictivas Storage**. Ninguna tabla pública tiene RLS deshabilitado. `documents.public=false`, `brand-assets.public=true`. Limpieza comprobada: cero usuarios Auth y cero objetos Storage sintéticos restantes.
 
-## Frontend y smoke tests reales — actualización 2026-10-16
+En esta ronda frontend se repitió `supabase db reset --local` antes de los smoke tests y nuevamente al cerrar, siempre hasta 04B. El reset final terminó con exit 0. Después pasaron otra vez `security_04_regressions.py` (49 / 274 / 316 / 989 / 1.041 / 225 = 2.894 assertions) y `security_04_storage_api.py` (130 assertions). La transición A → assets → B conserva la evidencia anterior; no se presenta como una nueva ejecución productiva.
 
-**READY FOR PHASE A: NO, para el paquete DB + frontend.** El SQL 04A mantiene su estado **TECHNICALLY READY**, pero el smoke integral encontró fallos frontend que requieren revisión/corrección y repetición. **READY FOR FULL DEPLOYMENT: NO.**
+## Frontend y smoke tests reales — correcciones y repetición
 
-### Recursos y ejecución
+El diagnóstico original se conserva en `security-browser-smoke-evidence.json`, dentro del checkpoint `267243b8c79368f27f2569ccc27ea311b89e8083` (`test(noveli-2): add browser security smoke coverage`). Git quedó limpio al crear ese checkpoint. La detención previa por el RPC privado fue correcta y quedó resuelta por la autorización explícita del usuario de usar fallback local; no se abrió el RPC.
 
-No existen Playwright, @playwright/test, Puppeteer ni Cypress en package.json, package-lock.json ni node_modules. Sí existen Chrome y Edge instalados. Se utilizó el Chrome existente en modo headless, identificado como **HeadlessChrome/155.0.0.0**, con Node v24.14.1 y su WebSocket nativo para CDP, sin instalar paquetes ni navegadores.
+Evidencia posterior: `security-browser-smoke-after-fixes.json`. Incluye pasos, assertions, eventos CDP, clasificación de errores intencionales, conteos por endpoint y SHA-256 de los fuentes probados. No contiene tokens, contraseñas ni claves privilegiadas.
 
-Harness local: `supabase/tests/security_browser_smoke.mjs`. Requiere Vite local en `http://127.0.0.1:5179` y Supabase en `http://127.0.0.1:54321`. Crea un perfil de Chrome temporal, tenant aleatorio y siete usuarios sintéticos; las claves quedan en memoria. Intercepta requests de la página y bloquea destinos ajenos a localhost/127.0.0.1. Las fuentes Google fueron bloqueadas intencionalmente, sin afectar las operaciones evaluadas. No se navegó al CRM productivo.
+### Causas y cambios
 
-El harness recibe acciones JSON por stdin (sesión TTY): `login`, `nav`, `inspect`, `fill`, `click`, `files`, `eval`, `seed`, `summary`, `finish`. Por ejemplo `{"type":"login","role":"admin"}` y `{"type":"nav","path":"/clientes"}`. Las interacciones se ejecutan sobre DOM/React reales, sin sustituir respuestas de Supabase ni habilitar modo mock. Los formularios se guardaron desde sus controles y se comprobaron respuestas/persistencia; las pruebas negativas de Storage se hicieron mediante el SDK real dentro del navegador. No son todas pruebas de botón: se distingue la UI de las verificaciones programáticas de Storage y PostgreSQL.
+- **Clientes:** `createdClient` se declaraba dentro de la rama de creación, pero se usaba fuera para sincronizaciones posteriores. El INSERT ya había terminado cuando se producía ReferenceError. Ahora tiene alcance sobre la continuación completa; `insertClientRecord` devuelve el registro real con id, propaga errores y ejecuta un único INSERT. Chrome comprobó una fila, un POST, actividad con el mismo `entity_id`, detalle, adjunto, edición y borrado.
+- **Branding:** App ejecutaba `get_org_branding` sin sesión. `branding.js` centraliza el fallback existente: nombre `Somos Noveli`, logo vacío que conserva el icono local de la UI y favicon `/favicon.svg`. Antes de autenticar no hay RPC ni consulta `company_settings`. Solo tras resolver usuario y organización desde su membresía se consulta el RPC privado. La respuesta lleva identidad de usuario/tenant, se descartan respuestas obsoletas al desmontar/cambiar sesión y logout vuelve inmediatamente al fallback. El RPC y sus permisos permanecen intactos; anon EXECUTE sigue false.
+- **Servicios y documentos:** `mutationPermissions` utiliza exclusivamente el mecanismo central de roles de Seguridad 02. Visualizador/desconocido no obtienen escritura; se protegen controles y handlers. Lectura conservada. Incluye adjuntos de Clientes y Servicios.
+- **Borrado documental:** antes se filtraba el estado local sin comprobar el resultado efectivo de Storage/DB. `deleteDocumentConfirmed` exige primero éxito y objeto eliminado en Storage, después éxito y fila eliminada en DB; las respuestas 200 con arrays vacíos tampoco son éxito. Solo entonces se retira de la UI. Cualquier error conserva el documento visible y muestra el fallo. También se corrigió el reset del formulario para conservar strings controlados y sus nombres reales.
+- **CMS category_links:** el wrapper agregaba `organization_id` a filtros/payloads y `user_id` al INSERT, aunque el baseline solo tiene `id`, `book_id`, `category_id`, `created_at`. Se excluye de la inyección directa de tenant/actor, se consultan columnas reales y se guardan solo relaciones padre; el aislamiento sigue a cargo del RLS existente por padres.
+- **Otros contratos CMS detectados durante la repetición:** categorías y otras tablas CMS sin columna `user_id` ya no reciben ese campo automático. El formulario de libros enviaba `novelty`/`upcoming`; ahora utiliza `is_new`/`is_coming_soon`, existentes en el baseline. Publicación sincroniza los campos existentes `visible` y `visible_on_website`, evitando una UI que anuncie ocultación mientras RLS todavía lo considere público. Los errores de guardado de categorías se propagan. La carga de settings sin fila ya no intenta hacer seeding cuando `isReadOnly` es true; se eliminó así el 403 inesperado del usuario sin membresía.
+- **Agenda ligada a Servicios:** la sincronización enviaba columnas inexistentes `notes`, `category` y tipo no permitido `etapa_servicio`. Ambos productores frontend envían `description`, tipo existente `evento` y `action_key='etapa_servicio'`, preservando service_id/stage_id/client_id y el reconocimiento de la etapa. No cambió el esquema.
+- **Dashboard:** se quitaron logs residuales y se registran errores de queries solo cuando realmente existen; se retiró la consulta Auth usada únicamente para debug. Se mantienen los errores legítimos.
+- **406 de tasa:** ausencia de cotización diaria es un escenario real, no solo un defecto del fixture. Se usa lookup opcional acotado por organización/moneda/fecha, `limit(1).maybeSingle()`, conservando el fallback anterior; CLP usa 1 sin consultar. Los errores reales siguen visibles. No cambió el modelo financiero.
 
-Evidencia resumida, sin contraseñas ni tokens: [security-browser-smoke-evidence.json](security-browser-smoke-evidence.json). Contiene **193 registros de acciones/observaciones**, no 193 pruebas aprobadas; incluye reintentos del harness y un resultado global FAIL. Se obtuvieron 30 observaciones adicionales de rol × ruta para los seis usuarios no-admin.
+### Ejecución y resultados
 
-### Resultado por módulo
+Mismo Chrome headless instalado, mismo harness CDP sin dependencias nuevas, React y Supabase reales exclusivamente locales. Se conserva el modo interactivo y se añade escenario automatizado repetible. La compilación de Vite preview se hizo con URL/key locales en memoria y el bundle se comprobó contra el endpoint local. Se evitó importar un segundo cliente GoTrue dentro del navegador: las pruebas HTTP negativas usan la sesión real local mediante probes; los flujos UI usan el SDK de la aplicación. Las recargas/HMR del servidor de desarrollo dejaron de interrumpir las pruebas.
 
-| Módulo / ruta | Resultado real |
+Se añadieron esperas por finalización de formulario/red, sin reducir assertions. La detección final no acepta cualquier fallo por estar en una fase negativa: solo admite los endpoints/status Storage deliberados; cualquier excepción React o HTTP 500 falla la ejecución.
+
+| Módulo | Resultado |
 |---|---|
-| AUTH, `/` / `/dashboard` | Login admin, redirección, logout y nuevo login PASS. Perfil propio leído desde el SDK del navegador: Local admin. La UI carga contexto de membresía y correo; no se inventa una pantalla de perfil que no existe en este flujo. Login FAIL en limpieza de Network por branding anónimo 401. |
-| Dashboard, `/dashboard` | Renderiza widgets financieros admin/finanzas y vista operativa para otros roles. Sin excepción React no controlada. Hay logs console.error con resultados null y requests redundantes al cargar. |
-| Clientes, `/clientes` | Listar, abrir ficha, editar, adjuntar PDF, firmar/ver y borrar como admin PASS. **Crear FAIL**: inserta la fila, después muestra `createdClient is not defined`. Se recargó para continuar, sin repetir INSERT. |
-| Prospectos, `/prospects` | Listar, crear, editar y borrar fixture admin PASS; se verificó persistencia/ausencia posterior. |
-| Cotizaciones, `/propuestas-comerciales` | Crear propuesta, ítem manual de $1.000, editar cantidad a dos y visualizar total $2.000 PASS. Vista previa del formulario renderiza. Borrado admin de propuesta e ítems PASS. No se afirma descarga/exportación PDF: no fue un paso probado. |
-| Servicios, `/services` | Listar, crear, editar y borrar como admin PASS. **UI visualizador FAIL**: edición y Configurar etapas siguen habilitados; DELETE principal sí está deshabilitado. No se abrió acceso adicional en RLS. |
-| Web/CMS, `/sitio-web/identidad` | Carga de configuración, modificación de marca, upload a brand-assets, guardado y restauración PASS. Tres previews cargan la imagen; URL pública 200. **Network FAIL** por consulta a category_links con columna inexistente. No se probó otro repositorio/hosting público de noveli-web. |
-| Documentos, `/documentos` | Upload desde Centro Documental y ficha de cliente PASS. documents privado, firma 300 segundos, acceso firmado 200, URL pública rechazada, expiración con firma corta y borrado admin PASS. **UI visualizador FAIL**: upload/delete habilitados y borrado optimista falso. |
-| Finanzas, `/ingresos`, `/gastos` | Listar, crear, editar y borrar fixtures como admin PASS. Finanzas puede abrir ingresos y no tiene DELETE; configuración administrativa denegada. Otras sesiones no financieras no obtienen el módulo financiero. No se repitió toda operación con cada rol; la matriz RLS completa permanece cubierta por las suites SQL previas. |
-| Storage multi-tenant | Objeto B real sintético: admin A obtiene listado vacío, no puede firmar ni modificar; remove devuelve cero objetos. Se confirmó después que el objeto B seguía presente con tamaño original. PASS. |
+| Auth / perfil / logout / relogin | PASS; fallback sin RPC privado ni company_settings antes de sesión, branding personalizado después, fallback tras logout |
+| Dashboard | PASS; widgets renderizados; sin errores propios inesperados; sin peticiones durante observación final de 7 segundos |
+| Clientes | PASS; una fila/un INSERT, actividad, detalle, edición, adjunto firmado y DELETE admin |
+| Prospectos | PASS; listar, crear, editar y eliminar |
+| Cotizaciones | PASS; crear, item, vista previa, cantidad/importe actualizado y eliminar |
+| Servicios | PASS; CRUD admin; lectura visualizador con escritura/configuración deshabilitadas |
+| CMS | PASS; configuración, imagen pública brand-assets, categoría, libro, vínculo, edición y ocultar/republicar con comprobación anon |
+| Documentos | PASS; upload, firma UI de 300 s, acceso firmado, URL pública rechazada, expiración corta, rechazo conserva UI/DB y borrado real autorizado |
+| Finanzas | PASS; ingreso/gasto creados y editados; admin puede eliminar; finanzas accede sin administración global |
+| Roles | PASS; seis roles canónicos y usuario sin membresía/desconocido; visualizador y desconocido sin controles habilitados de escritura; otros roles sin finanzas |
+| Storage / tenants | PASS; documents privado, brand-assets público, listado/firma/update/delete cross-tenant bloqueados y metadata del objeto B intacta |
 
-Los fixtures de usuario desconocido se representan como usuario autenticado sin membresía válida: el CHECK canónico impide guardar un rol desconocido sin alterar SQL. La UI cae en visualizador; no tiene escritura efectiva. La normalización de strings desconocidos ya tiene pruebas unitarias. No se retiró el CHECK para fabricar una membresía inválida en este smoke.
+**73 assertions PASS; 248 acciones.** Exit 0 y limpieza de tenant/usuarios/objetos del harness confirmada. Los errores encontrados en intentos intermedios se corrigieron; no se relabelaron como negativos esperados.
 
-### Roles: UI observada
+- **2.766 respuestas HTTP**, incluidas recargas y preflights; **2.570** corresponden a Supabase local. No son transacciones de negocio distintas.
+- **HTTP inesperados: 0.** Cero 401 pre-login, 406 por tasa, errores de columnas o RPC inexistentes.
+- **7 HTTP negativos esperados:** un 403 de borrado Storage inyectado; seis HTTP 400 nativos de Storage al probar URL pública privada, firma expirada, upload prohibido visualizador/desconocido y firma/update cross-tenant. Storage expresa varias denegaciones RLS mediante HTTP 400; no son errores de consultas válidas.
+- **Consola inesperada: 0. React/pageerror/ReferenceError: 0.** Se conserva un console.error esperado del rechazo deliberado de borrado, con aviso al usuario. Los mensajes de recurso fallido correspondientes a esas negativas también son esperados.
+- Google Fonts se bloqueó expresamente por el harness para evitar conexiones externas; se usaron fuentes fallback. No hubo tráfico Supabase productivo. Esta prueba no evalúa disponibilidad de Google Fonts.
+- **23/23 tests JavaScript PASS**, frente a 15 de la base previa; incluye 8 nuevos tests de contratos/bugs. Comando: `node --test src/utils/frontendSecurity.test.js src/utils/roles.test.js src/utils/storageDocuments.test.js scripts/noveli-2/migrate-storage-assets.test.mjs`.
+- **Build PASS: 425 módulos.** Persisten avisos históricos de sourcemaps Tailwind/tamaño de chunk.
+- **Lint diagnóstico global:** 393 errores / 22 warnings históricos. La comparación de archivos frontend modificados con HEAD, normalizando codeframes/números de línea, no detecta diagnósticos nuevos. No se hizo limpieza general de lint.
 
-| Rol | CRM clientes | Documentos | CMS identidad | Finanzas | Configuración global |
-|---|---|---|---|---|---|
-| admin | CRUD salvo bug de posguardado al crear | Upload, firma y DELETE real | Edita/sube | CRUD probado | Rol autorizado; administración completa no recorrida en este smoke |
-| finanzas | Añadir/editar permitido; sin DELETE principal | Botón upload presente | Solo lectura | Acceso operativo, sin DELETE | Denegada |
-| editor | Añadir/editar; sin DELETE principal | Upload presente | Edición habilitada | Denegada | Denegada |
-| diseñador | Añadir/editar; sin DELETE principal | Upload presente | Edición habilitada | Denegada | Denegada |
-| corrector | Añadir/editar; sin DELETE principal | Upload presente | Edición habilitada | Denegada | Denegada |
-| visualizador | Sin acciones de escritura en clientes/prospectos/cotizaciones | **FAIL UI:** upload/delete habilitados; RLS bloquea escritura | Sin guardado habilitado | Denegada | Denegada |
-| desconocido / sin membresía | Sin filas ni acciones CRM de escritura | **FAIL UI:** upload presente; Storage rechaza escritura | Sin guardado habilitado | Denegada | Denegada |
+### Archivos de esta revisión, sin commit
 
-Visualizador también conserva el botón Editar y Configurar etapas en Servicios; no se considera coherencia completa UI ↔ RLS aunque la base no permita mutar.
+Frontend: `src/App.jsx`, `src/components/{Clients,Dashboard,Documents,Services,Website}.jsx`, `src/supabaseClient.js`, `src/utils.js`, `src/utils/{branding,frontendMutations,querySchema}.js`.
 
-### Errores inesperados y propuestas — no aplicadas
+Pruebas: `src/utils/frontendSecurity.test.js`, `supabase/tests/security_browser_smoke.mjs`, `supabase/tests/security_browser_scenarios.mjs`, `supabase/tests/security_browser_probes.mjs`.
 
-1. **Clientes: persistencia parcial del flujo y riesgo de duplicación.** `Clients.jsx:1678` declara `createdClient` dentro de un bloque y `Clients.jsx:1797` lo referencia fuera. POST fue exitoso, pero el modal queda abierto con ReferenceError. Propuesta: conservar el ID resultante en un ámbito común a insert/update, separar el éxito de persistencia de las tareas posteriores y evitar reintentar un INSERT ya completado. Reproducido en Chrome y confirmado en PostgreSQL local.
-2. **Documents no aplica el modo de lectura a controles/handlers.** `Documents.jsx:13` no recibe isReadOnly/userRole; upload en línea 543 y DELETE en líneas 993/1104 siguen activos. Propuesta: usar utilidad central y props de autorización, ocultar/deshabilitar controles y proteger handlers; verificar filas/objetos efectivamente eliminados antes de actualizar estado.
-3. **Falso DELETE de visualizador.** `Documents.jsx:157`: Storage remove y DELETE RLS pueden devolver éxito con cero filas. La UI elimina optimistamente el documento de su estado. Se verificaron fila y objeto intactos después del intento. No fue bypass de RLS. Debe comprobar el resultado efectivo y recargar/mostrar falta de permiso.
-4. **Services ignora lectura en edición/configuración.** Editar en `Services.jsx:1334` y Configurar etapas alrededor de línea 1417 permanecen habilitados para visualizador. Propuesta: aplicar canRolePerformAction/isReadOnly a controles y handlers de edición/etapas/documentos; mantener el DELETE admin-only ya existente.
-5. **CMS consulta una columna inexistente.** `Website.jsx:1617` usa el wrapper genérico, que añade organization_id a `website_book_category_links`. La respuesta es HTTP 400 / PostgreSQL `42703: column website_book_category_links.organization_id does not exist`. Propuesta frontend: adaptar el wrapper/consulta de esta tabla hija al modelo parent/child existente y revisar también el payload de links de `Website.jsx:1729`, que incluye esa columna. No añadir una columna ni relajar RLS para solucionar este contrato.
-6. **Branding antes de autenticar.** `App.jsx:356–389` ejecuta get_org_branding desde login; 401 inesperados. Propuesta: consultar branding interno solo con sesión/membresía resuelta y mantener defaults visuales en login. No conceder EXECUTE a anon por este fallo.
-7. **React warning en upload del Centro Documental:** input cambia uncontrolled → controlled al seleccionar archivo (`documents-file`). No causó excepción ni impidió guardar. Propuesta: inicializar campos controlados con strings/valores definidos.
-8. **Ruido de consola:** Dashboard.jsx:232–235 imprime cuatro console.error sin comprobar error; creación de cliente imprime payload/data mediante console.error. Propuesta: registrar solo errores reales y retirar logs de payload de uso normal.
-9. **Fixture sin tasa:** dos HTTP 406 en exchange_rates por lookup opcional con .single() sobre cero filas. Se creó una tasa CLP→CLP=1 solo para el tenant local. No fue una denegación de RLS ni se abrió acceso financiero. Revisar también si .maybeSingle()/fallback evita ese error normal de ausencia; no se modificó el wrapper en este cierre.
-
-Ninguna propuesta fue aplicada a código productivo. No se detectó necesidad de una nueva migración para estos hallazgos. Si la revisión concluye que hace falta cambiar SQL/RLS, detenerse y pedir revisión antes de crearla.
-
-### Consola, Network y pruebas negativas
-
-Se capturaron Runtime.consoleAPICalled, Runtime.exceptionThrown, Log.entryAdded y Network.responseReceived. Se observaron **8.217 respuestas HTTP** (incluye módulos Vite, recargas y preflights), de ellas **4.147 de Supabase local**. No son 8.217 transacciones de negocio.
-
-- **UNEXPECTED:** 27 respuestas 401 de get_org_branding; 17 respuestas 400 de category_links (incluye la reproducción diagnóstica); dos 406 del fixture sin tasa. Total 46 respuestas, con las dos de fixture identificadas por separado.
-- **EXPECTED negativos:** seis respuestas HTTP 400 de Storage: URL pública de documents, upload visualizador, firma cross-tenant, update cross-tenant, firma expirada y upload sin membresía. Los uploads devuelven código lógico 403 en el SDK aunque este Storage local responde HTTP 400. No se cuentan como fallos del smoke.
-- DELETE/list con RLS pueden responder 200 y cero filas/objetos; se verificó ausencia de efectos en las negativas. El falso borrado visual sí es fallo de UI.
-- Cero respuestas 404 o 5xx capturadas; ningún RPC inexistente observado. El RPC de branding existe y rechaza correctamente a anon.
-- Cero pageerror/exception no controlada de la aplicación; un ReferenceError capturado por el handler de cliente y un warning React uncontrolled/controlled. Cero console.warn/console.warning de aplicación. Los logs null/debug se separan de errores reales.
-- 71 requests a Google Fonts bloqueados por el harness y sus mensajes de recurso bloqueado son efectos esperados de la restricción de red local; no fallos de RLS.
-- Consultas a organization_members, user_profiles, clients, prospects, quotations/items, services/stages, website_*, incomes, expenses, Storage y firmas quedaron observadas. Hay fan-out y cargas duplicadas al navegar; **cero respuestas durante siete segundos de reposo final**, por lo que no se observó un bucle sostenido en esa ventana. No equivale a un perfil de rendimiento de larga duración.
-- Se corrigieron siete errores de sincronización/selectores/sintaxis del propio harness y se repitieron esas acciones. Están separados de los hallazgos de la aplicación. Al finalizar, se corrigió también el cierre de stdin TTY del harness; la sesión anterior se interrumpió después de completar y verificar la limpieza.
-
-### Limpieza y límites
-
-Como admin se eliminaron los registros comerciales/financieros/documentales desde UI y se verificaron cero filas restantes. La marca se restauró desde CMS; el cleanup local retiró los restantes settings, catálogo, membresías, usuarios y objetos de prueba. El objeto del tenant B se comprobó intacto antes de retirarlo con credencial de fixture local. Conteo final: **cero organizaciones, cero usuarios Auth y cero objetos Storage de prueba**; documents continúa privado y brand-assets público.
-
-Las pruebas JavaScript 15/15 y build de 422 módulos de la validación anterior siguen vigentes: este intento no modifica src, dependencias ni migraciones. No se volvieron a presentar como ejecutadas en este intento. Se verificó sintaxis del nuevo harness con node --check. Las regresiones SQL/API previas conservan su evidencia; este smoke agrega la observación real de navegador y descubre fallos que aquellas suites no cubrían.
-
-No hace falta una checklist manual por ausencia de navegador: ese bloqueo técnico quedó resuelto. Sí es necesario repetir el smoke integral después de revisar/corregir los fallos frontend. No se otorga READY por el simple hecho de disponer de automatización.
-
+Documentación/evidencia: este informe y `docs/noveli-2/security-browser-smoke-after-fixes.json`. El JSON de diagnóstico original permanece intacto en el checkpoint previo. No se incluyen archivos temporales, credenciales ni artefactos Docker.
 
 ## Preflight productivo exclusivamente read-only
+
+Evidencia conservada del preflight anterior, no repetido en esta ronda frontend. Esta ronda no realizó consultas ni cambios productivos.
 
 Proyecto `bdxlzhpmifxwmqjnnmxa`. Se consultaron migrations por CLI/MCP y metadata por SQL dentro de `BEGIN READ ONLY` / `COMMIT`; no se aplicó SQL del baseline ni de seguridad.
 
@@ -241,10 +221,11 @@ Referencia operativa: [security-deployment-runbook.md](security-deployment-runbo
 - Durante A documents sigue público: endurecer RLS no vuelve privados sus bytes. Evitar presentar esta fase como confidencialidad ya desplegada.
 - Después de B no reabrir automáticamente documents ni volver a un frontend que dependa de URLs públicas de adjuntos. Ante fallo, detener el rollout y restaurar/avanzar con un procedimiento revisado que conserve privacidad y las rutas correctas. Cualquier SQL correctivo requiere revisión separada, no se prepara una migración nueva aquí.
 - Restaurar DB sin coordinar Storage puede dejar referencias rotas; conservar ambas instantáneas y fuentes. Cualquier reversión de referencias debe revisar el valor actual, no pisar ediciones posteriores.
+- El borrado documental coordina Storage y DB desde frontend, sin transacción distribuida: si Storage confirma el borrado y luego DB falla, la fila permanece visible y se informa el fallo, pero el archivo puede haberse eliminado. Revisar/restaurar antes de reintentar; esta fase no añade un sistema de compensación ni cambia SQL.
 - Firmas son bearer tokens durante su TTL; no se persisten ni se registran. Un cambio de membresía no invalida inmediatamente una firma ya emitida.
 - Los 14 objetos sin referencia no están demostrados como huérfanos definitivos; conservarlos y observar consumidores externos.
 - El modelo documental sigue siendo por tenant y no agrega clasificación financiera por archivo. No se rediseñó contabilidad, auditoría ni clasificación de adjuntos.
-- Bloqueo principal actualizado: el navegador CLI ya está disponible y el smoke real está ejecutado, con fallos frontend documentados. Corregir/revisar esos fallos y repetirlo antes de declarar READY FOR PHASE A.
+- El bloqueo frontend del smoke quedó resuelto en la repetición documentada arriba. Phase A está preparada para revisión/despliegue autorizado; producción completa sigue bloqueada por la transición pendiente.
 - El CLI dry-run en vivo, la migración real de imágenes y la reconciliación default-org son pasos futuros explícitos del runbook, no acciones completadas por esta auditoría.
 
 No se ejecutaron db push, Git push, migration repair, reset linked, cambios de bucket remoto, copias/movimientos/borrados de objetos remotos ni UPDATE de datos productivos.

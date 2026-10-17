@@ -1,3 +1,4 @@
+import { hasDirectTenant, hasActorColumn, optionalExchangeRate } from './utils/querySchema';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL;
@@ -1048,10 +1049,10 @@ const getMockDb = () => {
   }
 
   // Ensure every record in all business tables has organization_id
-  const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
+
   const defaultOrgId = '11111111-1111-1111-1111-111111111111';
   Object.keys(parsed).forEach(table => {
-    if (!EXCLUDED_TABLES.includes(table) && Array.isArray(parsed[table])) {
+    if (hasDirectTenant(table) && Array.isArray(parsed[table])) {
       parsed[table] = parsed[table].map(row => {
         if (!row.organization_id) {
           row.organization_id = defaultOrgId;
@@ -1108,8 +1109,8 @@ class MockQueryBuilder {
       const db = getMockDb();
       let records = db[this.table] || [];
 
-      const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
-      if (!EXCLUDED_TABLES.includes(this.table)) {
+
+      if (hasDirectTenant(this.table)) {
         const orgId = await getCurrentOrganizationId();
         records = records.filter(row => row.organization_id === orgId);
       }
@@ -1246,7 +1247,7 @@ class MockQueryBuilder {
       const existingIdx = records.findIndex(r => r[onConflict] === item[onConflict]);
       const current = existingIdx >= 0 ? records[existingIdx] : {};
       
-      const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
+
       const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
 
       const mergedItem = {
@@ -1257,7 +1258,7 @@ class MockQueryBuilder {
         ...item
       };
 
-      if (!EXCLUDED_TABLES.includes(this.table)) {
+      if (hasDirectTenant(this.table)) {
         if (!mergedItem.organization_id) {
           mergedItem.organization_id = orgId;
         }
@@ -1296,7 +1297,7 @@ class MockQueryBuilder {
     const db = getMockDb();
     const records = db[this.table] || [];
     
-    const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
+
     const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
 
     const itemsToInsert = Array.isArray(newData) ? newData : [newData];
@@ -1308,7 +1309,7 @@ class MockQueryBuilder {
         ...item
       };
 
-      if (!EXCLUDED_TABLES.includes(this.table)) {
+      if (hasDirectTenant(this.table)) {
         if (!newItem.organization_id) {
           newItem.organization_id = orgId;
         }
@@ -1693,7 +1694,7 @@ class MutationQueryBuilder {
 
   async execute() {
     let query;
-    const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
+
     const orgId = await getCurrentOrganizationId();
     
     let currentUserId = null;
@@ -1708,11 +1709,11 @@ class MutationQueryBuilder {
       const items = Array.isArray(this.data) ? this.data : [this.data];
       const updatedItems = await Promise.all(items.map(async item => {
         const newItem = { ...item };
-        if (!EXCLUDED_TABLES.includes(this.table)) {
+        if (hasDirectTenant(this.table)) {
           if (!newItem.organization_id) {
             newItem.organization_id = orgId;
           }
-          if (currentUserId && !newItem.user_id) {
+          if (hasActorColumn(this.table) && currentUserId && !newItem.user_id) {
             newItem.user_id = currentUserId;
           }
         }
@@ -1721,11 +1722,10 @@ class MutationQueryBuilder {
             let rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
             try {
               const todayStr = new Date().toISOString().split('T')[0];
-              const rateRes = await this.realClient.from('exchange_rates').select('rate').eq('currency_from', newItem.currency).eq('date', todayStr).single();
-              if (rateRes.data) {
-                rate = Number(rateRes.data.rate);
-              }
-            } catch (e) {}
+              rate = await optionalExchangeRate(this.realClient, orgId, newItem.currency, rate, todayStr);
+            } catch (error) {
+              console.error('Error loading exchange rate:', error);
+            }
             newItem.exchange_rate = rate;
           }
           const amt = Number(newItem.value || newItem.amount || 0);
@@ -1738,13 +1738,13 @@ class MutationQueryBuilder {
 
     } else if (this.method === 'update') {
       query = this.realClient.from(this.table).update(this.data);
-      if (!EXCLUDED_TABLES.includes(this.table)) {
+      if (hasDirectTenant(this.table)) {
         query = query.eq('organization_id', orgId);
       }
 
     } else if (this.method === 'delete') {
       query = this.realClient.from(this.table).delete();
-      if (!EXCLUDED_TABLES.includes(this.table)) {
+      if (hasDirectTenant(this.table)) {
         query = query.eq('organization_id', orgId);
       }
 
@@ -1752,11 +1752,11 @@ class MutationQueryBuilder {
       const items = Array.isArray(this.data) ? this.data : [this.data];
       const updatedItems = await Promise.all(items.map(async item => {
         const newItem = { ...item };
-        if (!EXCLUDED_TABLES.includes(this.table)) {
+        if (hasDirectTenant(this.table)) {
           if (!newItem.organization_id) {
             newItem.organization_id = orgId;
           }
-          if (currentUserId && !newItem.user_id) {
+          if (hasActorColumn(this.table) && currentUserId && !newItem.user_id) {
             newItem.user_id = currentUserId;
           }
         }
@@ -1765,11 +1765,10 @@ class MutationQueryBuilder {
             let rate = newItem.currency === 'USD' ? 940 : newItem.currency === 'EUR' ? 1010 : 1;
             try {
               const todayStr = new Date().toISOString().split('T')[0];
-              const rateRes = await this.realClient.from('exchange_rates').select('rate').eq('currency_from', newItem.currency).eq('date', todayStr).single();
-              if (rateRes.data) {
-                rate = Number(rateRes.data.rate);
-              }
-            } catch (e) {}
+              rate = await optionalExchangeRate(this.realClient, orgId, newItem.currency, rate, todayStr);
+            } catch (error) {
+              console.error('Error loading exchange rate:', error);
+            }
             newItem.exchange_rate = rate;
           }
           const amt = Number(newItem.value || newItem.amount || 0);
@@ -2055,8 +2054,8 @@ class RealSupabaseQueryBuilder {
   }
 
   async execute() {
-    const EXCLUDED_TABLES = ['organizations', 'user_profiles', 'organization_members'];
-    if (!EXCLUDED_TABLES.includes(this.table) && !this.orgFiltered) {
+
+    if (hasDirectTenant(this.table) && !this.orgFiltered) {
       const orgId = await getCurrentOrganizationId();
       this.query = this.query.eq('organization_id', orgId);
       this.orgFiltered = true;

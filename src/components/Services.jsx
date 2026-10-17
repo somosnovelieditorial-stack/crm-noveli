@@ -1,5 +1,5 @@
+import { mutationPermissions, deleteDocumentConfirmed } from '../utils/frontendMutations';
 import { openPrivateDocument } from '../utils/storageDocuments';
-import { canDeleteEntity } from '../utils/roles';
 import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
 import { supabase, isMock, getValidOrgId } from '../supabaseClient';
@@ -15,7 +15,9 @@ import {
   UploadCloud, FileSpreadsheet, Image, File, Eye, FileText, Settings, ArrowUp, ArrowDown
 } from 'lucide-react';
 
-export default function Services({ isReadOnly = false, realtimeTrigger }) {
+export default function Services({ isReadOnly = false, userRole = getCurrentUserRole(), realtimeTrigger }) {
+  const permissions = mutationPermissions(userRole, 'services', 'services', isReadOnly);
+  const canWrite = permissions.write;
   const [services, setServices] = useState([]);
   const [clients, setClients] = useState([]);
   const [editorialStages, setEditorialStages] = useState([]);
@@ -291,12 +293,11 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
           client_id: service.client_id || null,
           stage_id: stage.id,
           title: title,
-          type: 'etapa_servicio',
+          type: 'evento',
+          action_key: 'etapa_servicio',
           date: eventDate,
           status: eventStatus,
-          notes: notes,
-          description: notes,
-          category: 'entrega'
+          description: notes
         };
 
         const matchingEvent = (existingEvents || []).find(evt => evt.stage_id === stage.id);
@@ -372,6 +373,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
   };
 
   const handleToggleStageCompleted = async (service, stageId, isCompleted) => {
+    if (!canWrite) return;
     try {
       const newStatus = isCompleted ? 'completada' : 'pendiente';
       const today = new Date().toISOString().split('T')[0];
@@ -422,6 +424,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
   };
 
   const handleSaveStage = async (serviceId, stageId) => {
+    if (!canWrite) return;
     try {
       const payload = {
         name: stageEditForm.name,
@@ -451,6 +454,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
   };
 
   const handleOpenStageConfig = (service) => {
+    if (!canWrite) return;
     setActiveServiceForConfig(service);
     setConfigStages(service.stages || []);
     setSelectedTemplate(getRecommendedCategory(service.type));
@@ -458,6 +462,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
   };
 
   const handleApplyTemplateToConfig = () => {
+    if (!canWrite) return;
     const templateStages = STAGE_TEMPLATES[selectedTemplate] || STAGE_TEMPLATES.editorial;
     const newStages = templateStages.map((st, idx) => ({
       ...st,
@@ -467,6 +472,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
   };
 
   const handleSaveConfigStages = async () => {
+    if (!canWrite) return;
     try {
       const orgId = localStorage.getItem('somos_noveli_crm_org_id') || '11111111-1111-1111-1111-111111111111';
       const userRes = await supabase.auth.getUser();
@@ -538,7 +544,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
   };
 
   const handleOpenAddModal = () => {
-    if (isReadOnly) return;
+    if (!canWrite) return;
     setSelectedService(null);
     setFormData({
       client_id: clients[0]?.id || '',
@@ -567,7 +573,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
   };
 
   const handleOpenEditModal = (service) => {
-    if (isReadOnly) return;
+    if (!canWrite) return;
     setSelectedService(service);
     setFormData({
       client_id: service.client_id || '',
@@ -596,8 +602,8 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
   };
 
   const handleDeleteService = async (id) => {
-    if (!canDeleteEntity(getCurrentUserRole(), 'services')) return;
-    if (isReadOnly) {
+    if (!permissions.delete) return;
+    if (!canWrite) {
       alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
       return;
     }
@@ -619,7 +625,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
-    if (isReadOnly) {
+    if (!canWrite) {
       alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
       return;
     }
@@ -775,7 +781,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
 
   // Inline Stage Update
   const handleUpdateStageStatus = async (serviceId, stageId, newStatus) => {
-    if (isReadOnly) {
+    if (!canWrite) {
       alert('Acceso denegado: Tu rol actual no tiene permisos para esta acción.');
       return;
     }
@@ -885,6 +891,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
   };
 
   const handleUploadServiceDocument = async (file, docType, notes, docTitle, service) => {
+    if (!canWrite) return;
     if (!file || !docTitle) {
       alert('Debe seleccionar un archivo y especificar un título.');
       return;
@@ -967,23 +974,11 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
   };
 
   const handleDeleteServiceDocument = async (doc, serviceId) => {
+    if (!canWrite) return;
     const docName = doc.title || doc.name || doc.file_name || 'Documento';
     if (window.confirm(`¿Estás seguro de que deseas eliminar el documento "${docName}"?`)) {
       try {
-        const isMockVal = typeof isMock !== 'undefined' ? isMock : (supabase.isMock || false);
-        if (!isMockVal) {
-          const { error: storageErr } = await supabase.storage
-            .from('documents')
-            .remove([doc.file_path]);
-          if (storageErr) throw storageErr;
-        }
-
-        const { error: dbErr } = await supabase
-          .from('documents')
-          .delete()
-          .eq('id', doc.id);
-
-        if (dbErr) throw dbErr;
+        await deleteDocumentConfirmed(supabase, doc, isMock);
 
         setServiceDocuments(prev => prev.filter(d => d.id !== doc.id));
       } catch (err) {
@@ -1226,7 +1221,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
           />
           <button
             onClick={handleOpenAddModal}
-            disabled={clients.length === 0 || isReadOnly}
+            disabled={clients.length === 0 || !canWrite}
             className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-xs transition-all shadow-md shadow-brand-600/20 disabled:opacity-50 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -1332,13 +1327,14 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
                   
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => handleOpenEditModal(service)}
+                      disabled={!canWrite}
+                    onClick={() => handleOpenEditModal(service)}
                       className="p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-brand-600 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
-                      disabled={!canDeleteEntity(getCurrentUserRole(), 'services')} onClick={() => handleDeleteService(service.id)}
+                      disabled={!permissions.delete} onClick={() => handleDeleteService(service.id)}
                       className="p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-400 hover:text-red-650 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1410,6 +1406,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
                     </span>
                   </div>
                   <button
+                    disabled={!canWrite}
                     onClick={() => handleOpenStageConfig(service)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-brand-500 text-slate-655 dark:text-slate-350 hover:text-brand-600 dark:hover:text-brand-400 rounded-xl text-[11px] font-bold cursor-pointer transition-all shadow-sm"
                   >
@@ -1453,7 +1450,8 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
                     <div className="flex justify-between items-center pb-2 border-b border-slate-150 dark:border-slate-800">
                       <h4 className="font-bold text-xs text-slate-500 uppercase tracking-wider">Línea de Tiempo del Servicio</h4>
                       <button
-                        onClick={() => handleOpenStageConfig(service)}
+                        disabled={!canWrite}
+                    onClick={() => handleOpenStageConfig(service)}
                         className="px-2.5 py-1 bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-955/20 dark:text-brand-400 border border-brand-200/30 dark:border-brand-900/30 rounded-lg text-[10px] font-bold cursor-pointer"
                       >
                         Configurar Etapas
@@ -1551,6 +1549,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <input
                                         type="checkbox"
+                                        disabled={!canWrite}
                                         checked={isCompleted}
                                         onChange={(e) => handleToggleStageCompleted(service, stage.id, e.target.checked)}
                                         className="w-3.5 h-3.5 text-brand-600 rounded cursor-pointer"
@@ -1573,7 +1572,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
                                     )}
                                   </div>
 
-                                  {!isReadOnly && (
+                                  {canWrite && (
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -1653,7 +1652,8 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleDeleteServiceDocument(doc, service.id)}
+                                  disabled={!canWrite}
+                    onClick={() => handleDeleteServiceDocument(doc, service.id)}
                                   className="p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-405 hover:text-rose-600 hover:bg-white dark:hover:bg-slate-900 cursor-pointer"
                                   title="Eliminar"
                                 >
@@ -1674,7 +1674,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
                           <div>
                             <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Archivo *</label>
                             <input
-                              type="file"
+                              disabled={!canWrite} type="file"
                               onChange={(e) => {
                                 const file = e.target.files[0];
                                 if (file) {
@@ -1733,7 +1733,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
 
                         <button
                           type="button"
-                          disabled={isUploading || !newDocFile || !newDocTitle}
+                          disabled={!canWrite || isUploading || !newDocFile || !newDocTitle}
                           onClick={() => handleUploadServiceDocument(newDocFile, newDocType, newDocNotes, newDocTitle, service)}
                           className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold text-xs cursor-pointer transition-all disabled:opacity-50"
                         >
@@ -1752,7 +1752,7 @@ export default function Services({ isReadOnly = false, realtimeTrigger }) {
       )}
 
       {/* Add/Edit Modal */}
-      {isModalOpen && (
+      {canWrite && isModalOpen && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-up">
             <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 dark:border-slate-800">

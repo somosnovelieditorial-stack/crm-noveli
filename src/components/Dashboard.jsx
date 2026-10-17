@@ -229,36 +229,11 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
         };
       });
 
-      console.error('clientsError', clientsError);
-      console.error('incomesError', incomesError);
-      console.error('expensesError', expensesError);
-      console.error('servicesError', servicesError);
+      if (clientsError) console.error('clientsError', clientsError);
+      if (incomesError) console.error('incomesError', incomesError);
+      if (expensesError) console.error('expensesError', expensesError);
+      if (servicesError) console.error('servicesError', servicesError);
 
-      console.log('clients data', clients);
-      console.log('incomes data', incomes);
-      console.log('expenses data', expenses);
-      console.log('services data', services);
-
-      // Temporary development logs
-      let currentUserEmail = 'unknown';
-      try {
-        const userRes = await supabase.auth.getUser();
-        if (userRes.data?.user) {
-          currentUserEmail = userRes.data.user.email;
-        } else {
-          const userJson = localStorage.getItem('somos_noveli_crm_user');
-          if (userJson) {
-            currentUserEmail = JSON.parse(userJson).email;
-          }
-        }
-      } catch (e) {}
-      const organizationId = orgId;
-      console.log("usuario actual", currentUserEmail);
-      console.log("organizationId usado", organizationId);
-      console.log("clientes cargados", clients.length);
-      console.log("ingresos cargados", incomes.length);
-      console.log("gastos cargados", expenses.length);
-      console.log("servicios cargados", services.length);
 
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
@@ -364,10 +339,6 @@ export default function Dashboard({ organizationId, realtimeTrigger, onChangeTab
         .filter(p => p.isPaid)
         .reduce((sum, item) => sum + convertToClp(item.amount, item.currency || 'CLP'), 0);
 
-      const payrollPayments = monthPayroll;
-      const totalPayrollPayments = payrollTotal;
-      console.log("payrollPayments dashboard", payrollPayments);
-      console.log("totalPayrollPayments dashboard", totalPayrollPayments);
 
       // Period Utility
       const utility = incomesNet - expensesNet - payrollTotal - taxesPaidTotal;
