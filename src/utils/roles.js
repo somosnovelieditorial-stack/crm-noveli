@@ -56,6 +56,7 @@ const modulesByRole = {
 
 export const canRoleAccessModule = (value, module) => {
   const role = normalizeRole(value);
+  if (module === 'orders') return canonicalRoles.has(role);
   if (isFinanceModule(module)) return isFinanceRole(role);
   return role === 'admin' || (modulesByRole[role]?.includes(module) ?? false);
 };
@@ -63,6 +64,7 @@ export const canRoleAccessModule = (value, module) => {
 export const canRolePerformAction = (value, module, action = 'write') => {
   if (!canRoleAccessModule(value, module)) return false;
   if (['read', 'view', 'ver', 'select'].includes(action)) return true;
+  if (module === 'orders') return ['admin', 'editor'].includes(normalizeRole(value));
   return isWriterRole(value);
 };
 

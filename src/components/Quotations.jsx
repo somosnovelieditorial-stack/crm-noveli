@@ -1,6 +1,9 @@
 import { canDeleteEntity, isAdminRole } from '../utils/roles';
 import { getCurrentUserRole } from '../utils';
 import { useEffect, useState } from 'react';
+import QuotationOrderDialog from './orders/QuotationOrderDialog';
+import { ordersUiEnabled } from '../utils/ordersFeature';
+import { quotationPath } from '../utils/orders';
 import { supabase, getValidOrgId, isMock } from '../supabaseClient';
 import { formatCurrency, calculateVatSplit, formatDate } from '../utils';
 import { jsPDF } from 'jspdf';
@@ -92,7 +95,7 @@ const isPdfImageCompatible = (url) => {
   return clean.endsWith('.png') || clean.endsWith('.jpg') || clean.endsWith('.jpeg');
 };
 
-export default function Quotations({ isReadOnly = false, userRole = 'administrador', realtimeTrigger }) {
+export default function Quotations({ isReadOnly = false, userRole = 'administrador', realtimeTrigger, organizationId, onOrderNavigate, orderQuotationId }) {
   const [quotations, setQuotations] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [packs, setPacks] = useState([]);
@@ -1696,6 +1699,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
 
   return (
     <div className="space-y-6 animate-fade-in text-slate-800 dark:text-slate-100">
+      {ordersUiEnabled && !isMock && orderQuotationId && <QuotationOrderDialog key={`${organizationId}:${orderQuotationId}:${userRole}`} organizationId={organizationId} quotationId={orderQuotationId} userRole={userRole} onNavigate={onOrderNavigate} onClose={() => onOrderNavigate('/propuestas-comerciales')} />}
       
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -1795,6 +1799,7 @@ export default function Quotations({ isReadOnly = false, userRole = 'administrad
                       </span>
                     </td>
                     <td className="p-4 text-right space-x-1 whitespace-nowrap">
+                      {ordersUiEnabled && !isMock && <button type="button" onClick={() => onOrderNavigate(quotationPath(quote.id))} className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 hover:text-brand-600" title="Ver cotización y orden" aria-label={`Ver cotización ${quote.quote_number}`}><Eye className="w-3.5 h-3.5" /></button>}
                       <button
                         onClick={() => handleDownloadPDF(quote)}
                         className="inline-flex p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-450 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 cursor-pointer align-middle"

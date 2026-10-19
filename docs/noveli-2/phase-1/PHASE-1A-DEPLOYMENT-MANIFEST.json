@@ -1,0 +1,151 @@
+{
+  "review": "NOVELI 2.0 Phase 1A Deployment Review",
+  "review_date": "2026-10-18",
+  "result": "PASS",
+  "ready_for_deployment_approval": true,
+  "production_changes": "NONE",
+  "commit_created": false,
+  "git_push": false,
+  "database_push": false,
+  "vercel_deploy": false,
+  "feature_activation": false,
+  "current_local_head": "d4332c4ac3f6d6f5b84325ab532f4e3bd39ba273",
+  "commit_candidates": {
+    "A_required_code": [
+      "src/App.jsx",
+      "src/components/Quotations.jsx",
+      "src/components/orders/OrderDetail.jsx",
+      "src/components/orders/OrderPrimitives.jsx",
+      "src/components/orders/Orders.jsx",
+      "src/components/orders/QuotationOrderDialog.jsx",
+      "src/services/orders.js",
+      "src/supabaseClient.js",
+      "src/utils/orders.js",
+      "src/utils/ordersFeature.js",
+      "src/utils/roles.js"
+    ],
+    "B_required_migrations": [
+      "supabase/migrations/20261018214233_phase_1a_foundations.sql",
+      "supabase/migrations/20261018214235_phase_1a_orders.sql",
+      "supabase/migrations/20261018214237_phase_1a_quotation_conversion.sql"
+    ],
+    "C_required_tests": [
+      "src/services/orders.test.js",
+      "src/utils/orders.test.js",
+      "supabase/tests/phase_1a_browser_scenarios.mjs",
+      "supabase/tests/phase_1a_browser_smoke.mjs",
+      "supabase/tests/phase_1a_catalog.py",
+      "supabase/tests/phase_1a_http.py",
+      "supabase/tests/phase_1a_migration_stages.py",
+      "supabase/tests/phase_1a_orders.py",
+      "supabase/tests/phase_1a_orders.sql",
+      "supabase/tests/phase_1a_security_regressions.py",
+      "supabase/tests/phase_1a_ui_browser.mjs",
+      "supabase/tests/phase_1a_ui_scenarios.mjs"
+    ],
+    "D_required_documentation": [
+      "docs/noveli-2/NOVELI-2-STATUS.md",
+      "docs/noveli-2/phase-1/CURRENT-MODEL-AUDIT.md",
+      "docs/noveli-2/phase-1/PHASE-1-DESIGN.md",
+      "docs/noveli-2/phase-1/PHASE-1-DESIGN-REVIEW.md",
+      "docs/noveli-2/phase-1/PHASE-1-DECISIONS.md",
+      "docs/noveli-2/phase-1/PHASE-1-TEST-PLAN.md",
+      "docs/noveli-2/phase-1/PHASE-1A-IMPLEMENTATION.md",
+      "docs/noveli-2/phase-1/PHASE-1A-UI.md",
+      "docs/noveli-2/phase-1/PHASE-1A-INTEGRATION-REVIEW.md",
+      "docs/noveli-2/phase-1/PHASE-1A-DEPLOYMENT-REVIEW.md",
+      "docs/noveli-2/phase-1/PHASE-1A-DEPLOYMENT-MANIFEST.json"
+    ]
+  },
+  "excluded": {
+    "E_preexisting_unrelated": [
+      "docs/noveli-2/security-deployment-runbook.md",
+      "docs/noveli-2/asset-transition-closure-status.md",
+      "docs/noveli-2/phase-a-deployment-checklist.md",
+      "docs/noveli-2/evidence/**"
+    ],
+    "F_local_evidence": [
+      ".security-browser-evidence.json",
+      "docs/noveli-2/phase-1/catalog-audit.json",
+      "docs/noveli-2/phase-1/data-profile.json",
+      "docs/noveli-2/phase-1/frontend-dependencies.txt",
+      "docs/noveli-2/phase-1/integrity-and-grants.json",
+      "docs/noveli-2/phase-1/read-only-verification.json",
+      "docs/noveli-2/phase-1/REVIEW-MANIFEST.json",
+      "docs/noveli-2/phase-1/PHASE-1A-MANIFEST.json",
+      "docs/noveli-2/phase-1/PHASE-1A-UI-MANIFEST.json",
+      "docs/noveli-2/phase-1/phase-1a-*.json",
+      "docs/noveli-2/phase-1/phase-1a-*.log",
+      "docs/noveli-2/phase-1/phase-1a-*.png",
+      "docs/noveli-2/phase-1/*preview-location.txt"
+    ],
+    "G_secret_files": []
+  },
+  "migrations": [
+    {
+      "version": "20261018214233",
+      "name": "phase_1a_foundations",
+      "sha256": "c0949c7292ec16824b320fb97d0b7055d195ab2bcc1eb52ee9e23287b7478b6e"
+    },
+    {
+      "version": "20261018214235",
+      "name": "phase_1a_orders",
+      "sha256": "39a245f32f8dc2a0782b8cd3d67ab16af3a2c9632de04b7c26d4bef7f7c4bb33"
+    },
+    {
+      "version": "20261018214237",
+      "name": "phase_1a_quotation_conversion",
+      "sha256": "68e5d3efbaa6e4b6774d2e051d9ce139c1b27948a66c2857f9ec388c47feb7d8"
+    }
+  ],
+  "production_read_only_preflight": {
+    "project_ref": "bdxlzhpmifxwmqjnnmxa",
+    "health": "ACTIVE_HEALTHY",
+    "postgres": "17.6.1.127",
+    "latest_migration": "20261016013221_harden_security_04b_storage_lockdown",
+    "public_base_tables": 46,
+    "phase_1a_orders_tables": 0,
+    "brand_assets_public": true,
+    "documents_public": false,
+    "quotation_statuses": {
+      "borrador": 6
+    }
+  },
+  "isolated_dry_run": {
+    "cli_version": "2.109.1",
+    "exit_code": 0,
+    "proposed_versions_in_order": [
+      "20261018214233",
+      "20261018214235",
+      "20261018214237"
+    ],
+    "unexpected_migrations": 0,
+    "applied": false
+  },
+  "frontend": {
+    "flag": "VITE_PHASE_1A_ORDERS_ENABLED",
+    "evaluation": "exact string true enables; absent/false disables",
+    "current_production_effective_state": "OFF: current production commit does not contain Phase 1A feature code",
+    "current_vercel_env_value": "NOT QUERIED",
+    "capabilities": [
+      { "name": "orders", "default": false },
+      { "name": "quotation_conversion", "default": false }
+    ],
+    "flag_change_requires_rebuild_and_deployment": true
+  },
+  "validation_evidence": {
+    "last_valid_full_e2e": "62/62 PASS (previous approved run)",
+    "post_polish_node": "16/16 PASS",
+    "post_polish_isolated_lint": "PASS; zero new errors",
+    "post_polish_build": "PASS",
+    "post_polish_diff_check": "PASS",
+    "preview_order_list_and_detail_http": "200 / 200",
+    "post_polish_e2e_retry": "NO APPLICATION RESULT; local child PowerShell could not resolve global supabase CLI"
+  },
+  "backup_recommendation": {
+    "create_fresh_checkpoint_before_phase_1a_push": true,
+    "current_available_recovery_point": "20261017T035357Z pre-04B",
+    "reason": "Security 04B was applied after this recovery point"
+  },
+  "ready_for_deployment_approval": true
+}

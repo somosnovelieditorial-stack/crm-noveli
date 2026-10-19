@@ -22,6 +22,10 @@ import Reports from './components/Reports';
 import Integrations from './components/Integrations';
 import CompletedSales from './components/CompletedSales';
 import CommercialProposals from './components/CommercialProposals';
+import Orders from './components/orders/Orders';
+import OrderDetail from './components/orders/OrderDetail';
+import { ordersUiEnabled } from './utils/ordersFeature';
+import { isOrdersPath, orderIdFromPath } from './utils/orders';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // New Phase Components
@@ -64,12 +68,13 @@ const menuGroups = [
   },
   {
     id: 'clients_prospects',
-    label: 'Clientes y Prospectos',
+    label: 'Comercial',
     icon: <Users className="w-4 h-4" />,
     items: [
-      { id: 'quotations', label: 'Propuestas Comerciales', tab: 'quotations' },
-      { id: 'clients', label: 'Clientes', tab: 'clients' },
       { id: 'prospects', label: 'Prospectos', tab: 'prospects' },
+      { id: 'clients', label: 'Clientes', tab: 'clients' },
+      { id: 'quotations', label: 'Cotizaciones', tab: 'quotations' },
+      ...(ordersUiEnabled ? [{ id: 'orders', label: 'Órdenes', tab: 'orders' }] : []),
       { id: 'seguimientos', label: 'Seguimientos', tab: 'seguimientos' }
     ]
   },
@@ -228,6 +233,7 @@ function SeguimientosView({ isReadOnly }) {
 }
 
 const getTabFromPath = (path) => {
+  if (isOrdersPath(path)) return 'orders';
   const cleanPath = path.toLowerCase().replace(/^\/|\/$/g, '');
   
   if (cleanPath === 'configuracion/usuarios') return 'settings-users';
@@ -305,6 +311,7 @@ const getPathFromTab = (tab) => {
     'clients': '/clientes',
     'prospects': '/prospects',
     'quotations': '/propuestas-comerciales',
+    'orders': '/admin/ordenes',
     'services': '/services',
     'completed_sales': '/completed_sales',
     'catalog': '/catalogo',
@@ -343,6 +350,12 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => getTabFromPath(window.location.pathname));
+  const [routeLocation, setRouteLocation] = useState(() => window.location.pathname + window.location.search);
+  const [orderNotice, setOrderNotice] = useState(() => window.history.state?.orderNotice || null);
+  const navigateCrm = (path, notice = null) => {
+    window.history.pushState({ orderNotice: notice }, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
@@ -387,6 +400,8 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       setActiveTab(getTabFromPath(window.location.pathname));
+      setRouteLocation(window.location.pathname + window.location.search);
+      setOrderNotice(window.history.state?.orderNotice || null);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -404,7 +419,7 @@ export default function App() {
   // Sync activeTab changes to browser history URL pathname
   useEffect(() => {
     if (user) {
-      const targetPath = getPathFromTab(activeTab);
+      const targetPath = activeTab === 'orders' && isOrdersPath(window.location.pathname) ? window.location.pathname : getPathFromTab(activeTab);
       if (window.location.pathname !== targetPath) {
         window.history.pushState(null, '', targetPath);
       }
@@ -415,7 +430,7 @@ export default function App() {
   useEffect(() => {
     if (user) {
       const currentTab = getTabFromPath(window.location.pathname);
-      const targetPath = getPathFromTab(currentTab);
+      const targetPath = currentTab === 'orders' && isOrdersPath(window.location.pathname) ? window.location.pathname : getPathFromTab(currentTab);
       const cleanPath = window.location.pathname.toLowerCase().replace(/^\/|\/$/g, '');
       if (cleanPath === '' || cleanPath === 'login') {
         window.history.replaceState(null, '', '/dashboard');
@@ -1039,6 +1054,7 @@ export default function App() {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: <Library className="w-4.5 h-4.5" /> },
     { id: 'quotations', label: 'Propuestas Comerciales', icon: <FileText className="w-4.5 h-4.5" /> },
+    { id: 'orders', label: 'Órdenes', icon: <Receipt className="w-4.5 h-4.5" /> },
     { id: 'clients', label: 'Clientes', icon: <Users className="w-4.5 h-4.5" /> },
     { id: 'prospects', label: 'Prospectos', icon: <UserCheck className="w-4.5 h-4.5" /> },
     { id: 'services', label: 'Servicios Contratados', icon: <BookOpen className="w-4.5 h-4.5" /> },
@@ -1092,7 +1108,13 @@ export default function App() {
     const getComponent = () => {
       switch (activeTab) {
         case 'dashboard': return <Dashboard {...commonProps} onChangeTab={(tab) => tab === 'website-solicitudes' ? goToWebsiteLeads('nuevo') : setActiveTab(tab)} />;
-        case 'quotations': return <CommercialProposals {...commonProps} />;
+        case 'quotations': return <CommercialProposals {...commonProps} onOrderNavigate={navigateCrm} orderQuotationId={new URLSearchParams(routeLocation.split('?')[1] || '').get('quotation')} />;
+        case 'orders': {
+          if (!ordersUiEnabled || isMock) return <div className="p-8">Órdenes todavía no está habilitado en este entorno.</div>;
+          if (!canAccessModule('orders')) return <div className="p-8">No tienes permiso para acceder a este módulo.</div>;
+          const orderId = orderIdFromPath(routeLocation.split('?')[0]);
+          return orderId ? <OrderDetail key={`${organizationId}:${orderId}`} organizationId={organizationId} orderId={orderId} onNavigate={navigateCrm} notice={orderNotice} /> : <Orders key={organizationId} organizationId={organizationId} onNavigate={navigateCrm} />;
+        }
         case 'clients': return <Clients {...commonProps} />;
         case 'prospects': return <Prospects {...commonProps} />;
         case 'services': return <Services {...commonProps} />;
@@ -1395,7 +1417,8 @@ export default function App() {
                           <button
                             key={item.id}
                             onClick={() => {
-                              setActiveTab(item.tab);
+                              if (item.tab === 'orders') navigateCrm('/admin/ordenes');
+                              else setActiveTab(item.tab);
                               setIsSidebarOpen(false);
                             }}
                             className={`
@@ -1457,7 +1480,7 @@ export default function App() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+      <div className="min-w-0 flex-1 flex flex-col h-screen overflow-hidden">
         
         {/* Dynamic Global Top Header Bar */}
         <header className="bg-[var(--header-bg)] border-b border-slate-200 dark:border-slate-800/80 px-6 py-4 flex items-center justify-between z-30 shrink-0 shadow-sm">

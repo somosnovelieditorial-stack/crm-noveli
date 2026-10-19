@@ -2315,6 +2315,8 @@ if (useRealSupabase) {
   supabaseInstance = {
     auth: realClient.auth,
     storage: realClient.storage,
+    // Use the same authenticated session; RLS and RPC authorization stay server-side.
+    rpc: (name, args) => realClient.rpc(name, args),
     from: (table) => {
       return new RealSupabaseQueryBuilder(table, realClient);
     },
