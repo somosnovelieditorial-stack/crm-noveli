@@ -1,0 +1,55 @@
+{
+  "classification": "POST_PHASE_1A_PRE_PHASE_1B",
+  "lot": "P1-04",
+  "migration": "20261019045900_phase_1b_p1_04_payment_schedules.sql",
+  "migration_sha256": "a7746b6a77df66618570203c41c5d70462211d972004cbfb0ebbe737b5da7600",
+  "files_changed": [
+    "supabase/migrations/20261019045900_phase_1b_p1_04_payment_schedules.sql",
+    "supabase/tests/phase_1b_p1_04_schedules.py",
+    "supabase/tests/phase_1a_orders.py",
+    "supabase/tests/phase_1a_orders.sql",
+    "supabase/tests/phase_1a_security_regressions.py",
+    "docs/noveli-2/phase-1/PHASE-1B-P1-04-IMPLEMENTATION.md",
+    "docs/noveli-2/phase-1/PHASE-1B-P1-04-MANIFEST.json",
+    "docs/noveli-2/NOVELI-2-STATUS.md"
+  ],
+  "tests_executed": [
+    {
+      "name": "supabase db reset --local",
+      "result": "PASS",
+      "scope": "baseline through Security 04B, Phase 1A, and P1-04"
+    },
+    {
+      "name": "phase_1b_p1_04_schedules.py",
+      "result": "PASS",
+      "checks": 49,
+      "dedicated_concurrent_publish_test": "PASS"
+    },
+    {
+      "name": "phase_1a_orders.py",
+      "result": "PASS",
+      "checks": 55
+    },
+    {
+      "name": "phase_1a_orders.sql",
+      "result": "PASS",
+      "assertions": 19
+    },
+    {
+      "name": "phase_1a_security_regressions.py",
+      "result": "PASS",
+      "security_assertions": 2894,
+      "suites": ["Security 01", "Security 02", "Security 03A", "Security 03B", "Security 03C", "Security 04 / 04B"]
+    }
+  ],
+  "result": "APPROVED_LOCAL",
+  "formal_review": "PASS",
+  "low_finding_closed": true,
+  "production_deployed": false,
+  "production_changes": "NONE",
+  "phase_1b_p1_05_started": false,
+  "orders_altered": false,
+  "accounting_altered": false,
+  "payment_tables_created": ["payment_schedules"],
+  "deferred_payment_tables": ["payments", "payment_refunds", "payment_allocations"]
+}

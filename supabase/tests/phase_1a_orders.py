@@ -240,7 +240,7 @@ sql("SELECT public.phase1a_create_order_draft("+",".join([lit(org),lit(client),l
 check("counter exhaustion blocks without seven-digit number")
 sql("INSERT INTO noveli_private.order_number_counters VALUES("+lit(org)+",2001,9)")
 check("number namespace org/year",sql("SELECT count(*) FROM noveli_private.order_number_counters WHERE organization_id="+lit(org))=="2")
-check("no payment/contract tables",sql("SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN('payments','payment_schedules','payment_allocations','payment_refunds','contracts','contract_templates')")=="0")
+check("P1-04 schedules only; no ledger or contract tables",sql("SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN('payment_schedules','payments','payment_allocations','payment_refunds','contracts','contract_templates')")=="1")
 check("dedicated owner no login no bypass",sql("SELECT NOT rolcanlogin AND NOT rolbypassrls AND NOT rolsuper FROM pg_roles WHERE rolname='noveli_orders_executor'")=="t")
 check("private helpers not callable by anon",sql("SELECT NOT has_function_privilege('anon','noveli_private.insert_order(uuid,uuid,uuid,text,jsonb,text,text)','EXECUTE')")=="t")
 print("PHASE_1A_INTEGRATION_PASS",len(checks))

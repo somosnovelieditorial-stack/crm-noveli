@@ -14,12 +14,12 @@ tree.body = [n for n in tree.body if not isinstance(n, ast.For) and not (
  isinstance(n,ast.Expr) and isinstance(n.value,ast.Call) and isinstance(n.value.func,ast.Name) and n.value.func.id=="print")]
 exec(compile(tree,str(tests/"security_04_regressions.py"),"exec"),ns)
 prefix = """
-CREATE TEMP VIEW phase1a_legacy_policies AS SELECT * FROM pg_catalog.pg_policies WHERE policyname NOT LIKE 'phase1a_%';
-CREATE TEMP VIEW phase1a_legacy_proc AS SELECT * FROM pg_catalog.pg_proc WHERE proname NOT LIKE 'phase1a_%';
-CREATE TEMP VIEW phase1a_legacy_class AS SELECT * FROM pg_catalog.pg_class WHERE relname NOT IN('orders','order_items');
-CREATE TEMP VIEW phase1a_legacy_tables AS SELECT * FROM pg_catalog.pg_tables WHERE tablename NOT IN('orders','order_items');
-CREATE TEMP VIEW phase1a_legacy_information_tables AS SELECT * FROM information_schema.tables WHERE table_name NOT IN('orders','order_items');
-CREATE TEMP VIEW phase1a_legacy_information_columns AS SELECT * FROM information_schema.columns WHERE table_name NOT IN('orders','order_items');
+CREATE TEMP VIEW phase1a_legacy_policies AS SELECT * FROM pg_catalog.pg_policies WHERE policyname NOT LIKE 'phase1a_%' AND policyname NOT LIKE 'p1b_%';
+CREATE TEMP VIEW phase1a_legacy_proc AS SELECT * FROM pg_catalog.pg_proc WHERE proname NOT LIKE 'phase1a_%' AND proname NOT LIKE 'phase1b_%' AND proname NOT IN('payment_schedule_guard','save_payment_schedule_draft','publish_payment_schedule_plan');
+CREATE TEMP VIEW phase1a_legacy_class AS SELECT * FROM pg_catalog.pg_class WHERE relname NOT IN('orders','order_items','payment_schedules');
+CREATE TEMP VIEW phase1a_legacy_tables AS SELECT * FROM pg_catalog.pg_tables WHERE tablename NOT IN('orders','order_items','payment_schedules');
+CREATE TEMP VIEW phase1a_legacy_information_tables AS SELECT * FROM information_schema.tables WHERE table_name NOT IN('orders','order_items','payment_schedules');
+CREATE TEMP VIEW phase1a_legacy_information_columns AS SELECT * FROM information_schema.columns WHERE table_name NOT IN('orders','order_items','payment_schedules');
 GRANT SELECT ON pg_temp.phase1a_legacy_policies,pg_temp.phase1a_legacy_proc,pg_temp.phase1a_legacy_class,pg_temp.phase1a_legacy_tables,pg_temp.phase1a_legacy_information_tables TO authenticated,anon;
 GRANT SELECT ON pg_temp.phase1a_legacy_information_columns TO authenticated,anon;
 """

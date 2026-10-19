@@ -14,7 +14,7 @@ Estados permitidos: NOT STARTED · IN DESIGN · IN DEVELOPMENT · READY FOR REVI
 | Phase 1A Orders | VERIFIED | DB y CRM desplegados; Vercel `dpl_HmD6rciHvLWUVpTfz5HS7zAp4DsE` READY en `main` (`b085161…`), flag ON y capabilities `orders`/`quotation_conversion` habilitadas. Smoke productivo PASS; 0 órdenes y 0 conversiones reales |
 | Phase 1A Backend | VERIFIED | Aprobado por Javier; las tres migraciones aplicadas y verificadas en producción; tablas sin filas |
 | Phase 1A UI | VERIFIED | Integration Review PASS; revisión manual PASS; formato monetario pulido; flag predeterminado OFF |
-| Phase 1B Payments | READY FOR REVIEW | Readiness review preparada desde los lotes aprobados P1-04–P1-07; aún no implementada ni autorizada |
+| Phase 1B Payments | IN DEVELOPMENT | P1-04 payment schedules aprobado localmente tras review PASS; deployment review por preparar. P1-05/P1-06/P1-07 aún no iniciados |
 | Phase 1C Contracts | NOT STARTED | Diseño preparado; implementación no iniciada |
 | Phase 2 Projects | NOT STARTED | Sin inicio de trabajo registrado |
 | Phase 3 Red Noveli | NOT STARTED | Sin inicio de trabajo registrado |
@@ -51,6 +51,8 @@ Deployment completado/success se sustenta en evidencia GitHub/Vercel y smokes, n
 
 Recovery point vigente previo a Phase 1A: **POST-04B / PRE-PHASE-1A**, `C:/Users/xavie/Desktop/backup/pre-phase-1a/20261019T032415Z/`; verificado con DB/Auth/Storage 55/55. Restore integral no ensayado.
 
+Recovery point vigente previo a Phase 1B: **POST_PHASE_1A_PRE_PHASE_1B**, `C:/Users/xavie/Desktop/backup/pre-phase-1b/20261019T044950Z/`; database, Auth, Storage 55/55, manifest y hashes verificados. **Restore integral no ensayado.**
+
 Recovery point histórico anterior a04B: **POST-ASSET-TRANSITION / PRE-04B**, creado 2026-10-17 y hashes revalidados antes de04B:
 `C:/Users/xavie/Desktop/backup/pre-04b/20261017T035357Z/`.
 
@@ -83,6 +85,8 @@ Fechas UTC según evidencia; un estado de diseño no significa despliegue.
 | 2026-10-19 | Phase1A database | Recovery point POST-04B/PRE-PHASE-1A verificado; tres migraciones aplicadas; orders/order_items vacías, cotizaciones intactas y capabilities OFF | Producción Supabase | 20261018214233 / 20261018214235 / 20261018214237 | VERIFIED |
 | 2026-10-19 | Phase1A CRM rollout | `b085161…` Production READY; smoke legacy PASS; Vercel flag ON y capabilities Phase 1A habilitadas | Producción | `b0851619b3ba38fbde93d6846ce7c3dda08e5d36`; `dpl_HmD6rciHvLWUVpTfz5HS7zAp4DsE` | VERIFIED |
 | 2026-10-19 | Phase1A production smoke | Órdenes/sidebar, listado vacío y filtros PASS; seis cotizaciones `borrador` correctamente no muestran conversión; 0 órdenes y 0 conversiones reales | Producción + auditoría de código/tests locales | `b0851619b3ba38fbde93d6846ce7c3dda08e5d36` | PASS |
+| 2026-10-19 | Recovery Phase1B | Recovery point POST-Phase1A/PRE-Phase1B verificado; restore no ensayado | Backup fuera de Git | `pre-phase-1b/20261019T044950Z` | VERIFIED |
+| 2026-10-19 | Phase1B P1-04 | Review PASS; test dedicado de publicación concurrente cierra el LOW; implementación aprobada localmente, sin despliegue | Local exclusivamente | `20261019045900` | VERIFIED |
 
 ## 4. Fase actual
 
@@ -94,7 +98,8 @@ Fechas UTC según evidencia; un estado de diseño no significa despliegue.
 - Phase 1A UI VERIFIED: rutas /admin/ordenes y /admin/ordenes/:id, conversión explícita quotation→order, E2E aprobado 62/62 y revisión manual PASS. Pulido local monetario verificado; sin Payments/Contracts.
 - Phase 1A Integration Review PASS y deployment productivo VERIFIED. CRM `b085161…` está en Production READY con flag ON; capabilities `orders` y `quotation_conversion` están habilitadas para la organización aprobada.
 - Smoke productivo: sidebar Órdenes, `/admin/ordenes`, lista vacía y búsqueda/filtros PASS. Detalle NOT APPLICABLE (0 órdenes). La acción de conversión queda correctamente oculta mientras las seis cotizaciones estén `borrador`; los tests locales cubren diálogo elegible, evidencia, confirmación y permisos. 0 órdenes y 0 conversiones reales.
-- Phase 1B Payments: readiness review preparada desde P1-04 Calendario, P1-05 Estructura ledger, P1-06 Comandos ledger y P1-07 Conciliación incomes. El diseño fuente enumera esos lotes, pero no usa explícitamente el nombre “Phase 1B”; el mapeo corresponde a la fase Payments de este maestro. Sin implementación, migraciones ni cambios productivos.
+- Recovery point POST-Phase1A/PRE-Phase1B verificado en `pre-phase-1b/20261019T044950Z`; Auth cifrado, Storage 55/55 con provenance y hashes verificados. Restore integral no ensayado.
+- Phase 1B Payments corresponde a P1-04 Calendario, P1-05 Estructura ledger, P1-06 Comandos ledger y P1-07 Conciliación incomes. P1-04 quedó aprobado localmente tras review PASS: migración aditiva `payment_schedules`, draft/publicación y RLS; no crea cobros ni modifica contabilidad. P1-05/P1-06/P1-07 no iniciados. Producción no cambió; P1-04 no está desplegado.
 - Las60 pruebas son el plan general; el subset Phase1A quedó validado localmente. Resultados en el informe de implementación.
 - Backend local aprobado por Javier:55 comprobaciones de dominio,19 SQL,38 REST,2894 asserts Security y130 Auth/Storage PASS, repetidos durante la UI. La UI agrega pruebas frontend/E2E sin alterar las migraciones.
 - El cierre productivo Security no equivale a que Noveli2.0 completo esté listo para despliegue.
@@ -103,7 +108,7 @@ Fechas UTC según evidencia; un estado de diseño no significa despliegue.
 
 **Acción aprobada vigente, completada:** integración técnica Phase 1A backend+UI: cotización→orden, listado y detalle; sin UI manual, Payments ni Contracts.
 
-**Siguiente gate:** revisar y aprobar explícitamente el alcance Phase 1B antes de implementación. Crear un recovery point POST-Phase1A / PRE-Phase1B antes de cualquier cambio productivo; el checkpoint pre-Phase1A no es sustituto de ese checkpoint futuro. Phase 1A quedó habilitada y su smoke pasó sin conversiones reales.
+**Próxima acción:** preparar la revisión de deployment de P1-04. No desplegar ni iniciar P1-05/P1-06/P1-07 sin autorización separada.
 
 **Estado productivo:** HEALTHY; Phase 1A desplegada y habilitada. Flag ON, ambas capabilities habilitadas, Orders smoke PASS; no se crearon órdenes ni se convirtieron cotizaciones. Phase 1B no iniciada.
 
@@ -133,6 +138,7 @@ Cierre04B:12 findings preexistentes en cuatro grupos y cero nuevos atribuibles a
 - La evidencia detallada de modelo/Storage y manifests de pruebas Phase 1A permanece en workspace local y se excluye del commit.
 - [Implementación Phase1A](phase-1/PHASE-1A-IMPLEMENTATION.md), [UI](phase-1/PHASE-1A-UI.md), [revisión de integración](phase-1/PHASE-1A-INTEGRATION-REVIEW.md), [revisión de deployment](phase-1/PHASE-1A-DEPLOYMENT-REVIEW.md) y [manifest de deployment](phase-1/PHASE-1A-DEPLOYMENT-MANIFEST.json).
 - [Phase 1B Readiness Review](phase-1/PHASE-1B-READINESS-REVIEW.md): alcance propuesto P1-04–P1-07 y brechas entre el diseño y el modelo productivo actual.
+- [Implementación P1-04](phase-1/PHASE-1B-P1-04-IMPLEMENTATION.md) y [manifest P1-04](phase-1/PHASE-1B-P1-04-MANIFEST.json): estado local, tests y hash de migración; no desplegado.
 
 [Revisión de integración Phase 1A](phase-1/PHASE-1A-INTEGRATION-REVIEW.md).
 
