@@ -14,7 +14,7 @@ Estados permitidos: NOT STARTED · IN DESIGN · IN DEVELOPMENT · READY FOR REVI
 | Phase 1A Orders | VERIFIED | DB y CRM desplegados; Vercel `dpl_HmD6rciHvLWUVpTfz5HS7zAp4DsE` READY en `main` (`b085161…`), flag ON y capabilities `orders`/`quotation_conversion` habilitadas. Smoke productivo PASS; 0 órdenes y 0 conversiones reales |
 | Phase 1A Backend | VERIFIED | Aprobado por Javier; las tres migraciones aplicadas y verificadas en producción; tablas sin filas |
 | Phase 1A UI | VERIFIED | Integration Review PASS; revisión manual PASS; formato monetario pulido; flag predeterminado OFF |
-| Phase 1B Payments | IN DEVELOPMENT | P1-04 payment schedules aprobado localmente tras review PASS; deployment review por preparar. P1-05/P1-06/P1-07 aún no iniciados |
+| Phase 1B Payments | IN DEVELOPMENT | P1-04 deployed y verificado en producción; P1-05/P1-06/P1-07 aún no iniciados |
 | Phase 1C Contracts | NOT STARTED | Diseño preparado; implementación no iniciada |
 | Phase 2 Projects | NOT STARTED | Sin inicio de trabajo registrado |
 | Phase 3 Red Noveli | NOT STARTED | Sin inicio de trabajo registrado |
@@ -33,10 +33,10 @@ El diseño cuenta con aprobación formal de Javier. Los estados de fases futuras
 | Componente | Último estado documentado |
 |---|---|
 | Supabase | crm-noveli — proyecto `bdxlzhpmifxwmqjnnmxa`; PostgreSQL 17.6 |
-| Última migración aplicada | `20261018214237_phase_1a_quotation_conversion.sql` (última de Phase 1A) |
+| Última migración aplicada | `20261019045900_phase_1b_p1_04_payment_schedules.sql` (P1-04) |
 | Project health | ACTIVE_HEALTHY, comprobado nuevamente durante el pre-enable check del 2026-10-19 |
 | Storage | documents: **private**, 36 objetos; brand-assets: **public**, 19 objetos; total55 |
-| DB / órdenes | 48 tablas public con RLS; orders y order_items existen con 0 filas; 7 filas public.documents; seis cotizaciones siguen `borrador` |
+| DB / órdenes | 49 tablas public con RLS; `payment_schedules` existe con 0 filas; orders/order_items 0/0; 7 filas public.documents; seis cotizaciones siguen `borrador` |
 | Web pública / Storage | PUBLIC LEGACY STORAGE DEPENDENCIES=0, último smoke productivo posterior a04B |
 | CRM repo / branch | somosnovelieditorial-stack/crm-noveli — main |
 | CRM commit productivo | `b0851619b3ba38fbde93d6846ce7c3dda08e5d36` |
@@ -86,7 +86,8 @@ Fechas UTC según evidencia; un estado de diseño no significa despliegue.
 | 2026-10-19 | Phase1A CRM rollout | `b085161…` Production READY; smoke legacy PASS; Vercel flag ON y capabilities Phase 1A habilitadas | Producción | `b0851619b3ba38fbde93d6846ce7c3dda08e5d36`; `dpl_HmD6rciHvLWUVpTfz5HS7zAp4DsE` | VERIFIED |
 | 2026-10-19 | Phase1A production smoke | Órdenes/sidebar, listado vacío y filtros PASS; seis cotizaciones `borrador` correctamente no muestran conversión; 0 órdenes y 0 conversiones reales | Producción + auditoría de código/tests locales | `b0851619b3ba38fbde93d6846ce7c3dda08e5d36` | PASS |
 | 2026-10-19 | Recovery Phase1B | Recovery point POST-Phase1A/PRE-Phase1B verificado; restore no ensayado | Backup fuera de Git | `pre-phase-1b/20261019T044950Z` | VERIFIED |
-| 2026-10-19 | Phase1B P1-04 | Review PASS; test dedicado de publicación concurrente cierra el LOW; implementación aprobada localmente, sin despliegue | Local exclusivamente | `20261019045900` | VERIFIED |
+| 2026-10-19 | Phase1B P1-04 review | Review PASS; test dedicado de publicación concurrente cierra el LOW; implementación aprobada localmente antes del deployment | Local / review | `e3604dd…`; `20261019045900` | VERIFIED |
+| 2026-10-19 | Phase1B P1-04 deployment | Una migración aplicada; `payment_schedules` creada vacía; invariantes de Orders, cotizaciones y accounting verificadas | Producción Supabase | `20261019045900`; funcional `e3604dd40eb4f103c1bd81c7091b68acc8ee187c` (local, no push) | DEPLOYED / VERIFIED |
 
 ## 4. Fase actual
 
@@ -99,7 +100,7 @@ Fechas UTC según evidencia; un estado de diseño no significa despliegue.
 - Phase 1A Integration Review PASS y deployment productivo VERIFIED. CRM `b085161…` está en Production READY con flag ON; capabilities `orders` y `quotation_conversion` están habilitadas para la organización aprobada.
 - Smoke productivo: sidebar Órdenes, `/admin/ordenes`, lista vacía y búsqueda/filtros PASS. Detalle NOT APPLICABLE (0 órdenes). La acción de conversión queda correctamente oculta mientras las seis cotizaciones estén `borrador`; los tests locales cubren diálogo elegible, evidencia, confirmación y permisos. 0 órdenes y 0 conversiones reales.
 - Recovery point POST-Phase1A/PRE-Phase1B verificado en `pre-phase-1b/20261019T044950Z`; Auth cifrado, Storage 55/55 con provenance y hashes verificados. Restore integral no ensayado.
-- Phase 1B Payments corresponde a P1-04 Calendario, P1-05 Estructura ledger, P1-06 Comandos ledger y P1-07 Conciliación incomes. P1-04 quedó aprobado localmente tras review PASS: migración aditiva `payment_schedules`, draft/publicación y RLS; no crea cobros ni modifica contabilidad. P1-05/P1-06/P1-07 no iniciados. Producción no cambió; P1-04 no está desplegado.
+- Phase 1B Payments corresponde a P1-04 Calendario, P1-05 Estructura ledger, P1-06 Comandos ledger y P1-07 Conciliación incomes. P1-04 está desplegado y verificado: tabla aditiva `payment_schedules`, RLS y 0 filas; no crea cobros ni modifica contabilidad. P1-05/P1-06/P1-07 no iniciados. El recovery `20261019T044950Z` es PRE-P1-04; su restore no se ha ensayado.
 - Las60 pruebas son el plan general; el subset Phase1A quedó validado localmente. Resultados en el informe de implementación.
 - Backend local aprobado por Javier:55 comprobaciones de dominio,19 SQL,38 REST,2894 asserts Security y130 Auth/Storage PASS, repetidos durante la UI. La UI agrega pruebas frontend/E2E sin alterar las migraciones.
 - El cierre productivo Security no equivale a que Noveli2.0 completo esté listo para despliegue.
@@ -108,7 +109,7 @@ Fechas UTC según evidencia; un estado de diseño no significa despliegue.
 
 **Acción aprobada vigente, completada:** integración técnica Phase 1A backend+UI: cotización→orden, listado y detalle; sin UI manual, Payments ni Contracts.
 
-**Próxima acción:** preparar la revisión de deployment de P1-04. No desplegar ni iniciar P1-05/P1-06/P1-07 sin autorización separada.
+**Próxima acción:** mantener P1-05/P1-06/P1-07 sin iniciar hasta aprobación separada. Antes de cualquier futuro despliegue productivo de esos lotes, crear un recovery point posterior a P1-04; el checkpoint vigente es PRE-P1-04 y el restore integral no se ha ensayado.
 
 **Estado productivo:** HEALTHY; Phase 1A desplegada y habilitada. Flag ON, ambas capabilities habilitadas, Orders smoke PASS; no se crearon órdenes ni se convirtieron cotizaciones. Phase 1B no iniciada.
 
@@ -138,7 +139,7 @@ Cierre04B:12 findings preexistentes en cuatro grupos y cero nuevos atribuibles a
 - La evidencia detallada de modelo/Storage y manifests de pruebas Phase 1A permanece en workspace local y se excluye del commit.
 - [Implementación Phase1A](phase-1/PHASE-1A-IMPLEMENTATION.md), [UI](phase-1/PHASE-1A-UI.md), [revisión de integración](phase-1/PHASE-1A-INTEGRATION-REVIEW.md), [revisión de deployment](phase-1/PHASE-1A-DEPLOYMENT-REVIEW.md) y [manifest de deployment](phase-1/PHASE-1A-DEPLOYMENT-MANIFEST.json).
 - [Phase 1B Readiness Review](phase-1/PHASE-1B-READINESS-REVIEW.md): alcance propuesto P1-04–P1-07 y brechas entre el diseño y el modelo productivo actual.
-- [Implementación P1-04](phase-1/PHASE-1B-P1-04-IMPLEMENTATION.md) y [manifest P1-04](phase-1/PHASE-1B-P1-04-MANIFEST.json): estado local, tests y hash de migración; no desplegado.
+- [Implementación P1-04](phase-1/PHASE-1B-P1-04-IMPLEMENTATION.md), [manifest P1-04](phase-1/PHASE-1B-P1-04-MANIFEST.json) y [deployment review](phase-1/PHASE-1B-P1-04-DEPLOYMENT-REVIEW.md): review local, migración desplegada/verificada y límites del smoke productivo.
 
 [Revisión de integración Phase 1A](phase-1/PHASE-1A-INTEGRATION-REVIEW.md).
 
@@ -166,4 +167,5 @@ Algunos informes conservan estados históricos anteriores (por ejemplo04B pendie
 | 2026-10-19 | Phase 1A CRM flag-off | `b085161…` Production READY en main; smoke legacy manual PASS; feature sigue cerrada por flag OFF y capabilities false |
 | 2026-10-19 | Phase 1A enablement y smoke | Flag ON, capabilities `orders` y `quotation_conversion` habilitadas; ruta/listado PASS y borradores correctamente no convertibles; 0 cambios comerciales reales |
 | 2026-10-19 | Phase 1A cierre documental / Phase 1B readiness | Cierre productivo documentado; P1-04–P1-07 mapeados a Payments para review, sin inicio de implementación |
+| 2026-10-19 | Phase 1B P1-04 | P1-04 desplegado y verificado en producción; 49 tablas public con RLS, `payment_schedules` vacía, sin cambios de datos existentes; P1-05 no iniciado |
 Regla de mantenimiento: cada cambio de estado de fase debe actualizar estado general, fase actual y próximo paso; agregar cambio reciente y milestone cuando sea significativo, con fecha, entorno, commit/migration y enlace a evidencia. Conservar hitos y estados anteriores importantes. Las pruebas locales por sí solas no implican despliegue; VERIFIED registra aprobación/revisión formal de fase y permanece separado de DEPLOYED.

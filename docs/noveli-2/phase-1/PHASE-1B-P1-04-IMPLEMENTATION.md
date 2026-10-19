@@ -101,6 +101,16 @@ P1-04 es aditivo y esta iteración es local. No hay rollback productivo que ejec
 
 **P1-04 REVIEW: PASS**
 **P1-04 LOCAL IMPLEMENTATION: APPROVED**
-**PRODUCTION_DEPLOYED: FALSE**
-**PRODUCTION CHANGES: NONE**
+**P1-04 PRODUCTION DEPLOYED: YES (2026-10-19)**
+**P1-05 STARTED: NO**
+
+## Deployment posterior — 2026-10-19
+
+P1-04 se aplicó a `crm-noveli` (`bdxlzhpmifxwmqjnnmxa`) mediante `supabase db push --linked --yes`. El dry-run inmediatamente previo propuso exclusivamente `20261019045900_phase_1b_p1_04_payment_schedules`; el push terminó con exit code 0 y registró esa única migración. SHA-256 verificado antes del push: `a7746b6a77df66618570203c41c5d70462211d972004cbfb0ebbe737b5da7600`.
+
+Verificación posterior read-only: proyecto `ACTIVE_HEALTHY`, PostgreSQL `17.6.1.127`, 49 tablas public y 49 con RLS; `payment_schedules` presente, RLS habilitado/forzado, `numeric(18,2)`, CLP/USD, 0 filas. Constraints, FK compuesta tenant/orden, índices, policies y funciones esperadas presentes. Los dos wrappers públicos son `SECURITY INVOKER`; anon y `service_role` carecen de execute y DML directo. Los dos helpers internos `SECURITY DEFINER` pertenecen a `noveli_orders_executor` y tienen `search_path` vacío.
+
+Datos invariantes tras el despliegue: orders 0, order_items 0, quotations 6 (`borrador`: 6), incomes 4, income_allocations 10, income_distributions 0, expenses 13. Las tablas P1-05 (`payments`, `payment_refunds`, `payment_allocations`) siguen ausentes. Capabilities Phase 1A siguen habilitadas; Storage conserva 19 objetos públicos en `brand-assets` y 36 privados en `documents`. No se crearon datos reales ni se modificaron frontend, Vercel, Storage, Auth o contabilidad.
+
+Smoke HTTP GET sin sesión: `/admin/ordenes` y `/admin/cotizaciones` respondieron 200. No se automatizó login ni se inspeccionó consola autenticada; no hubo cambios de frontend en este despliegue DB-only.
 **P1-05 STARTED: NO**
