@@ -1,5 +1,7 @@
 # Phase 1A UI — CRM local
 
+> **Cierre posterior de producción (2026-10-19):** Este documento describe la implementación y evidencia local. Phase 1A quedó desplegada después: CRM `b0851619b3ba38fbde93d6846ce7c3dda08e5d36`, deployment `dpl_HmD6rciHvLWUVpTfz5HS7zAp4DsE` READY, flag `VITE_PHASE_1A_ORDERS_ENABLED=true` y capabilities habilitadas. Recovery pre-Phase1A `pre-phase-1a/20261019T032415Z` VERIFIED; legacy y Phase 1A production smoke PASS; production HEALTHY; 0 órdenes y 0 conversiones reales. Las referencias de este informe a “local/no desplegado” son históricas al momento de la iteración. Ver [estado maestro](../NOVELI-2-STATUS.md).
+
 Javier aprobó formalmente el backend Phase 1A. Esta iteración integra únicamente cotización→orden, listado y detalle. No crea migraciones ni cambia las tres migraciones aprobadas. No implementa Payments, Contracts ni creación manual de órdenes.
 
 ## Rutas y navegación

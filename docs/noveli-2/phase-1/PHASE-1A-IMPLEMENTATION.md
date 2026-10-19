@@ -1,5 +1,7 @@
 # Phase 1A — implementación backend local
 
+> **Cierre posterior de producción (2026-10-19):** Este informe conserva el resultado de implementación local indicado abajo. Posteriormente se desplegaron las tres migraciones Phase 1A y el CRM `b0851619b3ba38fbde93d6846ce7c3dda08e5d36`; deployment `dpl_HmD6rciHvLWUVpTfz5HS7zAp4DsE` quedó READY con `VITE_PHASE_1A_ORDERS_ENABLED=true` y capabilities `orders`/`quotation_conversion` habilitadas. Recovery pre-Phase1A `pre-phase-1a/20261019T032415Z` VERIFIED; legacy y Phase 1A production smoke PASS; production HEALTHY; 0 órdenes y 0 cotizaciones convertidas. Ver [estado maestro](../NOVELI-2-STATUS.md). No implica inicio de Phase 1B.
+
 Estado de cierre: **PHASE 1A BACKEND: READY FOR REVIEW**. **PRODUCTION CHANGES: NONE**.
 
 Autorización: Javier aprobó Phase 1 y exactamente tres lotes: fundamentos, Orders/OrderItems y conversión quotation→order. El alcance amplía a tres lotes el Phase1A inicial de dos lotes mencionado en el review. No se implementan pagos, cuotas, refunds, contratos, protección contractual de archivos ni UI Orders.

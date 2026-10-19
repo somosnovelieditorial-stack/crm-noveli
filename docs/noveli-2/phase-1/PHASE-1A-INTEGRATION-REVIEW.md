@@ -1,5 +1,7 @@
 # NOVELI 2.0 — PHASE 1A Integration Review
 
+> **Estado posterior a esta revisión (2026-10-19):** El resultado de esta revisión técnica fue local y pre-deployment. Phase 1A se desplegó después: CRM `b0851619b3ba38fbde93d6846ce7c3dda08e5d36`, deployment `dpl_HmD6rciHvLWUVpTfz5HS7zAp4DsE` READY, flag `VITE_PHASE_1A_ORDERS_ENABLED=true`, capabilities habilitadas; tres migraciones aplicadas. Recovery pre-Phase1A `pre-phase-1a/20261019T032415Z` VERIFIED. Legacy smoke y Phase 1A production smoke PASS; HEALTHY; 0 órdenes creadas y 0 cotizaciones convertidas. Las afirmaciones “PRODUCTION CHANGES: NONE” describen exclusivamente el alcance de la revisión fechada abajo. Ver [estado maestro](../NOVELI-2-STATUS.md).
+
 Fecha: 2026-10-18. Revisión conjunta de Foundations, Orders, Order Items, quotation → order RPC y UI.
 
 ## Resultado
