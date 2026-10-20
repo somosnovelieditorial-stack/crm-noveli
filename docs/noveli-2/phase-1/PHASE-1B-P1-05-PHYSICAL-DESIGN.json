@@ -1,0 +1,232 @@
+{
+  "document": "NOVELI 2.0 — P1-05 Physical Design",
+  "version": 1,
+  "classification": "DESIGN_ONLY_NOT_IMPLEMENTED",
+  "source_of_truth": [
+    "PHASE-1-DESIGN.md",
+    "PHASE-1-DESIGN-REVIEW.md",
+    "PHASE-1-DECISIONS.md",
+    "PHASE-1-TEST-PLAN.md",
+    "PHASE-1B-READINESS-REVIEW.md",
+    "PHASE-1B-P1-04-IMPLEMENTATION.md"
+  ],
+  "scope": {
+    "lot": "P1-05",
+    "tables": ["payments", "payment_refunds", "payment_allocations"],
+    "auxiliary_objects": [
+      "noveli_payments_executor NOLOGIN NOINHERIT NOBYPASSRLS",
+      "private SECURITY INVOKER guard/constraint-trigger functions",
+      "documents(organization_id,id) unique candidate index for approved composite evidence FK"
+    ],
+    "out_of_scope": [
+      "P1-06 business commands and public write RPCs",
+      "P1-07 incomes linkage/accounting posting/reconciliation",
+      "UI, capabilities, frontend, provider webhooks, automation"
+    ],
+    "production_changes": false,
+    "migration_created": false
+  },
+  "physical_conventions": {
+    "money_type": "numeric(18,2)",
+    "business_amount_limit": "9999999999.99",
+    "phase_1_currencies": ["CLP", "USD"],
+    "clp_fractional_amounts": "rejected by existing canonical money validator",
+    "timestamp_type": "timestamptz; server-created times default now(); occurred/received instants normalized as UTC",
+    "uuid_defaults": "gen_random_uuid() only for row ids; idempotency keys are caller-supplied UUIDs with no default",
+    "external_id_type": "text COLLATE C; exact comparison; no truncation or provider-specific UUID assumption",
+    "request_hash_type": "text COLLATE C, exact format sha256-v1:<64 lowercase hex>",
+    "request_hash_algorithm": "SHA-256 over RFC 8785/JCS UTF-8 canonical request JSON; money encoded as canonical decimal strings, UUID lowercase, timestamps UTC RFC 3339",
+    "zero_payment": "gross_amount = 0 rejected; provider_fee = 0 allowed when explicitly verified; net_amount may be zero only when fee equals positive gross",
+    "net_amount": {
+      "postgres_type": "numeric(18,2)",
+      "generation": "GENERATED ALWAYS AS (gross_amount - provider_fee) STORED",
+      "editable": false
+    },
+    "manual_identity": {
+      "provider": "manual",
+      "provider_account_scope": "manual",
+      "provider_payment_id": null,
+      "organization_id_is_part_of_namespace": true
+    }
+  },
+  "tables": {
+    "payments": {
+      "columns": [
+        {"name":"id","type":"uuid","nullable":false,"default":"gen_random_uuid()","check":null,"fk":null,"mutable":"never"},
+        {"name":"organization_id","type":"uuid","nullable":false,"default":null,"check":null,"fk":"composite -> orders(organization_id,id) via order_id","mutable":"never"},
+        {"name":"order_id","type":"uuid","nullable":false,"default":null,"check":null,"fk":"(organization_id,order_id) -> orders(organization_id,id), ON DELETE RESTRICT","mutable":"never"},
+        {"name":"gross_amount","type":"numeric(18,2)","nullable":false,"default":null,"check":"> 0; <= 9999999999.99; valid scale for currency","fk":null,"mutable":"never"},
+        {"name":"provider_fee","type":"numeric(18,2)","nullable":false,"default":null,"check":">= 0 AND <= gross_amount; valid scale for currency","fk":null,"mutable":"never"},
+        {"name":"net_amount","type":"numeric(18,2)","nullable":false,"default":"GENERATED ALWAYS AS (gross_amount - provider_fee) STORED","check":"derived; never supplied","fk":null,"mutable":"never"},
+        {"name":"currency","type":"text COLLATE C","nullable":false,"default":null,"check":"IN ('CLP','USD'); matches order.currency","fk":"validated with order context","mutable":"never"},
+        {"name":"provider","type":"text COLLATE C","nullable":false,"default":null,"check":"nonempty; trimmed lowercase provider key","fk":null,"mutable":"never"},
+        {"name":"provider_account_scope","type":"text COLLATE C","nullable":false,"default":null,"check":"nonempty stable account namespace; never synthetic date scope","fk":null,"mutable":"never"},
+        {"name":"provider_payment_id","type":"text COLLATE C","nullable":true,"default":null,"check":"NULL or nonempty exact external identifier","fk":null,"mutable":"never"},
+        {"name":"method","type":"text","nullable":false,"default":null,"check":"IN ('transfer','card','cash','other')","fk":null,"mutable":"never"},
+        {"name":"idempotency_key","type":"uuid","nullable":false,"default":null,"check":null,"fk":null,"mutable":"never"},
+        {"name":"request_hash","type":"text COLLATE C","nullable":false,"default":null,"check":"^sha256-v1:[0-9a-f]{64}$","fk":null,"mutable":"never"},
+        {"name":"external_reference","type":"text","nullable":true,"default":null,"check":null,"fk":null,"mutable":"never after insert; deliberately non-unique"},
+        {"name":"received_at","type":"timestamptz","nullable":true,"default":null,"check":"required iff status='succeeded'; otherwise NULL","fk":null,"mutable":"only with pending -> succeeded command"},
+        {"name":"status","type":"text","nullable":false,"default":"'pending'","check":"IN ('pending','succeeded','failed','cancelled')","fk":null,"mutable":"only pending -> one terminal state through P1-06; terminal immutable"},
+        {"name":"notes","type":"text","nullable":true,"default":null,"check":null,"fk":null,"mutable":"P1-06 only while pending; immutable after succeeded"},
+        {"name":"evidence_document_id","type":"uuid","nullable":true,"default":null,"check":"method-specific succeeded evidence enforced by P1-06 command policy","fk":"(organization_id,evidence_document_id) -> documents(organization_id,id), ON DELETE RESTRICT","mutable":"never"},
+        {"name":"created_by","type":"uuid","nullable":false,"default":null,"check":"actor assigned by server command","fk":"auth.users(id), ON DELETE RESTRICT","mutable":"never"},
+        {"name":"created_at","type":"timestamptz","nullable":false,"default":"now()","check":null,"fk":null,"mutable":"never"}
+      ],
+      "constraints": [
+        "PRIMARY KEY(id)",
+        "UNIQUE(organization_id,id)",
+        "UNIQUE(organization_id,id,currency) candidate key for refund FK",
+        "UNIQUE(organization_id,idempotency_key)",
+        "PARTIAL UNIQUE(organization_id,provider,provider_account_scope,provider_payment_id) WHERE provider_payment_id IS NOT NULL",
+        "FK(organization_id,order_id) -> orders(organization_id,id) ON DELETE RESTRICT",
+        "CHECK gross_amount > 0 and business maximum",
+        "CHECK 0 <= provider_fee <= gross_amount and business maximum",
+        "CHECK currency CLP/USD and canonical money scale",
+        "CHECK method enum; status enum; received_at/status consistency",
+        "CHECK provider/scope nonempty; provider_payment_id NULL or nonempty",
+        "CHECK versioned SHA-256 request_hash representation",
+        "FK organization/evidence_document to documents with RESTRICT",
+        "FK created_by to auth.users with RESTRICT"
+      ],
+      "indexes": [
+        "Unique indexes backing PK and candidate/identity constraints above",
+        "btree(organization_id,order_id,received_at DESC,id) for order payment history"
+      ],
+      "rls": "ENABLE and FORCE; authenticated SELECT only for active tenant admin/finance; internal executor policy; no authenticated DML grant"
+    },
+    "payment_refunds": {
+      "columns": [
+        {"name":"id","type":"uuid","nullable":false,"default":"gen_random_uuid()","check":null,"fk":null,"mutable":"never"},
+        {"name":"organization_id","type":"uuid","nullable":false,"default":null,"check":null,"fk":"composite to payment","mutable":"never"},
+        {"name":"payment_id","type":"uuid","nullable":false,"default":null,"check":null,"fk":"(organization_id,payment_id,currency) -> payments(organization_id,id,currency), ON DELETE RESTRICT","mutable":"never"},
+        {"name":"currency","type":"text COLLATE C","nullable":false,"default":null,"check":"CLP/USD, equal to immutable payment currency via composite FK","fk":"included in composite payment FK","mutable":"never"},
+        {"name":"refund_key","type":"uuid","nullable":false,"default":null,"check":"logical chain id","fk":null,"mutable":"never"},
+        {"name":"event_sequence","type":"integer","nullable":false,"default":null,"check":"> 0; first event=1; each successor increments by one","fk":null,"mutable":"never"},
+        {"name":"previous_event_id","type":"uuid","nullable":true,"default":null,"check":"NULL iff event_sequence=1; same chain and prior sequence validated by trigger","fk":"self FK to id, ON DELETE RESTRICT","mutable":"never"},
+        {"name":"amount","type":"numeric(18,2)","nullable":false,"default":null,"check":"> 0; <= business maximum; valid currency scale; constant within chain","fk":null,"mutable":"never"},
+        {"name":"reason","type":"text","nullable":false,"default":null,"check":"trimmed nonempty; constant within chain","fk":null,"mutable":"never"},
+        {"name":"status","type":"text","nullable":false,"default":null,"check":"IN ('requested','processing','succeeded','failed','cancelled')","fk":null,"mutable":"append new event only"},
+        {"name":"processed_at","type":"timestamptz","nullable":true,"default":null,"check":"NULL for requested/processing; required for terminal status","fk":null,"mutable":"never; terminal result is a new event"},
+        {"name":"provider_refund_id","type":"text COLLATE C","nullable":true,"default":null,"check":"NULL or exact nonempty external refund identity","fk":null,"mutable":"never; namespace inherited from payment"},
+        {"name":"external_reference","type":"text","nullable":true,"default":null,"check":null,"fk":null,"mutable":"never; deliberately non-unique"},
+        {"name":"operation_key","type":"uuid","nullable":false,"default":null,"check":null,"fk":null,"mutable":"never"},
+        {"name":"request_hash","type":"text COLLATE C","nullable":false,"default":null,"check":"^sha256-v1:[0-9a-f]{64}$","fk":null,"mutable":"never"},
+        {"name":"created_by","type":"uuid","nullable":false,"default":null,"check":"actor assigned by server command","fk":"auth.users(id), ON DELETE RESTRICT","mutable":"never"},
+        {"name":"created_at","type":"timestamptz","nullable":false,"default":"now()","check":null,"fk":null,"mutable":"never"}
+      ],
+      "constraints": [
+        "PRIMARY KEY(id)",
+        "UNIQUE(organization_id,id)",
+        "UNIQUE(organization_id,id,currency)",
+        "UNIQUE(organization_id,payment_id,id) candidate key for allocation refund-event FK",
+        "FK(organization_id,payment_id,currency) -> payments(organization_id,id,currency) ON DELETE RESTRICT",
+        "UNIQUE(organization_id,refund_key,event_sequence)",
+        "UNIQUE(organization_id,operation_key)",
+        "PARTIAL UNIQUE(organization_id,previous_event_id) WHERE previous_event_id IS NOT NULL",
+        "FK(previous_event_id) -> payment_refunds(id) ON DELETE RESTRICT; trigger verifies same tenant/payment/chain/currency and sequence+1",
+        "CHECK amount > 0, currency scale, nonempty reason, lifecycle enum and processed_at consistency",
+        "Deferred aggregate guard: succeeded refunds plus active reservations <= payment gross",
+        "Append-only trigger blocks UPDATE/DELETE"
+      ],
+      "indexes": [
+        "Unique indexes backing chain and FK candidate keys",
+        "btree(organization_id,payment_id,created_at DESC,id) for refund history",
+        "partial btree(organization_id,provider_refund_id) WHERE provider_refund_id IS NOT NULL for namespaced duplicate guard"
+      ],
+      "rls": "ENABLE and FORCE; authenticated SELECT only for active tenant admin/finance; internal executor policy; INSERT via P1-06 command only; no UPDATE/DELETE grants"
+    },
+    "payment_allocations": {
+      "columns": [
+        {"name":"id","type":"uuid","nullable":false,"default":"gen_random_uuid()","check":null,"fk":null,"mutable":"never"},
+        {"name":"organization_id","type":"uuid","nullable":false,"default":null,"check":null,"fk":"tenant component of all parent FKs","mutable":"never"},
+        {"name":"payment_id","type":"uuid","nullable":false,"default":null,"check":null,"fk":"(organization_id,payment_id) -> payments(organization_id,id), ON DELETE RESTRICT","mutable":"never"},
+        {"name":"payment_schedule_id","type":"uuid","nullable":false,"default":null,"check":null,"fk":"(organization_id,payment_schedule_id) -> payment_schedules(organization_id,id), ON DELETE RESTRICT","mutable":"never"},
+        {"name":"order_id","type":"uuid","nullable":false,"default":null,"check":null,"fk":"(organization_id,order_id) -> orders(organization_id,id), ON DELETE RESTRICT","mutable":"never"},
+        {"name":"currency","type":"text COLLATE C","nullable":false,"default":null,"check":"CLP/USD and equal payment/order/schedule currency by trigger","fk":"parent currency equality checked with locked parent rows","mutable":"never"},
+        {"name":"amount","type":"numeric(18,2)","nullable":false,"default":null,"check":"> 0; <= business maximum; canonical scale","fk":null,"mutable":"never"},
+        {"name":"created_by","type":"uuid","nullable":false,"default":null,"check":"actor assigned by server command","fk":"auth.users(id), ON DELETE RESTRICT","mutable":"never"},
+        {"name":"created_at","type":"timestamptz","nullable":false,"default":"now()","check":null,"fk":null,"mutable":"never"},
+        {"name":"direction","type":"text","nullable":false,"default":null,"check":"IN ('apply','reverse')","fk":null,"mutable":"never"},
+        {"name":"reversal_of_id","type":"uuid","nullable":true,"default":null,"check":"NULL for apply; non-NULL for reverse; must identify apply, never reverse","fk":"(organization_id,reversal_of_id) -> payment_allocations(organization_id,id), ON DELETE RESTRICT","mutable":"never"},
+        {"name":"refund_event_id","type":"uuid","nullable":true,"default":null,"check":"NULL for apply; required for reverse and must be succeeded","fk":"(organization_id,payment_id,refund_event_id) -> payment_refunds(organization_id,payment_id,id), ON DELETE RESTRICT","mutable":"never"},
+        {"name":"operation_key","type":"uuid","nullable":false,"default":null,"check":null,"fk":null,"mutable":"never"},
+        {"name":"operation_position","type":"integer","nullable":false,"default":null,"check":"> 0","fk":null,"mutable":"never"}
+      ],
+      "constraints": [
+        "PRIMARY KEY(id)",
+        "UNIQUE(organization_id,id)",
+        "UNIQUE(organization_id,operation_key,operation_position)",
+        "PARTIAL UNIQUE(organization_id,refund_event_id,reversal_of_id) WHERE direction='reverse'",
+        "FK(organization_id,payment_id) -> payments(organization_id,id) ON DELETE RESTRICT",
+        "FK(organization_id,payment_schedule_id) -> payment_schedules(organization_id,id) ON DELETE RESTRICT",
+        "FK(organization_id,order_id) -> orders(organization_id,id) ON DELETE RESTRICT",
+        "FK(organization_id,payment_id,refund_event_id) -> payment_refunds(organization_id,payment_id,id) ON DELETE RESTRICT",
+        "FK(organization_id,reversal_of_id) -> payment_allocations(organization_id,id) ON DELETE RESTRICT",
+        "CHECK amount > 0, canonical currency/money, positive operation position, apply/reverse null-shape",
+        "Trigger verifies payment, schedule, order and currency are the same tenant/order/currency; reverse points to apply and succeeded refund",
+        "Deferred aggregate guards enforce payment retained gross/reservations and schedule cap under serialization",
+        "Append-only trigger blocks UPDATE/DELETE"
+      ],
+      "indexes": [
+        "Unique indexes backing PK, tenant key and operation replay relationship",
+        "btree(organization_id,payment_id)",
+        "btree(organization_id,payment_schedule_id)",
+        "partial btree(organization_id,reversal_of_id) WHERE direction='reverse'"
+      ],
+      "rls": "ENABLE and FORCE; authenticated SELECT only for active tenant admin/finance; internal executor policy; INSERT via P1-06 command only; no UPDATE/DELETE grants"
+    }
+  },
+  "auxiliary_objects": {
+    "documents_composite_key": "Unique index on existing documents(organization_id,id), solely to support approved tenant-scoped evidence FK; id is already globally unique; no row/data changes",
+    "internal_role": "noveli_payments_executor; NOLOGIN, NOINHERIT, NOBYPASSRLS; SET ROLE membership only to postgres; minimal privileges/policies scoped to ledger and required parent reads",
+    "functions": [
+      {"purpose":"row immutability/lifecycle/tenant guards","schema":"noveli_private","security":"INVOKER","search_path":"empty","public_entrypoint":false},
+      {"purpose":"deferred cross-row totals/refund reservation guards and provider refund identity namespace serialization","schema":"noveli_private","security":"INVOKER","search_path":"empty","public_entrypoint":false}
+    ]
+  },
+  "immutability": {
+    "payments": {"insert":"internal commands only; API DML closed in P1-05","update":"only P1-06 pending-to-terminal status/received_at and pending notes; financial terms, identity, tenant, order and created metadata immutable; terminal row immutable","delete":"never"},
+    "payment_refunds": {"insert":"append event only via P1-06 command; P1-05 API write closed","update":"never; transitions append successor event","delete":"never"},
+    "payment_allocations": {"insert":"append apply/reverse via P1-06 command; P1-05 API write closed","update":"never","delete":"never"}
+  },
+  "rls_matrix": {
+    "admin": {"select":"active tenant only","direct_insert":false,"direct_update":false,"delete":false,"business_commands_in_p1_05":false},
+    "editor": {"select":false,"direct_insert":false,"direct_update":false,"delete":false},
+    "diseñador": {"select":false,"direct_insert":false,"direct_update":false,"delete":false},
+    "corrector": {"select":false,"direct_insert":false,"direct_update":false,"delete":false},
+    "finanzas": {"select":"active tenant only","direct_insert":false,"direct_update":false,"delete":false,"business_commands_in_p1_05":false},
+    "visualizador": {"select":false,"direct_insert":false,"direct_update":false,"delete":false},
+    "anon": {"select":false,"direct_insert":false,"direct_update":false,"delete":false},
+    "service_role": {"select":false,"direct_insert":false,"direct_update":false,"delete":false,"note":"explicit table/function revokes; not an application path"},
+    "noveli_payments_executor": {"select":"tenant-scoped policy","insert":"internal only","update":"payments lifecycle only; no refund/allocation update","delete":false,"login":false,"bypass_rls":false}
+  },
+  "deferred_behavior": {
+    "p1_06": ["record/confirm payment commands", "allocate/reverse commands", "refund request/process commands", "public authenticated RPC wrappers", "observable idempotent replay", "actor/capability authorization", "uniform lock orchestration", "command-level over-allocation and refund reservation decisions", "payment/schedule/order derived summaries and activity events", "method-specific evidence verification at success"],
+    "p1_07": ["incomes.payment_id", "accounting linkage/posting", "income/allocation reconciliation", "financial reports and tax projections"],
+    "lock_order": ["order row", "payments in UUID order", "refund chain", "schedules in UUID order"],
+    "cross_row_guards_p1_05": ["succeeded refunds plus latest requested/processing reservations <= gross", "net applied amount <= retained gross", "effective allocations per schedule <= expected_amount", "all parent tenant/order/currency context equal"]
+  },
+  "tests_before_implementation": [
+    "schema and indexes exact",
+    "CLP/USD, positive gross, fee zero explicit, fee > gross rejected, generated net exact",
+    "provider ID partial uniqueness and manual null identity behavior",
+    "idempotency key unique per tenant and hash representation/payload conflict contract",
+    "tenant/order/currency FKs and cross-parent schedule checks",
+    "refund chain sequence, no branch, terminal successor denial and provider refund dedupe across payments",
+    "apply/reverse shape, N:N, refund event/apply same-context references",
+    "deferred refund/reservation/payment/schedule caps under two real concurrent sessions",
+    "immutability and DELETE denied",
+    "admin/finance read scope; other roles/anon/service_role denied; internal executor only",
+    "Phase 1A, P1-04, Security 01–04B and Storage/Auth regression suites"
+  ],
+  "open_blocking_questions": 0,
+  "implementation_started": false,
+  "production_changes": false,
+  "recovery": {
+    "current_path": "C:/Users/xavie/Desktop/backup/pre-phase-1b/20261019T044950Z",
+    "classification": "PRE-P1-04",
+    "restore_rehearsal": "NOT PERFORMED",
+    "required_before_p1_05_production": "POST-P1-04 / PRE-P1-05-PRODUCTION"
+  }
+}

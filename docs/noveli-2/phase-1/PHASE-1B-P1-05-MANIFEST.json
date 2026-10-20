@@ -1,0 +1,55 @@
+{
+  "lot": "P1-05",
+  "status": "LOCAL_APPROVED",
+  "migration": "supabase/migrations/20261019070000_phase_1b_p1_05_payments_ledger.sql",
+  "migration_sha256": "ce32ff184ec52305be8290722f9c215945defa4044c97efcd654bf40a45f34d0",
+  "superseded_pre_review_migration_sha256": "7c13b31b93d02d0df1e12f873b5c95a9434cf9e79bb07831754a94598495f653",
+  "review": "PASS",
+  "low_findings": "CLOSED",
+  "net_amount_catalog": {
+    "type": "numeric(18,2)",
+    "generated": "STORED",
+    "nullable": false,
+    "expression": "gross_amount - provider_fee"
+  },
+  "tables_created": [
+    "payments",
+    "payment_refunds",
+    "payment_allocations"
+  ],
+  "auxiliary_objects": [
+    "noveli_payments_executor NOLOGIN NOINHERIT NOBYPASSRLS",
+    "five noveli_private SECURITY INVOKER guard functions",
+    "documents(organization_id,id) unique candidate index",
+    "tenant-scoped lock/read policies for order and payment schedule parents"
+  ],
+  "files_changed": [
+    "supabase/migrations/20261019070000_phase_1b_p1_05_payments_ledger.sql",
+    "supabase/tests/phase_1b_p1_05_payments.py",
+    "supabase/tests/phase_1b_p1_04_schedules.py",
+    "supabase/tests/phase_1a_orders.py",
+    "supabase/tests/phase_1a_orders.sql",
+    "supabase/tests/phase_1a_security_regressions.py",
+    "docs/noveli-2/phase-1/PHASE-1B-P1-05-IMPLEMENTATION.md",
+    "docs/noveli-2/phase-1/PHASE-1B-P1-05-MANIFEST.json",
+    "docs/noveli-2/phase-1/PHASE-1B-P1-05-DESIGN-REVIEW.md",
+    "docs/noveli-2/phase-1/PHASE-1B-P1-05-PHYSICAL-DESIGN.json",
+    "docs/noveli-2/NOVELI-2-STATUS.md"
+  ],
+  "tests": {
+    "p1_05": { "result": "PASS", "checks": 126 },
+    "p1_04": { "result": "PASS", "checks": 49 },
+    "phase_1a_orders_conversion": { "result": "PASS", "checks": 55 },
+    "phase_1a_sql_assertions": { "result": "PASS", "checks": 19 },
+    "security_01_04b": { "result": "PASS", "checks": 2894 },
+    "python_syntax": "PASS",
+    "json_validation": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "physical_design_deviations": [],
+  "production_deployed": false,
+  "production_changes": false,
+  "p1_06_started": false,
+  "p1_07_started": false,
+  "commit_created": false
+}
