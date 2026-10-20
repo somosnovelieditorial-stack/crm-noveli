@@ -1,6 +1,6 @@
 {
   "lot": "P1-05",
-  "status": "LOCAL_APPROVED",
+  "status": "PRODUCTION_DEPLOYED_VERIFIED",
   "migration": "supabase/migrations/20261019070000_phase_1b_p1_05_payments_ledger.sql",
   "migration_sha256": "ce32ff184ec52305be8290722f9c215945defa4044c97efcd654bf40a45f34d0",
   "superseded_pre_review_migration_sha256": "7c13b31b93d02d0df1e12f873b5c95a9434cf9e79bb07831754a94598495f653",
@@ -46,10 +46,43 @@
     "json_validation": "PASS",
     "git_diff_check": "PASS"
   },
+  "deployment": {
+    "date": "2026-10-20",
+    "project_ref": "bdxlzhpmifxwmqjnnmxa",
+    "project_health": "ACTIVE_HEALTHY",
+    "migration_version": "20261019070000",
+    "dry_run": "PASS; exactly one migration",
+    "public_tables": 52,
+    "public_tables_with_rls": 52,
+    "new_table_rows": {
+      "payments": 0,
+      "payment_refunds": 0,
+      "payment_allocations": 0
+    },
+    "net_amount_catalog": {
+      "type": "numeric(18,2)",
+      "generated": "STORED",
+      "nullable": false,
+      "expression": "gross_amount - provider_fee"
+    },
+    "documents_auxiliary_index": "PASS",
+    "security_review": "PASS; five SECURITY INVOKER helpers, zero SECURITY DEFINER, no public P1-06 command RPCs",
+    "accounting_baseline_unchanged": true,
+    "real_financial_data_created": false,
+    "production_status": "HEALTHY"
+  },
+  "recovery": {
+    "path": "C:\\Users\\xavie\\Desktop\\backup\\pre-p1-05-production\\20261020T211445Z",
+    "classification": "POST_P1_04_PRE_P1_05_PRODUCTION",
+    "verified": true,
+    "restore_rehearsal": "NOT PERFORMED"
+  },
+  "functional_commit": "70511f490c6cbbc1c4b415ef18a316a819ddb14f",
   "physical_design_deviations": [],
-  "production_deployed": false,
-  "production_changes": false,
+  "production_deployed": true,
+  "production_changes": true,
   "p1_06_started": false,
   "p1_07_started": false,
-  "commit_created": false
+  "commit_created": true,
+  "commit_pushed": false
 }

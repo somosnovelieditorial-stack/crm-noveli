@@ -14,7 +14,7 @@ Estados permitidos: NOT STARTED · IN DESIGN · IN DEVELOPMENT · READY FOR REVI
 | Phase 1A Orders | VERIFIED | DB y CRM desplegados; Vercel `dpl_HmD6rciHvLWUVpTfz5HS7zAp4DsE` READY en `main` (`b085161…`), flag ON y capabilities `orders`/`quotation_conversion` habilitadas. Smoke productivo PASS; 0 órdenes y 0 conversiones reales |
 | Phase 1A Backend | VERIFIED | Aprobado por Javier; las tres migraciones aplicadas y verificadas en producción; tablas sin filas |
 | Phase 1A UI | VERIFIED | Integration Review PASS; revisión manual PASS; formato monetario pulido; flag predeterminado OFF |
-| Phase 1B Payments | IN DEVELOPMENT | P1-04 deployed/verificado; P1-05 implementation approved locally, sin commit/deploy; P1-06/P1-07 no iniciados |
+| Phase 1B Payments | IN DEVELOPMENT | P1-04 y P1-05 desplegados/verificados; P1-06/P1-07 no iniciados |
 | Phase 1C Contracts | NOT STARTED | Diseño preparado; implementación no iniciada |
 | Phase 2 Projects | NOT STARTED | Sin inicio de trabajo registrado |
 | Phase 3 Red Noveli | NOT STARTED | Sin inicio de trabajo registrado |
@@ -33,10 +33,10 @@ El diseño cuenta con aprobación formal de Javier. Los estados de fases futuras
 | Componente | Último estado documentado |
 |---|---|
 | Supabase | crm-noveli — proyecto `bdxlzhpmifxwmqjnnmxa`; PostgreSQL 17.6 |
-| Última migración aplicada | `20261019045900_phase_1b_p1_04_payment_schedules.sql` (P1-04) |
-| Project health | ACTIVE_HEALTHY, comprobado nuevamente durante el pre-enable check del 2026-10-19 |
+| Última migración aplicada | `20261019070000_phase_1b_p1_05_payments_ledger.sql` (P1-05) |
+| Project health | ACTIVE_HEALTHY; comprobado después del deployment P1-05 el 2026-10-20 |
 | Storage | documents: **private**, 36 objetos; brand-assets: **public**, 19 objetos; total55 |
-| DB / órdenes | 49 tablas public con RLS; `payment_schedules` existe con 0 filas; orders/order_items 0/0; 7 filas public.documents; seis cotizaciones siguen `borrador` |
+| DB / órdenes / ledger | 52 tablas public con RLS; `payment_schedules`, `payments`, `payment_refunds` y `payment_allocations` existen con 0 filas; orders/order_items 0/0; 7 filas public.documents; seis cotizaciones siguen `borrador` |
 | Web pública / Storage | PUBLIC LEGACY STORAGE DEPENDENCIES=0, último smoke productivo posterior a04B |
 | CRM repo / branch | somosnovelieditorial-stack/crm-noveli — main |
 | CRM commit productivo | `b0851619b3ba38fbde93d6846ce7c3dda08e5d36` |
@@ -100,7 +100,7 @@ Fechas UTC según evidencia; un estado de diseño no significa despliegue.
 - Phase 1A Integration Review PASS y deployment productivo VERIFIED. CRM `b085161…` está en Production READY con flag ON; capabilities `orders` y `quotation_conversion` están habilitadas para la organización aprobada.
 - Smoke productivo: sidebar Órdenes, `/admin/ordenes`, lista vacía y búsqueda/filtros PASS. Detalle NOT APPLICABLE (0 órdenes). La acción de conversión queda correctamente oculta mientras las seis cotizaciones estén `borrador`; los tests locales cubren diálogo elegible, evidencia, confirmación y permisos. 0 órdenes y 0 conversiones reales.
 - Recovery point POST-Phase1A/PRE-Phase1B verificado en `pre-phase-1b/20261019T044950Z`; Auth cifrado, Storage 55/55 con provenance y hashes verificados. Restore integral no ensayado.
-- Phase 1B Payments corresponde a P1-04 Calendario, P1-05 Estructura ledger, P1-06 Comandos ledger y P1-07 Conciliación incomes. P1-04 está desplegado y verificado: tabla aditiva `payment_schedules`, RLS y 0 filas; no crea cobros ni modifica contabilidad. P1-05 tiene physical design freeze aprobado y quedó implementado localmente APPROVED tras review: una migración con `payments`, `payment_refunds` y `payment_allocations`, sin comandos públicos ni cambios contables. La revisión detectó `net_amount` nullable; se corrigió antes de commit/deploy y el catálogo confirma generated stored + NOT NULL. Hash pre-review superseded; nuevo SHA-256 canonical en manifest. LOW findings cerrados. Suites P1-05 126/126, P1-04 49/49, Phase 1A 55/55 + SQL 19/19 y Security 2.894/2.894 PASS. P1-05 no está desplegado ni committed; P1-06/P1-07 no iniciados. Antes de producción será obligatorio un recovery POST-P1-04 / PRE-P1-05-PRODUCTION. El recovery `20261019T044950Z` sigue clasificado PRE-P1-04; restore rehearsal NOT PERFORMED.
+- Phase 1B Payments corresponde a P1-04 Calendario, P1-05 Estructura ledger, P1-06 Comandos ledger y P1-07 Conciliación incomes. P1-04 está desplegado y verificado. P1-05 se desplegó el 2026-10-20 con la única migración `20261019070000`; SHA-256 canonical `ce32ff184ec52305be8290722f9c215945defa4044c97efcd654bf40a45f34d0`. El catálogo productivo confirma `payments.net_amount` como `numeric(18,2) GENERATED STORED NOT NULL`, las tres tablas nuevas con RLS y 0 filas, y el índice de evidencia compuesto. Estado productivo HEALTHY, 52/52 tablas públicas con RLS; órdenes, schedules, cotizaciones y accounting sin cambios. El commit funcional `70511f490c6cbbc1c4b415ef18a316a819ddb14f` permanece local y pendiente de push. Suites locales P1-05 126/126, P1-04 49/49, Phase 1A 55/55 + SQL 19/19 y Security 2.894/2.894 PASS. P1-06/P1-07 no iniciados. Recovery inmediato `pre-p1-05-production/20261020T211445Z` verificado; restore rehearsal NOT PERFORMED.
 - Las60 pruebas son el plan general; el subset Phase1A quedó validado localmente. Resultados en el informe de implementación.
 - Backend local aprobado por Javier:55 comprobaciones de dominio,19 SQL,38 REST,2894 asserts Security y130 Auth/Storage PASS, repetidos durante la UI. La UI agrega pruebas frontend/E2E sin alterar las migraciones.
 - El cierre productivo Security no equivale a que Noveli2.0 completo esté listo para despliegue.
@@ -109,9 +109,9 @@ Fechas UTC según evidencia; un estado de diseño no significa despliegue.
 
 **Acción aprobada vigente, completada:** integración técnica Phase 1A backend+UI: cotización→orden, listado y detalle; sin UI manual, Payments ni Contracts.
 
-**Próxima acción:** review de P1-05 PASS y aprobación local recuperada; congelar candidate set y crear commit local según autorización vigente. P1-06 y P1-07 siguen sin iniciar. Antes de cualquier futuro despliegue productivo de P1-05, crear un recovery point posterior a P1-04; el checkpoint vigente es PRE-P1-04 y el restore integral no se ha ensayado.
+**Próxima acción:** preparar el design review de P1-06 para aprobación separada. P1-06 y P1-07 siguen sin iniciar. El deployment P1-05 usó el recovery POST-P1-04 / PRE-P1-05-PRODUCTION verificado; restore integral no ensayado.
 
-**Estado productivo:** HEALTHY; Phase 1A desplegada y habilitada. Flag ON, ambas capabilities habilitadas, Orders smoke PASS; no se crearon órdenes ni se convirtieron cotizaciones. Phase 1B no iniciada.
+**Estado productivo:** HEALTHY; Phase 1A y P1-04/P1-05 desplegados. Flag Phase 1A ON y ambas capabilities habilitadas; datos de Orders, schedules, pagos, refunds y allocations siguen en cero; no se convirtieron cotizaciones. P1-06/P1-07 no iniciados.
 
 ## 6. Bloqueos / deuda técnica separada
 
@@ -140,7 +140,7 @@ Cierre04B:12 findings preexistentes en cuatro grupos y cero nuevos atribuibles a
 - [Implementación Phase1A](phase-1/PHASE-1A-IMPLEMENTATION.md), [UI](phase-1/PHASE-1A-UI.md), [revisión de integración](phase-1/PHASE-1A-INTEGRATION-REVIEW.md), [revisión de deployment](phase-1/PHASE-1A-DEPLOYMENT-REVIEW.md) y [manifest de deployment](phase-1/PHASE-1A-DEPLOYMENT-MANIFEST.json).
 - [Phase 1B Readiness Review](phase-1/PHASE-1B-READINESS-REVIEW.md): alcance propuesto P1-04–P1-07 y brechas entre el diseño y el modelo productivo actual.
 - [Implementación P1-04](phase-1/PHASE-1B-P1-04-IMPLEMENTATION.md), [manifest P1-04](phase-1/PHASE-1B-P1-04-MANIFEST.json) y [deployment review](phase-1/PHASE-1B-P1-04-DEPLOYMENT-REVIEW.md): review local, migración desplegada/verificada y límites del smoke productivo.
-- [Design review P1-05](phase-1/PHASE-1B-P1-05-DESIGN-REVIEW.md) y [physical design freeze](phase-1/PHASE-1B-P1-05-PHYSICAL-DESIGN.json): especificación aprobada. [Implementación P1-05](phase-1/PHASE-1B-P1-05-IMPLEMENTATION.md) y [manifest P1-05](phase-1/PHASE-1B-P1-05-MANIFEST.json): LOCAL / APPROVED; no deployment ni commit.
+- [Design review P1-05](phase-1/PHASE-1B-P1-05-DESIGN-REVIEW.md) y [physical design freeze](phase-1/PHASE-1B-P1-05-PHYSICAL-DESIGN.json): especificación aprobada. [Implementación P1-05](phase-1/PHASE-1B-P1-05-IMPLEMENTATION.md), [manifest P1-05](phase-1/PHASE-1B-P1-05-MANIFEST.json) y [deployment review](phase-1/PHASE-1B-P1-05-DEPLOYMENT-REVIEW.md): deployment productivo verificado; commit funcional local pendiente de push.
 
 [Revisión de integración Phase 1A](phase-1/PHASE-1A-INTEGRATION-REVIEW.md).
 
@@ -171,4 +171,5 @@ Algunos informes conservan estados históricos anteriores (por ejemplo04B pendie
 | 2026-10-19 | Phase 1B P1-04 | P1-04 desplegado y verificado en producción; 49 tablas public con RLS, `payment_schedules` vacía, sin cambios de datos existentes; P1-05 no iniciado |
 | 2026-10-19 | Phase 1B P1-05 | Physical design freeze implementado localmente; ledger/guards pasan suites; migración sin aplicar en producción | Local exclusivamente | `20261019070000`; sin commit | UNDER REVIEW |
 | 2026-10-20 | Phase 1B P1-05 review correction | Review revocó aprobación por `net_amount` nullable; migración corregida solo con NOT NULL, catalog/test suites y regresiones PASS; hash canonical actualizado | Local exclusivamente | P1-05 126, P1-04 49, Phase 1A 55 + SQL 19, Security 2.894; sin commit | APPROVED / no deployment |
+| 2026-10-20 | Phase 1B P1-05 deployment | Recovery POST-P1-04/PRE-P1-05 verificado; dry-run propuso exactamente una migración; ledger vacío y catálogo/RLS/índices verificados; producción HEALTHY | Supabase producción | `20261019070000`; SHA-256 `ce32ff184ec52305be8290722f9c215945defa4044c97efcd654bf40a45f34d0`; recovery `pre-p1-05-production/20261020T211445Z` | DEPLOYED / VERIFIED |
 Regla de mantenimiento: cada cambio de estado de fase debe actualizar estado general, fase actual y próximo paso; agregar cambio reciente y milestone cuando sea significativo, con fecha, entorno, commit/migration y enlace a evidencia. Conservar hitos y estados anteriores importantes. Las pruebas locales por sí solas no implican despliegue; VERIFIED registra aprobación/revisión formal de fase y permanece separado de DEPLOYED.

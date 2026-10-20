@@ -1,8 +1,8 @@
 # NOVELI 2.0 — P1-05 Payments Ledger Foundation
 
-**Estado:** LOCAL / APPROVED
-**Producción:** sin cambios
-**Fecha:** 2026-10-19
+**Estado:** DEPLOYED / VERIFIED
+**Aprobación local:** APPROVED
+**Producción:** HEALTHY; deployment verificado el 2026-10-20
 
 ## Alcance
 
@@ -15,7 +15,7 @@ Quedan fuera P1-06 (comandos de negocio del ledger) y P1-07 (vínculo/posting/co
 - `supabase/migrations/20261019070000_phase_1b_p1_05_payments_ledger.sql`
 - SHA-256: `ce32ff184ec52305be8290722f9c215945defa4044c97efcd654bf40a45f34d0`
 - Superseded pre-review SHA-256: `7c13b31b93d02d0df1e12f873b5c95a9434cf9e79bb07831754a94598495f653` (net_amount NOT NULL correction before commit/deploy).
-- Una migración aditiva, sin `DROP`, backfill ni mutación productiva.
+- Una migración aditiva, sin `DROP`, backfill ni cambios en datos de negocio existentes.
 - Dependencias: Phase 1A, P1-04 y helpers monetarios aprobados.
 
 ## Modelo instalado
@@ -75,8 +75,17 @@ P1-07 sigue a cargo de `incomes.payment_id`, posting y conciliación. `incomes`,
 
 La migración es aditiva. Si falla en local, corregir y resetear localmente. Para un futuro fallo remoto, detenerse, conservar evidencia y preferir forward fix revisado; no usar rollback destructivo, `migration repair` ni borrar ledger. El recovery actual es `C:\Users\xavie\Desktop\backup\pre-phase-1b\20261019T044950Z`, clasificación **PRE-P1-04**, restore rehearsal **NOT PERFORMED**; es insuficiente como recovery de deployment P1-05. Crear uno **POST-P1-04 / PRE-P1-05-PRODUCTION** antes de cualquier despliegue futuro.
 
-`production_deployed=false`; P1-06 y P1-07 no iniciados.
+P1-06 y P1-07 no iniciados.
 
 ## Revisión estructural y corrección pre-commit — 2026-10-20
 
-La primera revisión revocó la aprobación porque el catálogo reportaba `payments.net_amount` nullable frente al freeze `NOT NULL`. Se corrigió únicamente esa constraint en la columna generada; no cambió la expresión ni otra semántica de la migración. El test de catálogo confirma `numeric(18,2)`, generated stored, NOT NULL y `(gross_amount - provider_fee)`. LOW #2 quedó cerrado con metadatos catalog-driven, variantes negativas, schedule cross-tenant aislado y UPDATE/DELETE por rol. P1-05 quedó revalidado con 126 checks; regresiones P1-04, Phase 1A, SQL y Security también pasaron. `P1-05 REVIEW: PASS`; aprobación local recuperada. Sigue sin commit ni deployment.
+La primera revisión revocó la aprobación porque el catálogo reportaba `payments.net_amount` nullable frente al freeze `NOT NULL`. Se corrigió únicamente esa constraint en la columna generada; no cambió la expresión ni otra semántica de la migración. El test de catálogo confirma `numeric(18,2)`, generated stored, NOT NULL y `(gross_amount - provider_fee)`. LOW #2 quedó cerrado con metadatos catalog-driven, variantes negativas, schedule cross-tenant aislado y UPDATE/DELETE por rol. P1-05 se revalidó con 126 checks; regresiones P1-04, Phase 1A, SQL y Security también pasaron. `P1-05 REVIEW: PASS`; aprobación local recuperada.
+
+## Deployment productivo — 2026-10-20
+
+- Recovery inmediato: `C:\Users\xavie\Desktop\backup\pre-p1-05-production\20261020T211445Z`, clasificación `POST_P1_04_PRE_P1_05_PRODUCTION`, verificado. Restore rehearsal: **NOT PERFORMED**.
+- Pre-check read-only, hash canónico y dry-run pasaron; el dry-run propuso exclusivamente `20261019070000_phase_1b_p1_05_payments_ledger.sql`.
+- La migración `20261019070000` figura en el historial remoto. El proyecto permanece `ACTIVE_HEALTHY`; public tables/RLS: 52/52.
+- `payments`, `payment_refunds` y `payment_allocations` existen con 0 filas y RLS. Catálogo confirma `net_amount numeric(18,2) GENERATED STORED NOT NULL`, expresión `(gross_amount - provider_fee)`. Índice auxiliar de documents presente; sin SECURITY DEFINER, comandos públicos P1-06 ni integración contable P1-07.
+- `payment_schedules`, orders y order_items permanecen en 0; quotations siguen 6 `borrador`; baseline accounting sin cambios. No se creó dato financiero real.
+- Producción HEALTHY. Commit funcional `70511f490c6cbbc1c4b415ef18a316a819ddb14f` todavía no se ha sincronizado con `main`; P1-06/P1-07 siguen sin iniciar.
